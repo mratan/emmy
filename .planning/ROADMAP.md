@@ -116,11 +116,11 @@ Plans:
 
 Plans:
 - [x] 02-01-PLAN.md — Wave 0 scaffold: Bun workspace + 4 @emmy/* packages + profile v2 sibling + docs templates + committed bun.lock (completed 2026-04-21; commits 4fa82ac + ae97e04)
-- [ ] 02-02-PLAN.md — @emmy/provider: vLLM HTTP + OpenAI-compat strip + reactive grammar retry (nested tools.grammar.{path, mode} shape)
-- [ ] 02-03-PLAN.md — @emmy/tools (part 1): hash-anchored edit primitives + atomic write + post-hoc diff
+- [x] 02-02-PLAN.md — @emmy/provider: vLLM HTTP + OpenAI-compat strip + reactive grammar retry (nested tools.grammar.{path, mode} shape) (completed 2026-04-21; commits d6c3ba9 + 534e7a1 + c7d80f2 + c4a85ff)
+- [x] 02-03-PLAN.md — @emmy/tools (part 1): hash-anchored edit primitives + atomic write + post-hoc diff (completed 2026-04-21; commits ce418d6 + 79327bd + 725249a + 1ee3dda)
 - [ ] 02-04-PLAN.md — @emmy/ux: pi-emmy CLI (real pi 0.68.0 runtime) + SP_OK gate + profile-validate pre-flight + 3-layer prompt + session transcript capture
-- [ ] 02-05-PLAN.md — SUPERSEDED by 02-07/08/09 (structural revision 2026-04-21 — see CLOSEOUT for narrative)
-- [ ] 02-06-PLAN.md — @emmy/tools (part 2): 8 native tools (read/write/edit/bash/grep/find/ls/web_fetch) + MCP bridge + Unicode poison check
+- [x] 02-05-PLAN.md — SUPERSEDED by 02-07/08/09 (structural revision 2026-04-21 — see CLOSEOUT for narrative)
+- [x] 02-06-PLAN.md — @emmy/tools (part 2): 8 native tools (read/write/edit/bash/grep/find/ls/web_fetch) + MCP bridge + Unicode poison check (completed 2026-04-21; commits 6a23d40 + 42190b6 + 59e4258 + c5c8f4a + 2d5c358)
 - [ ] 02-07-PLAN.md — Profile v2 fill: nested tools.grammar shape + verified max_model_len + grammar + schemas + prompts + recompute hash + un-skip regression
 - [ ] 02-08-PLAN.md — SC-2/SC-3 (3 runs: reactive + disabled baseline + no_per_tool_sampling) / SC-4 / SC-5 evidence + PROFILE_NOTES validation_runs
 - [ ] 02-09-PLAN.md — SC-1 daily-driver walkthrough checkpoint (the only non-autonomous plan) + CLOSEOUT + REQUIREMENTS traceability + ROADMAP/STATE advance
