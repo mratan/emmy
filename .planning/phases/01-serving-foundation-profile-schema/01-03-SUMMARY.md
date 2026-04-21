@@ -277,7 +277,20 @@ The first-boot failure (Finding 1, fastsafetensors missing) naturally produced a
 4. **CUDA forward-compat mode** — NGC container uses CUDA 13.2 driver against kernel 580.95.05 via forward-compat. Perf parity with native-mode is worth measuring.
 5. **gpu_memory_utilization=0.75 baseline** — Plan 01-04's KV finder bisects this; a higher setting may enable larger CUDA graph capture sizes and affect decode.
 
-STACK.md's ~75 tok/s estimate remains the aspirational target; 60 is the floor; 50 is today's measurement. Plan 01-04 is sequenced exactly for this.
+STACK.md's ~75 tok/s estimate remains the aspirational target; 60 is the floor; 51 is today's measurement. Plan 01-04 is sequenced exactly for this.
+
+**Quick experiments already tried (~10 min budget, negative results documented so Plan 01-04 doesn't repeat them):**
+
+| Experiment | Result |
+|---|---|
+| `enable_prefix_caching: false` (test the Mamba experimental-path warning) | 51.27 tok/s mean — within noise of baseline 51.29. Not the bottleneck. |
+| `attention_backend: triton_attn` | vLLM accepts only upper-cased canonical names; the value `triton` alone fails with "Unknown attention backend". Re-test with `triton_attn` needed. |
+| `attention_backend: flash_attn` | Boots but EngineCore fails at initialization for Mamba+MoE config on vLLM 0.17.1+nvinternal — deeper incompatibility than a simple flag swap. FLASHINFER remains the only working backend for this model on this image today. |
+
+Notes:
+- The smoke-test ready-banner tok/s is persistently ~10 tok/s (measured 10.04, 10.07, 9.08 across runs) because the first generation after cold boot eats CUDA-graph-compile + FlashInfer-warmup overhead. This is cosmetic — warm steady-state is 51 tok/s. Plan 01-04's load driver should use a warmup round before measuring.
+- The NGC 26.03.post1 image uses CUDA forward-compat (driver 595.45.04 on kernel 580.95.05). If Plan 01-04's tuning pass doesn't close the 51→60 gap via knobs alone, forward-compat overhead is a real candidate worth measuring against native mode.
+- Qwen3.6-A3B uses `Qwen3_5MoeForConditionalGeneration` with Mamba layers, which forces prefix-caching-align mode (flagged experimental by vLLM). The architecture is new enough that FP8 + Mamba + FlashInfer may not yet be fully optimized in this vLLM build.
 
 ### Scope expansion summary (for verifier)
 
