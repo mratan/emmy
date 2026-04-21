@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.68.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-04-21T17:05:00.000Z"
+last_updated: "2026-04-21T16:40:30Z"
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 8
   completed_plans: 5
   percent: 63
-  in_progress_plan: "01-06"
-  in_progress_task: "Task 2 (checkpoint:human-verify — DGX Spark ~60-90 min GPU)"
+  in_progress_plans: ["01-06", "01-07"]
+  in_progress_task: "Plan 01-07 Task 1 COMPLETE (sampler fix); Tasks 2 + 3 PENDING (DGX Spark ~4 hours GPU total). Plan 01-06 Task 2 also PENDING (DGX Spark ~60-90 min GPU)."
 ---
 
 # State: Emmy
@@ -116,13 +116,20 @@ Phases with standard patterns (skip research-phase per SUMMARY.md):
 
 ## Session Continuity
 
-**Current position:** Phase 1, Plan 01-06 (SC-1 throughput gap closure) — Task 1 COMPLETE (on-machine), Task 2 PENDING (DGX Spark checkpoint, ~60-90 min GPU).
+**Current position:** Phase 1 — two gap-closure plans in flight (both blocked on DGX Spark operator):
+
+- **Plan 01-06 (SC-1 throughput):** Task 1 COMPLETE on-machine; Task 2 PENDING (DGX Spark sweep, ~60-90 min GPU)
+- **Plan 01-07 (SC-5 sampler + reproducibility):** Task 1 COMPLETE on-machine (GpuSampler `[N/A]` per-field fix, 7 tests GREEN, commits `4214b71` + `b510d1b`); Tasks 2 + 3 PENDING (two 2-hour thermal replays on DGX Spark)
 
 **Plan 01-06 Task 2 resume signal (from 01-06-PLAN.md):** Type `"sc1 resolved"` once the operator has (a) executed the sweep producing `runs/*-phase1-sc1-throughput-sweep/results.json` with 5 candidate entries + decision field, (b) rewritten PROFILE_NOTES.md §"SC-1 throughput gap" per Template A (winner) or Template B (accept-architectural), (c) if winner, applied the knob to serving.yaml, (d) recomputed profile.yaml.hash + confirmed `emmy profile validate` exits 0, (e) committed, and (f) `uv run pytest tests/unit -q` is all-green. See `.planning/phases/01-serving-foundation-profile-schema/01-06-SUMMARY.md` for the full runbook.
 
-**Next action (operator):** `/gsd-execute-phase 1` with the `sc1 resolved` signal to continue Plan 01-06 Task 2 AND/OR proceed to Plan 01-07 (SC-4 self-hosted runner registration) + Plan 01-08 (SC-5 second thermal replay + clock sampler fix).
+**Plan 01-07 Task 2 resume signal (from 01-07-PLAN.md):** Type `"sc5 floors recorded"` once the operator has (a) confirmed `uv run pytest tests/unit/test_thermal_sampler.py -x -q` is 7/7 GREEN on the DGX Spark, (b) completed the second 2-hour `--record-floors` replay with exit 0, (c) confirmed `PROFILE_NOTES.md measured_values.gpu_clock_p5/p50_hour2_mhz` are both non-zero and within 500-5000 MHz, (d) extended `validation_runs` to ≥2 entries, (e) confirmed `uv run emmy profile validate` exits 0, (f) committed the feat. See `.planning/phases/01-serving-foundation-profile-schema/01-07-SUMMARY.md` for the full runbook.
 
-**Resume signal:** STATE.md current focus + ROADMAP.md Phase 1 success criteria together fully specify what "Phase 1 done" means. Plans must satisfy success criteria 1–5 of Phase 1 to advance. SC-1 closure is the gate for Plan 01-06.
+**Plan 01-07 Task 3 resume signal (depends on Task 2 being complete first):** Type `"sc5 reproducibility green"` once the third 2-hour `--assert-floors` replay exits 0 with "All floors pass", `validation_runs` has ≥3 entries, `emmy profile validate` exits 0, and the feat commit lands.
+
+**Next action (operator):** `/gsd-execute-phase 1` with whichever of the three resume signals arrives first. The three DGX Spark tasks can be serialised in any order (01-06 Task 2 and 01-07 Task 2 are independent; 01-07 Task 3 must follow 01-07 Task 2).
+
+**Resume signal:** STATE.md current focus + ROADMAP.md Phase 1 success criteria together fully specify what "Phase 1 done" means. Plans must satisfy success criteria 1–5 of Phase 1 to advance. SC-1 closure gates Plan 01-06; SC-5 closure (sampler + reproducibility) gates Plan 01-07.
 
 ---
 
@@ -131,3 +138,5 @@ Phases with standard patterns (skip research-phase per SUMMARY.md):
 **Planned Phase:** 1 (Serving Foundation + Profile Schema) — 5 plans — 2026-04-21T02:23:42.515Z
 
 **Plan 01-06 Task 1 completed:** 2026-04-21 — commits `feea40c` (RED) + `742fd9b` (GREEN); SUMMARY.md written; awaiting DGX Spark operator for Task 2.
+
+**Plan 01-07 Task 1 completed:** 2026-04-21T16:40:09Z — commits `4214b71` (RED) + `b510d1b` (GREEN); SUMMARY.md written at `.planning/phases/01-serving-foundation-profile-schema/01-07-SUMMARY.md`; GpuSampler now tolerates nvidia-smi `[N/A]` per-field (DGX Spark UMA case). 7/7 sampler tests GREEN, 124/124 unit suite GREEN (1 skip for missing shellcheck), `uv run emmy profile validate` exits 0. Awaiting DGX Spark operator for Task 2 (second 2-hour `--record-floors` replay) and Task 3 (third 2-hour `--assert-floors` replay).

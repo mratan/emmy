@@ -68,7 +68,7 @@ Plans:
 - [ ] 01-04-PLAN.md — D-14 thermal audit + thermal corpus + KV-finder bisection + 2-hour thermal replay + measured-values commit checkpoint
 - [ ] 01-05-PLAN.md — 50-turn air-gap fixture + D-12 layered validator + .github/workflows/airgap.yml self-hosted CI + PROFILE-06 Layer 2/3 enforcement + SC-4 demo checkpoint
 - [~] 01-06-PLAN.md — [GAP CLOSURE, IN PROGRESS] SC-1 throughput sweep: Task 1 COMPLETE (library + harness + 20 unit tests GREEN; commits `feea40c` + `742fd9b`), Task 2 PENDING (DGX Spark checkpoint — operator runs sweep + rewrites PROFILE_NOTES.md + rehashes profile)
-- [ ] 01-07-PLAN.md — [GAP CLOSURE] SC-5 GPU-clock sampler fix ([N/A] on DGX Spark UMA) + 2nd --record-floors + 3rd --assert-floors reproducibility run
+- [~] 01-07-PLAN.md — [GAP CLOSURE, IN PROGRESS] SC-5 GPU-clock sampler fix: Task 1 COMPLETE (GpuSampler per-field [N/A] tolerance + 7 unit tests GREEN; commits `4214b71` + `b510d1b`), Tasks 2 + 3 PENDING (two 2-hour DGX Spark replays — operator runs --record-floors then --assert-floors)
 - [ ] 01-08-PLAN.md — [GAP CLOSURE] SC-4 certification: trigger + verify scripts + runbook; operator registers self-hosted runner and commits green-run artifact
 
 ---
