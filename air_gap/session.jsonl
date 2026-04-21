@@ -1,0 +1,50 @@
+{"turn":1,"role":"user","content":"Please show me the first 20 lines of /tmp/foo.py.","_expected_tool_call":{"name":"read","args":{"path":"/tmp/foo.py","end_line":20}}}
+{"turn":2,"role":"assistant","content":null,"tool_calls":[{"id":"call_read_1","type":"function","function":{"name":"read","arguments":"{\"path\":\"/tmp/foo.py\",\"end_line\":20}"}}]}
+{"turn":3,"role":"tool","tool_call_id":"call_read_1","content":"def foo():\n    return 42\n\ndef bar():\n    return 43\n\nVALUE = 7\n"}
+{"turn":4,"role":"assistant","content":"The file defines two functions and a constant: foo() returns 42, bar() returns 43, VALUE=7."}
+{"turn":5,"role":"user","content":"Create /tmp/hello.py that prints 'hello, emmy'.","_expected_tool_call":{"name":"write","args":{"path":"/tmp/hello.py","content":"print('hello, emmy')\n"}}}
+{"turn":6,"role":"assistant","content":null,"tool_calls":[{"id":"call_write_1","type":"function","function":{"name":"write","arguments":"{\"path\":\"/tmp/hello.py\",\"content\":\"print('hello, emmy')\\n\"}"}}]}
+{"turn":7,"role":"tool","tool_call_id":"call_write_1","content":"wrote 21 bytes to /tmp/hello.py"}
+{"turn":8,"role":"assistant","content":"Done \u2014 /tmp/hello.py now prints 'hello, emmy' when run."}
+{"turn":9,"role":"user","content":"In /tmp/foo.py change `return 42` to `return 0`. The hash of the target block is 'ab12cd'.","_expected_tool_call":{"name":"edit","args":{"path":"/tmp/foo.py","old_hash":"ab12cd","new_content":"def foo():\n    return 0\n"}}}
+{"turn":10,"role":"assistant","content":null,"tool_calls":[{"id":"call_edit_1","type":"function","function":{"name":"edit","arguments":"{\"path\":\"/tmp/foo.py\",\"old_hash\":\"ab12cd\",\"new_content\":\"def foo():\\n    return 0\\n\"}"}}]}
+{"turn":11,"role":"tool","tool_call_id":"call_edit_1","content":"edit applied; 1 block replaced in /tmp/foo.py"}
+{"turn":12,"role":"user","content":"Now change `return 43` to `return 1`. The hash of that block is 'ef34gh'.","_expected_tool_call":{"name":"edit","args":{"path":"/tmp/foo.py","old_hash":"ef34gh","new_content":"def bar():\n    return 1\n"}}}
+{"turn":13,"role":"assistant","content":null,"tool_calls":[{"id":"call_edit_2","type":"function","function":{"name":"edit","arguments":"{\"path\":\"/tmp/foo.py\",\"old_hash\":\"ef34gh\",\"new_content\":\"def bar():\\n    return 1\\n\"}"}}]}
+{"turn":14,"role":"tool","tool_call_id":"call_edit_2","content":"edit applied; 1 block replaced in /tmp/foo.py"}
+{"turn":15,"role":"user","content":"Run the file we just created.","_expected_tool_call":{"name":"bash","args":{"command":"python3 /tmp/hello.py","timeout_s":10}}}
+{"turn":16,"role":"assistant","content":null,"tool_calls":[{"id":"call_bash_1","type":"function","function":{"name":"bash","arguments":"{\"command\":\"python3 /tmp/hello.py\",\"timeout_s\":10}"}}]}
+{"turn":17,"role":"tool","tool_call_id":"call_bash_1","content":"hello, emmy\n"}
+{"turn":18,"role":"user","content":"Now show me what's in /tmp as a long-form listing.","_expected_tool_call":{"name":"bash","args":{"command":"ls -la /tmp","timeout_s":5}}}
+{"turn":19,"role":"assistant","content":null,"tool_calls":[{"id":"call_bash_2","type":"function","function":{"name":"bash","arguments":"{\"command\":\"ls -la /tmp\",\"timeout_s\":5}"}}]}
+{"turn":20,"role":"tool","tool_call_id":"call_bash_2","content":"total 8\n-rw-r--r-- 1 user user  23 Apr 20 09:00 hello.py\n-rw-r--r-- 1 user user  70 Apr 20 09:01 foo.py\n"}
+{"turn":21,"role":"user","content":"Find all 'def ' definitions under /tmp.","_expected_tool_call":{"name":"grep","args":{"pattern":"^def ","path":"/tmp"}}}
+{"turn":22,"role":"assistant","content":null,"tool_calls":[{"id":"call_grep_1","type":"function","function":{"name":"grep","arguments":"{\"pattern\":\"^def \",\"path\":\"/tmp\"}"}}]}
+{"turn":23,"role":"tool","tool_call_id":"call_grep_1","content":"/tmp/foo.py:1:def foo():\n/tmp/foo.py:4:def bar():\n"}
+{"turn":24,"role":"assistant","content":"Two definitions: foo() at /tmp/foo.py:1 and bar() at /tmp/foo.py:4."}
+{"turn":25,"role":"user","content":"Find any *.py files under /tmp.","_expected_tool_call":{"name":"find","args":{"name":"*.py","path":"/tmp"}}}
+{"turn":26,"role":"assistant","content":null,"tool_calls":[{"id":"call_find_1","type":"function","function":{"name":"find","arguments":"{\"name\":\"*.py\",\"path\":\"/tmp\"}"}}]}
+{"turn":27,"role":"tool","tool_call_id":"call_find_1","content":"/tmp/hello.py\n/tmp/foo.py\n"}
+{"turn":28,"role":"assistant","content":"Two python files: /tmp/hello.py and /tmp/foo.py."}
+{"turn":29,"role":"user","content":"List the contents of /tmp.","_expected_tool_call":{"name":"ls","args":{"path":"/tmp"}}}
+{"turn":30,"role":"assistant","content":null,"tool_calls":[{"id":"call_ls_1","type":"function","function":{"name":"ls","arguments":"{\"path\":\"/tmp\"}"}}]}
+{"turn":31,"role":"tool","tool_call_id":"call_ls_1","content":"foo.py\nhello.py\n"}
+{"turn":32,"role":"assistant","content":"/tmp contains foo.py and hello.py."}
+{"turn":33,"role":"user","content":"Fetch the Python 3.12 what's-new page.","_expected_tool_call":{"name":"web_fetch","args":{"url":"https://docs.python.org/3.12/whatsnew/3.12.html"}}}
+{"turn":34,"role":"assistant","content":null,"tool_calls":[{"id":"call_web_1","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://docs.python.org/3.12/whatsnew/3.12.html\"}"}}]}
+{"turn":35,"role":"tool","tool_call_id":"call_web_1","content":"(mock \u2014 no network in air-gap)\n# What's New In Python 3.12\n\n- PEP 709: Comprehension inlining\n- PEP 695: Type parameter syntax\n"}
+{"turn":36,"role":"assistant","content":"Summary (from mocked fetch): 3.12 highlights comprehension inlining (PEP 709) and new type-parameter syntax (PEP 695)."}
+{"turn":37,"role":"user","content":"Read /tmp/hello.py, change its message to 'hi emmy', then re-run it.","_expected_tool_call":{"name":"read","args":{"path":"/tmp/hello.py"}}}
+{"turn":38,"role":"assistant","content":null,"tool_calls":[{"id":"call_multi_read","type":"function","function":{"name":"read","arguments":"{\"path\":\"/tmp/hello.py\"}"}}]}
+{"turn":39,"role":"tool","tool_call_id":"call_multi_read","content":"print('hello, emmy')\n"}
+{"turn":40,"role":"assistant","content":null,"tool_calls":[{"id":"call_multi_edit","type":"function","function":{"name":"edit","arguments":"{\"path\":\"/tmp/hello.py\",\"old_hash\":\"hello01\",\"new_content\":\"print('hi emmy')\\n\"}"}}]}
+{"turn":41,"role":"tool","tool_call_id":"call_multi_edit","content":"edit applied; 1 block replaced in /tmp/hello.py"}
+{"turn":42,"role":"assistant","content":null,"tool_calls":[{"id":"call_multi_bash","type":"function","function":{"name":"bash","arguments":"{\"command\":\"python3 /tmp/hello.py\",\"timeout_s\":10}"}}]}
+{"turn":43,"role":"user","content":"Earlier you wrote /tmp/hello.py \u2014 remind me of its final printed message now."}
+{"turn":44,"role":"assistant","content":"After the recent edit /tmp/hello.py prints 'hi emmy'."}
+{"turn":45,"role":"user","content":"In the foo.py we looked at first, what were the original return values of foo() and bar()?"}
+{"turn":46,"role":"user","content":"Also, before you answer: we ran `ls -la /tmp` earlier \u2014 what two .py files did it show?"}
+{"turn":47,"role":"assistant","content":"Originally foo() returned 42 and bar() returned 43 before we edited them to 0 and 1. The two python files listed were /tmp/foo.py and /tmp/hello.py."}
+{"turn":48,"role":"user","content":"From our earlier grep, how many 'def ' definitions did we find under /tmp?"}
+{"turn":49,"role":"assistant","content":"Two definitions: foo() at /tmp/foo.py:1 and bar() at /tmp/foo.py:4."}
+{"turn":50,"role":"user","content":"Finally, summarise in one sentence everything we just did across the whole session (starting from reading /tmp/foo.py)."}
