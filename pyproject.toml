@@ -1,0 +1,42 @@
+[project]
+name = "emmy-serve"
+version = "0.1.0"
+description = "Emmy — local coding-agent serving foundation for DGX Spark (Phase 1)"
+requires-python = ">=3.10"
+dependencies = [
+    "pydantic>=2.6",
+    "pyyaml>=6.0",
+    "httpx>=0.27",
+    "prometheus-client>=0.20",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.4",
+    "pytest-asyncio>=0.23",
+    "pyyaml>=6.0",
+]
+
+[project.scripts]
+emmy = "emmy_serve.cli:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["emmy_serve"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+addopts = "-ra --strict-markers"
+markers = [
+    "slow: long-running tests (>60s) — opt in with --run-slow",
+    "integration: requires running vLLM container — opt in with --run-integration",
+    "airgap: runs only in air-gap CI on self-hosted DGX Spark runner — opt in with --run-airgap",
+]
+asyncio_mode = "auto"
