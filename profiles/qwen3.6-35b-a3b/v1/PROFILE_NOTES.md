@@ -2,17 +2,22 @@
 profile_id: qwen3.6-35b-a3b
 profile_version: v1
 created: 2026-04-20
-hardware_id: dgx-spark-01                      # filled at first measurement
+hardware_id: dgx-spark-01
 measured_values:
-  gpu_memory_utilization: null                  # D-13 fills this
-  gpu_clock_p5_hour2_mhz: null                   # D-15 fills this
-  decode_throughput_p50_hour2_tokps: null        # D-15 fills this
-  decode_throughput_p1_hour2_tokps: null         # D-15 fills this
-  cold_start_seconds: null                       # measured at first boot
-  warm_throughput_tokps: null                    # smoke-test 100-token generation
+  gpu_memory_utilization: 0.88
+  gpu_clock_p5_hour2_mhz: 0    # nvidia-smi sampler returned 0 — see Sampler Gap below
+  decode_throughput_p50_hour2_tokps: 48.1
+  decode_throughput_p1_hour2_tokps: 41.4
+  gpu_clock_p50_hour2_mhz: 0   # nvidia-smi sampler returned 0 — see Sampler Gap below
+  cold_start_seconds: 159
+  warm_throughput_tokps: 49.9
 validation_runs:
-  - run_id: null                                 # runs/<iso>-phase1-validation/ reference
-    hash: null                                   # content hash of the run directory
+- run_id: 20260421T062726Z_dc65a5-kv-finder
+  hash: sha256:87f70318eba717e86c548ba538c75bb85df32215c499c29c8250b30e6f048df7
+  purpose: KV-bisection finder (10 iterations, values 0.75..0.93 clean, 0.95 boot-timeout)
+- run_id: 20260421T092927Z_a1b62b-thermal
+  hash: sha256:5a072c14e4ad3684cf5f145cad188b3b55a74c8704bfcb08d722529d202d30fd
+  purpose: 2-hour thermal replay (record-floors; zero preemptions, zero OOM)
 ---
 
 # Qwen3.6-35B-A3B-FP8 — v1 Profile Notes
@@ -70,17 +75,51 @@ Reordering any of 1-3 busts prefix cache. This rule is a profile contract.
 
 | Measurement | Value | Method | Run artifact |
 |-------------|-------|--------|--------------|
-| `gpu_memory_utilization` (final) | <filled by D-13> | `scripts/find_kv_budget.py` | [`runs/<iso>-kv-finder/`](#) |
-| GPU clock floor p5 hour 2 | <filled> MHz | `scripts/thermal_replay.py` | [`runs/<iso>-thermal/`](#) |
-| Decode throughput p50 hour 2 | <filled> tok/s | `scripts/thermal_replay.py` | [`runs/<iso>-thermal/`](#) |
-| Decode throughput p1 hour 2 | <filled> tok/s | `scripts/thermal_replay.py` | [`runs/<iso>-thermal/`](#) |
-| Cold-start (fastsafetensors) | <filled> s | `start_emmy.sh` timing | [`runs/<iso>-thermal/`](#) |
+| `gpu_memory_utilization` (final) | 0.88 | `scripts/find_kv_budget.py` (10 iterations; safety 5% of 0.93) | `runs/20260421T062726Z_dc65a5-kv-finder/iterations.jsonl` |
+| GPU clock floor p5 hour 2 | 0 MHz (**sampler gap — see below**) | `scripts/thermal_replay.py` nvidia-smi subprocess | `runs/20260421T092927Z_a1b62b-thermal/` |
+| Decode throughput p50 hour 2 | 48.13 tok/s | `scripts/thermal_replay.py` `--record-floors` | `runs/20260421T092927Z_a1b62b-thermal/summary.json` |
+| Decode throughput p1 hour 2 | 41.36 tok/s | `scripts/thermal_replay.py` `--record-floors` | `runs/20260421T092927Z_a1b62b-thermal/summary.json` |
+| Cold-start (fastsafetensors) | 159 s | `start_emmy.sh` ready banner | `runs/phase-b2-20260421T085621Z/boot.log` |
+| Warm 500-token decode throughput | 49.92 tok/s mean (3 runs, post-2hr-thermal) | direct httpx | Phase C measurement |
+
+## SC-1 throughput gap vs. 60 tok/s floor
+
+The measured decode throughput (49–50 tok/s warm, 48.13 tok/s p50 hour-2 under
+sustained load, 41.36 tok/s p1 hour-2) is below Phase 1 Success Criterion 1's
+60 tok/s floor. This gap persisted across the four Phase-C throughput knobs
+swept locally (see 01-03-SUMMARY.md) AND did not move measurably when the KV
+budget rose from 0.75 → 0.88, confirming the bottleneck is architectural
+(Mamba+MoE+FP8 on vLLM 0.17.1+nvinternal on GB10) rather than profile-knob.
+Candidates for Phase 2+ or a Phase 1.1 gap-closure plan:
+
+- FLASHINFER_TRTLLM vs. TRITON MoE backend (VLLM_FLASHINFER_MOE_BACKEND env
+  was `latency` but vLLM chose TRITON anyway — needs a different env knob,
+  likely `VLLM_USE_FLASHINFER_MOE_FP8=1`).
+- NGC CUDA forward-compat mode (driver 595 on kernel 580) overhead vs.
+  native mode.
+- vLLM 0.17.1+nvinternal FP8+Mamba prefix-caching optimization (flagged
+  experimental in this build).
+- Reasoning parser integration (Phase 2) so the common Qwen3.6 thinking
+  path stops consuming the budget on CoT prose.
+
+## Sampler gap: GPU clock
+
+The thermal replay's nvidia-smi subprocess sampler returned 0 for both
+`gpu_clock_p5_hour2_mhz` and `gpu_clock_p50_hour2_mhz`. This is either a
+permissions issue in the container-isolated sampler context (unlikely — the
+decode-throughput samplers worked fine) or a parsing bug in
+`emmy_serve/thermal/sampler.py`. Symptom is non-blocking: the floor assertions
+that matter for re-runs (`--assert-floors` next thermal) are the decode
+throughput p50/p1 values, which did land correctly. A Phase 1.1 or Phase 2
+plan should close this gap; the SC-3 (thermal replay demonstrably works +
+zero preemptions/OOM) contract is satisfied today.
 
 ## Validation runs (D-16)
 
-| Run ID | Date | Purpose | Hash |
+| Run ID | Date | Purpose | Profile hash |
 |--------|------|---------|------|
-| <filled> | <date> | Initial Phase 1 validation | <sha256> |
+| `20260421T062726Z_dc65a5-kv-finder` | 2026-04-21 | KV-bisection finder — 10 iterations, util 0.75→0.93 clean, 0.95 boot-timeout; final 0.88 via 5% safety | `sha256:87f70318eba717e86c548ba538c75bb85df32215c499c29c8250b30e6f048df7` |
+| `20260421T092927Z_a1b62b-thermal` | 2026-04-21 | 2-hour thermal replay with `--record-floors` — zero preemptions, zero OOM; throughput floors recorded | `sha256:5a072c14e4ad3684cf5f145cad188b3b55a74c8704bfcb08d722529d202d30fd` |
 
 ## Deferred / future
 

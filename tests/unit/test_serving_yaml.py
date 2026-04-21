@@ -19,10 +19,6 @@ def _skip_if_no_serving(profile_path: Path) -> Path:
     return serving
 
 
-@pytest.mark.xfail(
-    reason="Plan 02 commits the placeholder 0.75; Plan 04's KV-finder overwrites it",
-    strict=False,
-)
 def test_kv_budget_final(profile_path: Path):
     """SERVE-08: gpu_memory_utilization must NOT be the placeholder 0.75."""
     serving = _skip_if_no_serving(profile_path)
