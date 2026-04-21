@@ -1,0 +1,37 @@
+# ~/.emmy/mcp_servers.yaml — USER-level MCP server registry (defaults).
+# Project-level `./.emmy/mcp_servers.yaml` overrides user on same server key (D-16).
+# All servers launch as stdio subprocesses (D-17). All tool names/descriptions pass
+# the Unicode blocklist check (D-18) at registration time.
+
+servers:
+  # Filesystem access to the user's home, scoped by passing the root as an arg.
+  # From https://github.com/modelcontextprotocol/servers/tree/main/src/filesystem
+  filesystem:
+    command: npx
+    args:
+      - -y
+      - "@modelcontextprotocol/server-filesystem"
+      - "${HOME}"
+    # env: optional map; values interpolate $VAR from the parent process env.
+    # env:
+    #   SOME_VAR: "$SOME_VAR"
+
+  # Example (commented): Brave Search MCP.
+  # Uncomment and provide BRAVE_API_KEY in your shell env.
+  # web-search:
+  #   command: npx
+  #   args:
+  #     - -y
+  #     - "@modelcontextprotocol/server-brave-search"
+  #   env:
+  #     BRAVE_API_KEY: "$BRAVE_API_KEY"
+
+# Dispatch rules (emmy-enforced, not user-configurable):
+#   1. Flat tool-name registration (D-15). If an MCP-declared tool name collides
+#      with a native emmy tool (read, write, edit, bash, grep, find, ls, web_fetch),
+#      registration FAILS LOUD. Remediate by adding `alias: <new_name>` under the
+#      offending server entry (not implemented in Phase 2 — Phase 2 rejects loudly).
+#   2. Names + descriptions are checked against Unicode blocklist (Cf / Co / Cs +
+#      bidi-override U+202A..U+202E and U+2066..U+2069). Any hit → registration
+#      throws PoisonError with the offending codepoint in the message.
+#   3. Subprocess stdio transport only in Phase 2 (D-17). HTTP/SSE deferred to v1.x.

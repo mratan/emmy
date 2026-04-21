@@ -1,0 +1,87 @@
+# profiles/qwen3.6-35b-a3b/v1/serving.yaml
+# Consumed by emmy-serve at boot. Engine fields require vLLM restart (PROFILE-03).
+# Every field has provenance in PROFILE_NOTES.md.
+
+engine:
+  # --- immutable identity ---
+  model: /models/Qwen3.6-35B-A3B-FP8            # container-internal path (matches -v mount)
+  model_hf_id: Qwen/Qwen3.6-35B-A3B-FP8         # for documentation + HF cache lookup
+  served_model_name: qwen3.6-35b-a3b             # name vLLM exposes on /v1/models
+  container_image: emmy-serve/vllm:26.03.post1-fst                   # emmy-derived image; docker/Dockerfile layers fastsafetensors on NGC 26.03.post1-py3
+  container_image_digest: sha256:77321e416cf49702ed6f04af9e5d39945726fea48970bb013617fddc659f9486  # docker inspect --format '{{.Id}}' of the derived image; see scripts/build_emmy_image.sh
+
+  # --- context + memory ---
+  max_model_len: 131072                          # 128K; well under 262K native, honest per CONTEXT-05
+  gpu_memory_utilization: 0.88                   # STARTING VALUE for D-13; final value written by find_kv_budget.py
+  kv_cache_dtype: fp8                            # STACK.md Qwen3.6 recipe
+  enable_prefix_caching: true                    # SERVE-07
+  enable_chunked_prefill: true                   # SERVE-07
+  max_num_batched_tokens: 16384                  # STACK.md "If latency is bottleneck" — interactive feel
+  # Note: per SUMMARY.md "Gaps to Address", optimal max_num_batched_tokens for real coding prefills
+  # (10-40K) is a measurement gap; 16384 is a reasonable starting value per STACK.md.
+
+  # --- loader ---
+  load_format: fastsafetensors                   # SERVE-10
+
+  # --- quantization ---
+  quantization: fp8                              # already quantized by Qwen; this flag is a vLLM hint
+
+  # --- tool-call parser ---
+  tool_call_parser: qwen3_coder                  # STACK.md line 94; VERIFIED for Qwen3.6 coder variant
+  # Note: Qwen3.6 is the instruct/coder variant; STACK.md commands both `qwen3_coder` and
+  # `qwen3` (reasoning parser). Alternative `hermes` works for Qwen3 non-coder variants;
+  # the recipe explicitly recommends qwen3_coder for this model. [VERIFIED: STACK.md §"Installation"]
+  enable_auto_tool_choice: true                  # required alongside tool_call_parser
+  # Reasoning parser intentionally UNSET in Phase 1 — the CONTEXT.md deferred list puts
+  # reasoning_content handling in Phase 2. Leaving reasoning_parser null = no extraction;
+  # whatever the model emits lands in `content`. Phase 2 decides whether to set `qwen3`.
+
+  # --- attention + backends ---
+  attention_backend: flashinfer                  # STACK.md line 88 + GB10 requirement
+
+  # --- network / runtime ---
+  host: 0.0.0.0                                  # container-internal bind; docker -p does loopback
+  port: 8000                                     # container-internal; host maps to 8002
+
+  # --- what is NOT here (deferred) ---
+  # speculative: null       — Phase 6 per CONTEXT.md deferred list; document in PROFILE_NOTES.md.
+  # enable_lora: false      — no LoRA in v1
+  # enable_thinking: false  — Phase 2 territory
+
+sampling_defaults:
+  # Primary source: Qwen3.6 model card on HuggingFace (STACK.md line 217-218).
+  # These are PRIORS; harness per-tool sampling overrides them. Changing them = new profile version.
+  temperature: 0.2                               # coding default; cites Qwen team blog 2026-04-16
+  top_p: 0.95
+  top_k: 40
+  repetition_penalty: 1.05
+  max_tokens: 8192
+  stop: []                                        # let tool_call_parser handle stop tokens
+  # Note: STACK.md shows `["</tool_call>", "<|im_end|>"]` as an example but for qwen3_coder's
+  # <tools> XML format the parser handles delimiters itself. Planner verifies against Qwen3.6
+  # chat template at plan time; adjust here if the parser needs explicit stops.
+
+speculative: null                                # Phase 6 per CONTEXT.md deferred; PROFILE_NOTES.md must document the null
+
+guided_decoding:
+  default_backend: xgrammar                      # vLLM 0.19 default; STACK.md
+  # Phase 1 enables XGrammar backend but does NOT gate on parse-rate SLA (Phase 2, SERVE-05).
+
+quirks:
+  strip_thinking_tags: false                     # Phase 1 leaves model output unaltered
+  promote_reasoning_to_content: false            # Phase 2 may enable for qwen3 reasoning parser
+  buffer_tool_streams: false                     # Phase 1: qwen3_coder parser streams natively
+  # Note: the prior repo used `buffer_tool_streams: true` for Qwen via the compat_proxy,
+  # but that was a workaround for Hermes XML streaming on vLLM 0.13. vLLM 0.19 + qwen3_coder
+  # parser stream tool_calls as proper SSE deltas. If Phase 2 harness hits tool-stream issues,
+  # re-enable and bump version. [ASSUMED — verify with a tool-call-in-streaming test at plan time]
+
+env:
+  # These reinforce the docker run env; validator warns if they contradict.
+  VLLM_NO_USAGE_STATS: "1"
+  DO_NOT_TRACK: "1"
+  VLLM_LOAD_FORMAT: fastsafetensors
+  VLLM_FLASHINFER_MOE_BACKEND: latency
+  VLLM_DISABLE_COMPILE_CACHE: "1"
+  HF_HUB_OFFLINE: "1"
+  TRANSFORMERS_OFFLINE: "1"

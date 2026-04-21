@@ -1,0 +1,32 @@
+# profiles/qwen3.6-35b-a3b/v1/harness.yaml
+# Phase 1: minimal valid stub. Phase 2 fills real values. Every field present for type-check.
+
+prompts:
+  system: prompts/system.md                    # exists in Phase 1 (SP_OK canary uses it)
+  edit_format: null                             # TODO(Phase-2): prompts/edit_format.md for Hashline
+  tool_descriptions: null                       # TODO(Phase-2): prompts/tool_descriptions.md
+  use_system_role: true                         # Qwen honors system role; see Pitfall #6 / D-07
+  prepend_system_text: ""                       # TODO(Phase-2): global + project AGENTS.md layering
+
+context:
+  max_input_tokens: 120000                       # TODO(Phase-2): honest max per CONTEXT-05; this is a
+                                                 #   placeholder less than max_model_len=131072
+  include_repo_map: false                        # TODO(Phase-2): Aider-style ranked symbol map
+  repo_map_max_tokens: 0                         # TODO(Phase-2): 4096 once repo-map ships
+  default_pruning: head_tail                     # TODO(Phase-2): choose per compaction policy
+
+tools:
+  format: openai                                 # TODO(Phase-2): verify qwen3_coder over the wire
+                                                 #   is OpenAI tool_calls after parsing (it is)
+  schemas: null                                  # TODO(Phase-2): tool_schemas/default.json
+  grammar: null                                  # TODO(Phase-2): grammars/tool_call.lark if SERVE-05
+                                                 #   parse-rate benchmark shows need
+  per_tool_sampling: {}                          # TODO(Phase-2): {edit: {temperature: 0.0}, ...}
+
+agent_loop:
+  max_iterations: 25                             # TODO(Phase-2): tune on daily-driver sessions
+  retry_on_unparseable_tool_call: 2              # TODO(Phase-2): paired with SERVE-05 parse rate
+  retry_on_empty_response: 1                     # TODO(Phase-2): Pitfall #6 — detect SP delivery fail
+  self_correction: enabled                       # TODO(Phase-2): ReAct self-correction policy
+
+advanced_settings_whitelist: []                  # TODO(Phase-2): Aider pattern; per model family
