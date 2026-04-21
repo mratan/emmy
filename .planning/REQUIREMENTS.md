@@ -40,7 +40,8 @@ Requirements for initial release. Each maps to roadmap phases.
 **: System is built on `@mariozechner/pi-coding-agent` v0.68.0 (pi-mono); harness extends pi via its public extension API rather than forking
 - [ ] **HARNESS-02**: Custom pi `registerProvider` for the local vLLM endpoint, including the prior repo's compat-proxy lessons (e.g. strip `reasoning_content` if needed)
 - [ ] **HARNESS-03**: Tool-call format is owned by the profile (not hardcoded); each model uses what it parses best (Hermes-style XML for Qwen, function calling for Gemma 4)
-- [ ] **HARNESS-04**: Agent loop is customizable: configurable retry-with-corrective-feedback, layered ReAct stopping conditions, infinite-loop guard, structured (not length-based) tool-result truncation
+- [x] **HARNESS-04
+**: Agent loop is customizable: configurable retry-with-corrective-feedback, layered ReAct stopping conditions, infinite-loop guard, structured (not length-based) tool-result truncation
 - [ ] **HARNESS-05**: Context management is owned by the harness: smart pruning, injection control, file pinning (via pi's `@file`), per-profile compaction policy
 - [x] **HARNESS-06
 **: System prompt assembly is layered (global → project → user), every assembly emits a hash to logs, and the assembled prompt fits a budget (default ≤ 200 tokens base, profile may extend with rationale)
@@ -54,11 +55,13 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [ ] **TOOLS-01**: `read` (file with line ranges) — pi built-in
 - [ ] **TOOLS-02**: `write` (overwrite file) — pi built-in
-- [ ] **TOOLS-03**: `edit` with hash-anchored format as default (Hashline pattern; documented 6.7→68.3% on 180 tasks for weak models); falls back to plain string-replace only when hashes can't be computed (e.g. binary)
+- [x] **TOOLS-03
+**: `edit` with hash-anchored format as default (Hashline pattern; documented 6.7→68.3% on 180 tasks for weak models); falls back to plain string-replace only when hashes can't be computed (e.g. binary)
 - [ ] **TOOLS-04**: `bash` (cwd-persistent, timeout, abort, stderr capture) — pi built-in
 - [ ] **TOOLS-05**: `grep` / `find` / `ls` enabled by default in emmy's profile
 - [ ] **TOOLS-06**: `web_fetch` (HTTP GET → markdown) — pi extension; documentation reading allowed (not inference)
-- [ ] **TOOLS-07**: MCP client extension — overrides pi's "no MCP" stance; bridges MCP servers via `@modelcontextprotocol/sdk` so emmy can consume the LF-governed 10k+ MCP server ecosystem
+- [x] **TOOLS-07
+**: MCP client extension — overrides pi's "no MCP" stance; bridges MCP servers via `@modelcontextprotocol/sdk` so emmy can consume the LF-governed 10k+ MCP server ecosystem
 - [ ] **TOOLS-08**: Diff display of edits inline (post-hoc unified diff, even in YOLO mode)
 - [ ] **TOOLS-09**: TODO/PLAN file pattern (file-based, model reads/writes via edit tool — pi's existing pattern)
 

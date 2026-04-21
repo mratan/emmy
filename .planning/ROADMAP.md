@@ -122,7 +122,7 @@ Plans:
 - [x] 02-05-PLAN.md — SUPERSEDED by 02-07/08/09 (structural revision 2026-04-21 — see CLOSEOUT for narrative)
 - [x] 02-06-PLAN.md — @emmy/tools (part 2): 8 native tools (read/write/edit/bash/grep/find/ls/web_fetch) + MCP bridge + Unicode poison check (completed 2026-04-21; commits 6a23d40 + 42190b6 + 59e4258 + c5c8f4a + 2d5c358)
 - [x] 02-07-PLAN.md — Profile v2 fill: nested tools.grammar shape + verified max_model_len + grammar + schemas + prompts + recompute hash + un-skip regression (completed 2026-04-21; commits 88e48a4 + 979a8d0)
-- [ ] 02-08-PLAN.md — SC-2/SC-3 (3 runs: reactive + disabled baseline + no_per_tool_sampling) / SC-4 / SC-5 evidence + PROFILE_NOTES validation_runs
+- [x] 02-08-PLAN.md — SC-2/SC-3 (3 runs: reactive + disabled baseline + no_per_tool_sampling) / SC-4 / SC-5 evidence + PROFILE_NOTES validation_runs (completed 2026-04-21; commits dfb8627 + 507623f; all 4 SC verdicts=pass; v2 hash sha256:0025799f→sha256:24be3eea)
 - [ ] 02-09-PLAN.md — SC-1 daily-driver walkthrough checkpoint (the only non-autonomous plan) + CLOSEOUT + REQUIREMENTS traceability + ROADMAP/STATE advance
 
 ---
