@@ -14,6 +14,7 @@ called out in CLAUDE.md pitfall #8.
 """
 from __future__ import annotations
 
+from .ci_verify import validate_airgap_report
 from .probe import (
     LayerResult,
     layer_a_network_devices,
@@ -32,4 +33,5 @@ __all__ = [
     "layer_d_hf_offline_env",
     "main",
     "run_airgap_probe",
+    "validate_airgap_report",
 ]
