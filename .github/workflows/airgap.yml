@@ -1,0 +1,112 @@
+name: Air-gap Reproducibility + Profile Hash Integrity
+
+on:
+  pull_request:
+    paths:
+      - "emmy-serve/**"
+      - "emmy_serve/**"
+      - "profiles/**"
+      - "scripts/start_emmy.sh"
+      - "scripts/smoke_test.py"
+      - "scripts/airgap_probe.py"
+      - "air_gap/**"
+      - ".github/workflows/airgap.yml"
+
+concurrency:
+  group: airgap-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  profile-hash-integrity:
+    # Layer 3 of PROFILE-06 (01-RESEARCH.md §5). Runs anywhere — no GPU required.
+    name: Profile hash + schema validation
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+      - name: Sync
+        run: uv sync --all-extras
+      - name: Validate all profiles
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          bundles=(profiles/*/v*/)
+          if [ ${#bundles[@]} -eq 0 ]; then
+            echo "no profile bundles under profiles/*/v*/ — failing"
+            exit 1
+          fi
+          for bundle in "${bundles[@]}"; do
+            echo "=== validating $bundle ==="
+            uv run emmy profile validate "$bundle"
+          done
+
+  airgap-replay:
+    # SC-4: physical-air-gap equivalence via --network none + layered D-12 assertions.
+    # 01-RESEARCH.md §10.1 + §10.2.
+    name: Air-gap replay on DGX Spark
+    needs: profile-hash-integrity
+    runs-on: [self-hosted, dgx-spark]
+    timeout-minutes: 30
+    env:
+      PROFILE: profiles/qwen3.6-35b-a3b/v1
+      PORT: "8002"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync deps (uv)
+        run: uv sync --all-extras
+
+      - name: Pre-boot airgap policy check (D-12 c/d)
+        run: uv run python -m emmy_serve.airgap.validator pre-boot --profile "$PROFILE"
+
+      - name: Stop any existing emmy-serve container
+        run: |
+          docker stop emmy-serve 2>/dev/null || true
+          docker rm emmy-serve 2>/dev/null || true
+
+      - name: Boot emmy-serve with --airgap (--network none)
+        run: ./scripts/start_emmy.sh --profile "$PROFILE" --port "$PORT" --airgap
+
+      - name: Post-boot D-12 assertions (layers a/b/c/d)
+        run: |
+          mkdir -p runs/ci-airgap
+          uv run python -m emmy_serve.airgap.validator post-boot \
+            --container emmy-serve \
+            --out runs/ci-airgap/airgap-report.json
+
+      - name: Replay 50-turn session via docker exec (zero-network proof)
+        run: |
+          # Copy fixtures into container — loopback only; --network none
+          # guarantees no outbound path regardless of what the model emits.
+          docker cp air_gap/session.jsonl emmy-serve:/tmp/session.jsonl
+          docker cp air_gap/tool_registry.json emmy-serve:/tmp/tool_registry.json
+
+          docker exec emmy-serve python3 -c "
+          import json, os
+          from emmy_serve.canary.replay import run_replay
+          from emmy_serve.profile.loader import load_profile
+          tools = json.load(open('/tmp/tool_registry.json'))['tools']
+          serving, _, ref = load_profile(os.environ.get('PROFILE', '$PROFILE'))
+          run_replay('http://127.0.0.1:8000', serving.engine.served_model_name, '/tmp/session.jsonl', tools=tools)
+          print('replay ok')
+          "
+
+      - name: Offline-HF load test (REPRO-04)
+        run: |
+          uv run pytest tests/integration/test_offline_hf.py -x -v --run-integration
+
+      - name: Tear down
+        if: always()
+        run: |
+          docker stop emmy-serve 2>/dev/null || true
+          docker rm emmy-serve 2>/dev/null || true
+
+      - name: Upload airgap report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: airgap-report
+          path: runs/ci-airgap/

@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# .githooks/pre-commit — Layer 2 of PROFILE-06 enforcement
+# (01-RESEARCH.md §5 lines 929-935).
+#
+# Activate via:    git config core.hooksPath .githooks
+# Bypass:          git commit --no-verify    (CI Layer 3 still catches drift)
+#
+# Validates profile bundles touched by staged changes. Any bundle whose stored
+# hash (profile.yaml.hash) drifts from the computed hash, or whose serving.yaml
+# fails the cross-field air-gap policy, or whose canonicalization violates
+# §4 (symlinks, non-UTF-8), aborts the commit with the exact recompute command.
+#
+# Exit codes (from emmy profile validate — 01-RESEARCH.md §5):
+#   0 ok   1 schema   2 hash mismatch   3 canonicalization   4 policy
+
+set -euo pipefail
+
+# Find profile bundles touched by staged changes (ignore deletions).
+# Bundle dir shape is `profiles/<name>/v<N>/...`; we strip to that directory.
+staged=$(git diff --cached --name-only --diff-filter=ACMR \
+  | grep -E '^profiles/[^/]+/v[0-9]+/' \
+  || true)
+
+if [[ -z "$staged" ]]; then
+  exit 0
+fi
+
+bundles=$(printf '%s\n' "$staged" \
+  | awk -F/ '{print $1"/"$2"/"$3"/"}' \
+  | sort -u)
+
+fail=0
+while IFS= read -r bundle; do
+  [[ -z "$bundle" ]] && continue
+  echo "[pre-commit] validating $bundle" >&2
+  if ! uv run emmy profile validate "$bundle"; then
+    echo "[pre-commit] FAIL: $bundle failed validation (schema/hash/policy)." >&2
+    echo "[pre-commit] Remediation:" >&2
+    echo "[pre-commit]   1) Fix policy violations (check env.VLLM_NO_USAGE_STATS / env.HF_HUB_OFFLINE)." >&2
+    echo "[pre-commit]   2) If this is an intentional content change, create profiles/<name>/v<N+1>/" >&2
+    echo "[pre-commit]      (PROFILE-06 immutability — see docs/profile-immutability.md)." >&2
+    echo "[pre-commit]   3) If this is a fresh bundle (new v<N>/) recompute the manifest with:" >&2
+    echo "[pre-commit]        uv run emmy profile hash $bundle --write" >&2
+    echo "[pre-commit] Bypass with --no-verify at your own risk (Layer 3 CI will still catch)." >&2
+    fail=1
+  fi
+done <<< "$bundles"
+
+exit "$fail"
