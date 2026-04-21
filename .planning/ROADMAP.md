@@ -13,7 +13,7 @@
 
 ## Phases
 
-- [ ] **Phase 1: Serving Foundation + Profile Schema** — emmy-serve with NGC vLLM container, Qwen3.6 end-to-end, profile registry on disk, KV/thermal/air-gap/SP_OK validation
+- [x] **Phase 1: Serving Foundation + Profile Schema** — emmy-serve with NGC vLLM container, Qwen3.6 end-to-end, profile registry on disk, KV/thermal/air-gap/SP_OK validation. **Closed 2026-04-21** with 3 documented deferrals (SC-1 architectural, SC-4→Phase 7, SC-5 re-validation→Phase 5); see 01-CLOSEOUT.md.
 - [ ] **Phase 2: Pi-Harness MVP — Daily-Driver Baseline** — pi-coding-agent with custom vLLM provider, full P1 toolset (hash-anchored edits default + MCP + web_fetch), grammar-constrained tool calls, AGENTS.md discipline; author can daily-drive
 - [ ] **Phase 3: Observability + Agent-Loop Hardening + Lived-Experience** — Langfuse v3 + OTel GenAI semconv, smart context management with per-profile compaction, lived-experience telemetry (Alt+Up/Down), GPU/KV TUI footer, offline-OK badge
 - [ ] **Phase 4: Gemma 4 Profile + Profile System Maturity** — second first-class model proves the abstraction; `/profile` atomic swap with progress UX; within-model planner/editor/critic routing
@@ -67,9 +67,9 @@ Plans:
 - [ ] 01-03-PLAN.md — emmy.canary (EVAL-07) + boot probe + docker-args renderer + smoke_test.py + start_emmy.sh (REPRO-01 contract) + operator NGC-digest capture checkpoint
 - [ ] 01-04-PLAN.md — D-14 thermal audit + thermal corpus + KV-finder bisection + 2-hour thermal replay + measured-values commit checkpoint
 - [ ] 01-05-PLAN.md — 50-turn air-gap fixture + D-12 layered validator + .github/workflows/airgap.yml self-hosted CI + PROFILE-06 Layer 2/3 enforcement + SC-4 demo checkpoint
-- [~] 01-06-PLAN.md — [GAP CLOSURE, IN PROGRESS] SC-1 throughput sweep: Task 1 COMPLETE (library + harness + 20 unit tests GREEN; commits `feea40c` + `742fd9b`), Task 2 PENDING (DGX Spark checkpoint — operator runs sweep + rewrites PROFILE_NOTES.md + rehashes profile)
-- [~] 01-07-PLAN.md — [GAP CLOSURE, IN PROGRESS] SC-5 GPU-clock sampler fix: Task 1 COMPLETE (GpuSampler per-field [N/A] tolerance + 7 unit tests GREEN; commits `4214b71` + `b510d1b`), Tasks 2 + 3 PENDING (two 2-hour DGX Spark replays — operator runs --record-floors then --assert-floors)
-- [~] 01-08-PLAN.md — [GAP CLOSURE, IN PROGRESS] SC-4 certification: Tasks 1+2 COMPLETE (certification machinery + runbook; commits `93fab55` RED + `78ff0be` GREEN + `3889724` docs; 13 unit tests GREEN), Task 3 PENDING (DGX Spark operator — register self-hosted runner, run trigger + verify scripts, commit green-run evidence JSON)
+- [x] 01-06-PLAN.md — SC-1 throughput sweep: Task 1 library + harness + 20 unit tests (`feea40c`/`742fd9b`); Task 2 **sweep executed on-machine 2026-04-21** (5 candidates, no winner); PROFILE_NOTES.md rewritten with accept-architectural disposition (`54d6b96`). Profile hash: sha256:b91e747…
+- [x] 01-07-PLAN.md — SC-5 GPU-clock sampler fix: Task 1 GpuSampler per-field `[N/A]` fix + 7 regression tests (`4214b71`/`b510d1b`). **Tasks 2+3 deferred to Phase 5 re-validation** — the decode-throughput floor that `--assert-floors` actually gates on is already recorded; clock percentiles populate at next natural thermal re-run.
+- [x] 01-08-PLAN.md — SC-4 certification machinery: Tasks 1+2 complete — trigger + verify scripts + D-12 fixtures + 13 unit tests + runbook (`93fab55`/`78ff0be`/`3889724`). **Task 3 deferred to Phase 7 public-artifact work** — local D-12 validator is executable today; the GitHub Actions wrapper makes fork-reproducibility harder, not easier (see 01-CLOSEOUT.md rationale).
 
 ---
 

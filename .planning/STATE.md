@@ -2,16 +2,16 @@
 gsd_state_version: 1.0
 milestone: v0.68.0
 milestone_name: milestone
-status: executing
-last_updated: "2026-04-21T17:30:00Z"
+status: "Phase 1 closed 2026-04-21 with 3 documented deferrals (SC-1 accept-architectural, SC-4 deferred to Phase 7, SC-5 re-validation deferred to Phase 5). Ready for Phase 2 (pi-mono harness)."
+last_updated: "2026-04-21T19:00:00Z"
 progress:
   total_phases: 7
-  completed_phases: 0
+  completed_phases: 1
   total_plans: 8
-  completed_plans: 5
-  percent: 63
-  in_progress_plans: ["01-06", "01-07", "01-08"]
-  in_progress_task: "Plan 01-08 Tasks 1+2 COMPLETE on-machine (certification machinery + runbook); Task 3 PENDING (operator runner-registration + trigger + verify + commit evidence). Plan 01-07 Task 1 COMPLETE (sampler fix); Tasks 2 + 3 PENDING (DGX Spark ~4 hours GPU total). Plan 01-06 Task 2 also PENDING (DGX Spark ~60-90 min GPU)."
+  completed_plans: 8
+  percent: 14
+  in_progress_plans: []
+  next_action: "/gsd-plan-phase 2"
 ---
 
 # State: Emmy
@@ -25,7 +25,7 @@ progress:
 
 **Project:** Emmy — fully-local coding agent on NVIDIA DGX Spark
 **Core Value:** A local coding agent good enough to be the author's daily driver, structured rigorously enough to be a public research artifact others can reproduce — with no cloud dependency anywhere in the loop.
-**Current Focus:** Phase --phase — 01
+**Current Focus:** Phase 2 (pi-mono harness) — Phase 1 closed 2026-04-21
 
 **Authoritative documents:**
 
@@ -42,16 +42,14 @@ progress:
 
 ## Current Position
 
-Phase: --phase (01) — EXECUTING
-Plan: 1 of --name
-**Phase:** 1 — Serving Foundation + Profile Schema
-**Plan:** Not yet planned (next: `/gsd-plan-phase 1`)
-**Status:** Executing Phase --phase
-**Phase Progress:** 0% (0/0 plans complete)
+Phase: 01 — CLOSED (2026-04-21)
+**Phase:** 1 — Serving Foundation + Profile Schema — closed with 3 documented deferrals; see `.planning/phases/01-serving-foundation-profile-schema/01-CLOSEOUT.md`
+**Next:** `/gsd-plan-phase 2` (pi-mono harness — daily-driver bar)
+**Phase Progress:** 100% (8/8 plans landed; 3 plans carry deferrals owned by Phase 5 or Phase 7)
 
 ```
-Phases: [▢][▢][▢][▢][▢][▢][▢]   0/7 phases complete
-Current: Phase 1 (planning pending)
+Phases: [✓][▢][▢][▢][▢][▢][▢]   1/7 phases complete
+Current: Phase 2 (planning pending — daily-driver bar)
 ```
 
 **Daily-driver bar:** end of Phase 2
