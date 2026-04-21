@@ -67,7 +67,7 @@ Plans:
 - [ ] 01-03-PLAN.md — emmy.canary (EVAL-07) + boot probe + docker-args renderer + smoke_test.py + start_emmy.sh (REPRO-01 contract) + operator NGC-digest capture checkpoint
 - [ ] 01-04-PLAN.md — D-14 thermal audit + thermal corpus + KV-finder bisection + 2-hour thermal replay + measured-values commit checkpoint
 - [ ] 01-05-PLAN.md — 50-turn air-gap fixture + D-12 layered validator + .github/workflows/airgap.yml self-hosted CI + PROFILE-06 Layer 2/3 enforcement + SC-4 demo checkpoint
-- [ ] 01-06-PLAN.md — [GAP CLOSURE] SC-1 throughput sweep: measure 4 PROFILE_NOTES.md candidate knobs with full canary suite; either close gap with winner or document as architectural
+- [~] 01-06-PLAN.md — [GAP CLOSURE, IN PROGRESS] SC-1 throughput sweep: Task 1 COMPLETE (library + harness + 20 unit tests GREEN; commits `feea40c` + `742fd9b`), Task 2 PENDING (DGX Spark checkpoint — operator runs sweep + rewrites PROFILE_NOTES.md + rehashes profile)
 - [ ] 01-07-PLAN.md — [GAP CLOSURE] SC-5 GPU-clock sampler fix ([N/A] on DGX Spark UMA) + 2nd --record-floors + 3rd --assert-floors reproducibility run
 - [ ] 01-08-PLAN.md — [GAP CLOSURE] SC-4 certification: trigger + verify scripts + runbook; operator registers self-hosted runner and commits green-run artifact
 
