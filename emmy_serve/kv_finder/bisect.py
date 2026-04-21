@@ -176,19 +176,28 @@ def _append_profile_notes(
         f.write(block)
 
 
-def _restart_vllm(profile_path: Path) -> None:
-    """Restart vLLM via ./scripts/start_emmy.sh (handles digest + canary gate).
+def _restart_vllm(profile_path: Path) -> bool:
+    """Restart vLLM via ./scripts/start_emmy.sh. Returns True on success.
 
-    Allowed to fail-loud — if start_emmy.sh exits non-zero, the finder
-    cannot continue; subprocess.run raises CalledProcessError which
-    propagates to the caller. That's correct: we'd rather the finder
-    abort than loop on a broken boot.
+    Boot failure (non-zero exit from start_emmy.sh) is a common outcome during
+    bisection: as gpu_memory_utilization climbs, model-weight load contends
+    with KV-cache reservation, and thermal-throttled cold-start can creep past
+    the 300s wait_for_vllm ceiling. Semantically this is a "this util is too
+    high" signal — functionally equivalent to a preemption failure in that
+    the bisection must step DOWN, not abort.
+
+    Returns:
+        True  — start_emmy.sh exited 0; stack is up.
+        False — start_emmy.sh exited non-zero (boot rejection, digest
+                mismatch, or wait_for_vllm timeout). Caller classifies this
+                as a failure iteration and bisects downward.
     """
-    subprocess.run(
+    result = subprocess.run(
         ["./scripts/start_emmy.sh", "--profile", str(profile_path)],
-        check=True,
+        check=False,
         timeout=420,
     )
+    return result.returncode == 0
 
 
 def _stop_vllm() -> None:
@@ -293,24 +302,43 @@ def run_finder(
         # canonical hash at end-of-run is whatever the final util produces.
         _recompute_profile_hash(profile_path)
 
-        # Restart vLLM with the new value.
-        _restart_vllm(profile_path)
+        # Restart vLLM with the new value. Boot failure is treated as a
+        # "util-too-high" signal (classified as 'boot_failure' below) rather
+        # than aborting the finder — at high util, model-weight load contends
+        # with KV reservation and thermal-throttled cold-start can exceed the
+        # 300s wait_for_vllm ceiling.
+        boot_ok = _restart_vllm(profile_path)
 
-        # Snapshot metrics pre-drive, drive load, snapshot post-drive.
-        # Swallow scrape errors: a momentarily-unresponsive /metrics is not
-        # a preemption signal; the delta comparison handles "both zero" fine.
-        try:
-            pre = scrape_metrics(base_url)
-        except Exception:
-            pre = {}
-        load_stats = drive_load(base_url, served_model, drive_minutes * 60)
-        try:
-            post = scrape_metrics(base_url)
-        except Exception:
-            post = {}
+        if boot_ok:
+            # Snapshot metrics pre-drive, drive load, snapshot post-drive.
+            # Swallow scrape errors: a momentarily-unresponsive /metrics is not
+            # a preemption signal; the delta comparison handles "both zero" fine.
+            try:
+                pre = scrape_metrics(base_url)
+            except Exception:
+                pre = {}
+            load_stats = drive_load(base_url, served_model, drive_minutes * 60)
+            try:
+                post = scrape_metrics(base_url)
+            except Exception:
+                post = {}
 
-        dmesg_hits = _check_dmesg_oom()
-        failure, deltas = _classify_failure(pre, post, dmesg_hits)
+            dmesg_hits = _check_dmesg_oom()
+            failure, deltas = _classify_failure(pre, post, dmesg_hits)
+        else:
+            # Boot rejected — treat as a failure iteration at this util. Record
+            # the event with a synthetic load_stats so the jsonl row stays
+            # shape-compatible with successful iterations.
+            load_stats = {
+                "duration_s": 0.0,
+                "p50_latency_ms": 0.0,
+                "p99_latency_ms": 0.0,
+                "tokens_generated": 0,
+                "n_requests": 0,
+            }
+            deltas = {"preemptions_delta": 0.0, "swapped_delta": 0.0}
+            dmesg_hits = _check_dmesg_oom()
+            failure = "boot_failure"
 
         append_jsonl_atomic(
             layout.iterations_path,
@@ -334,7 +362,9 @@ def run_finder(
 
         _stop_vllm()
 
-        # Update bisection state.
+        # Update bisection state. 'boot_failure' is treated equivalently to
+        # 'preemption' / 'oom' for stepping purposes — in all three, the
+        # current util is too high and the search point moves downward.
         if failure == "none":
             state.ok_value = max(state.ok_value, state.current_value)
             if state.preempted_at is not None:

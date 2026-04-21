@@ -87,3 +87,21 @@ Reordering any of 1-3 busts prefix cache. This rule is a profile contract.
 - Spec decode (Phase 6); when enabled, bump to v2 with `speculative:` block and paired benchmark recorded here.
 - `reasoning_parser` (Phase 2 will decide); if set, bump version.
 - Per-tool sampling overrides (Phase 2 fills `harness.yaml.tools.per_tool_sampling`).
+
+### KV-finder result (run 20260421T062726Z_dc65a5)
+
+| Measurement | Value |
+|---|---|
+| `gpu_memory_utilization` (final) | 0.88 |
+| First-preemption value | never observed (boot ceiling hit first) |
+| Highest clean value | 0.93 |
+| Iterations | 10 (of 12 max) |
+| Iteration values walked | 0.75, 0.77, 0.79, 0.81, 0.83, 0.85, 0.87, 0.89, 0.91, 0.93 (step-up 2%) |
+| Stop reason | Iteration 11 (value=0.95) `start_emmy.sh` boot-timeout at 300s — likely thermal-throttled cold-start, not preemption |
+| Safety margin applied | 5.0% (`0.93 - 0.05 = 0.88`) |
+| Hardware | DGX Spark (GB10 GPU) |
+| vLLM image | `emmy-serve/vllm:26.03.post1-fst` (NGC 26.03.post1-py3 + fastsafetensors 0.1.14) |
+| Run artifact | `runs/20260421T062726Z_dc65a5-kv-finder/iterations.jsonl` |
+| Finder bug | Iteration 11's boot-timeout aborted the finder instead of classifying as "too-high → bisect down". Fixed in `fix(01-04): classify start_emmy boot-timeout as preemption-equivalent` commit. |
+
+All 10 recorded iterations completed a 10-minute sustained-load drive with zero preemption and zero dmesg OOM hits, confirming `gpu_memory_utilization=0.88` is a conservative floor. The true ceiling is between 0.93 (last clean) and 0.95 (boot failure); the 5% safety margin absorbs both any preemption ceiling below 0.95 and thermal-throttle cold-start drift.

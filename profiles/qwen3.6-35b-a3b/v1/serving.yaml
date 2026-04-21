@@ -12,7 +12,7 @@ engine:
 
   # --- context + memory ---
   max_model_len: 131072                          # 128K; well under 262K native, honest per CONTEXT-05
-  gpu_memory_utilization: 0.75                   # STARTING VALUE for D-13; final value written by find_kv_budget.py
+  gpu_memory_utilization: 0.88                   # STARTING VALUE for D-13; final value written by find_kv_budget.py
   kv_cache_dtype: fp8                            # STACK.md Qwen3.6 recipe
   enable_prefix_caching: true                    # SERVE-07
   enable_chunked_prefill: true                   # SERVE-07

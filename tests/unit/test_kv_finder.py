@@ -303,7 +303,9 @@ def _stub_finder_hardware(monkeypatch, bisect_mod) -> None:
     Python 3.12 (check_output delegates to run internally). Patch specific
     bisect helpers instead.
     """
-    monkeypatch.setattr(bisect_mod, "_restart_vllm", lambda *a, **kw: None)
+    # _restart_vllm now returns True on success; tests want successful boots
+    # unless a test specifically overrides this to simulate boot failure.
+    monkeypatch.setattr(bisect_mod, "_restart_vllm", lambda *a, **kw: True)
     monkeypatch.setattr(bisect_mod, "_stop_vllm", lambda *a, **kw: None)
     monkeypatch.setattr(bisect_mod, "_check_dmesg_oom", lambda *a, **kw: [])
     monkeypatch.setattr(bisect_mod, "_hardware_id", lambda: "test-host")
