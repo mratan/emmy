@@ -18,6 +18,11 @@ def _skip_if_no_serving(profile_path: Path) -> Path:
     return serving
 
 
+@pytest.mark.xfail(
+    reason="Plan 02 commits the sha256:REPLACE_AT_FIRST_PULL sentinel; "
+    "Plan 03 operator task captures the NGC digest after docker pull",
+    strict=False,
+)
 def test_digest_format_valid(profile_path: Path):
     """SERVE-01: container_image_digest matches `sha256:<64-hex>`."""
     serving = _skip_if_no_serving(profile_path)
@@ -29,6 +34,11 @@ def test_digest_format_valid(profile_path: Path):
     )
 
 
+@pytest.mark.xfail(
+    reason="Plan 03 operator task: capture NGC digest after docker pull "
+    "(see docs/ci-runner.md + 01-RESEARCH.md §12)",
+    strict=False,
+)
 def test_digest_not_placeholder(profile_path: Path):
     """REPRO-01: digest must be a real capture — not the placeholder string."""
     serving = _skip_if_no_serving(profile_path)
