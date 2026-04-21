@@ -24,16 +24,30 @@ from ..profile.loader import load_serving
 
 
 def render_image_ref(profile_path: Path) -> str:
-    """Return 'nvcr.io/nvidia/vllm@sha256:<64-hex>' from serving.yaml.
+    """Return a content-addressable docker image reference pinned by digest.
 
-    start_emmy.sh pins the container via this function's output so there is a
-    single source of truth for the digest (SERVE-01 / REPRO-01 / T-03-01). The
-    image repo portion is derived from ``engine.container_image`` (tag stripped),
-    the digest from ``engine.container_image_digest``.
+    For registry-hosted images (``container_image`` contains a registry host
+    such as ``nvcr.io/...``), returns ``<repo>@<digest>`` — the canonical
+    docker pull-spec form. For locally-built / derived images (e.g. the
+    emmy-derived ``emmy-serve/vllm:26.03.post1-fst`` from
+    ``scripts/build_emmy_image.sh``), returns the bare ``sha256:<64-hex>``
+    image ID, which ``docker run`` accepts natively without requiring a
+    RepoDigest.
+
+    Either form pins by content hash (SERVE-01 / REPRO-01 / T-03-01): the
+    running container is exactly the digest captured in serving.yaml, never
+    whatever ``:tag`` currently resolves to.
     """
     serving = load_serving(profile_path / "serving.yaml")
-    repo = serving.engine.container_image.split(":")[0]
-    return f"{repo}@{serving.engine.container_image_digest}"
+    image = serving.engine.container_image
+    digest = serving.engine.container_image_digest
+    repo = image.split(":")[0]
+    # Heuristic: a registry-hosted repo has a dot in its first path segment
+    # (e.g. "nvcr.io/nvidia/vllm", "ghcr.io/...", "docker.io/...").
+    first_segment = repo.split("/", 1)[0]
+    if "." in first_segment:
+        return f"{repo}@{digest}"
+    return digest
 
 
 def render_vllm_cli_args(profile_path: Path) -> list[str]:

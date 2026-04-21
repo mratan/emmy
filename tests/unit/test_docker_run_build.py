@@ -22,7 +22,7 @@ engine:
   model: /models/Qwen3.6-35B-A3B-FP8
   model_hf_id: Qwen/Qwen3.6-35B-A3B-FP8
   served_model_name: qwen3.6-35b-a3b
-  container_image: nvcr.io/nvidia/vllm:26.03.post1-py3
+  container_image: emmy-serve/vllm:26.03.post1-fst
   container_image_digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
   max_model_len: 131072
   gpu_memory_utilization: 0.75
@@ -104,11 +104,59 @@ def test_render_includes_fastsafetensors_load_format(rendered_args):
 
 
 def test_render_includes_pinned_digest_image(rendered_args):
-    """SERVE-01/REPRO-01: image reference uses sha256 digest form, never a tag."""
-    # Find the image argument (it won't have a leading --flag prefix)
-    image_refs = [a for a in rendered_args if a.startswith("nvcr.io/nvidia/vllm@")]
-    assert image_refs, f"no pinned-digest image found in args: {rendered_args}"
-    assert image_refs[0].startswith("nvcr.io/nvidia/vllm@sha256:")
+    """SERVE-01/REPRO-01: image reference uses sha256 content-hash form, never a tag.
+
+    Two acceptable shapes, both pinned by content hash:
+      * ``<registry-repo>@sha256:<hex>`` — canonical pull-spec for registry images
+      * ``sha256:<hex>`` — bare image ID for locally-built/derived images
+        (Docker accepts either form in ``docker run``)
+    A raw ``:tag`` form is NOT acceptable (SERVE-01 forbids tag drift).
+    """
+    import re
+    pinned_pat = re.compile(r"(?:^|/)([^/:]+)@sha256:[0-9a-f]{64}$|^sha256:[0-9a-f]{64}$")
+    image_refs = [a for a in rendered_args if pinned_pat.search(a)]
+    assert image_refs, (
+        f"no pinned-digest image ref (repo@sha256 or bare sha256) found in args: {rendered_args}"
+    )
+
+
+def test_render_local_image_emits_bare_sha256(tmp_path, tmp_runs_dir):
+    """SERVE-01: a locally-built image (no registry host) renders as bare sha256.
+
+    Locally-built images lack a RepoDigest until pushed — the pinned form is the
+    image ID (``docker inspect --format '{{.Id}}'``), which ``docker run`` accepts
+    directly. This path covers emmy's derived ``emmy-serve/vllm:...-fst`` image.
+    """
+    yaml_text = _VALID_SERVING_YAML  # already uses emmy-serve/vllm (no registry host)
+    bundle = tmp_path / "v1"
+    bundle.mkdir()
+    (bundle / "serving.yaml").write_text(yaml_text, encoding="utf-8")
+    args = runner.render_docker_args(
+        profile_path=bundle, run_dir=tmp_runs_dir, port=8002, airgap=False
+    )
+    # The bare sha256 digest must appear as its own argv element.
+    bare_digests = [a for a in args if a.startswith("sha256:") and "/" not in a and "@" not in a]
+    assert bare_digests, f"no bare sha256 image ref found in args: {args}"
+
+
+def test_render_registry_image_emits_repo_at_sha256(tmp_path, tmp_runs_dir):
+    """SERVE-01: a registry-hosted image renders as ``<repo>@sha256:<hex>``.
+
+    This path covers pristine NGC images (``nvcr.io/...``) if a future profile
+    moves back to them. The renderer keeps both shapes working.
+    """
+    yaml_text = _VALID_SERVING_YAML.replace(
+        "container_image: emmy-serve/vllm:26.03.post1-fst",
+        "container_image: nvcr.io/nvidia/vllm:26.03.post1-py3",
+    )
+    bundle = tmp_path / "v1"
+    bundle.mkdir()
+    (bundle / "serving.yaml").write_text(yaml_text, encoding="utf-8")
+    args = runner.render_docker_args(
+        profile_path=bundle, run_dir=tmp_runs_dir, port=8002, airgap=False
+    )
+    refs = [a for a in args if a.startswith("nvcr.io/nvidia/vllm@sha256:")]
+    assert refs, f"no pinned NGC image ref found in args: {args}"
 
 
 def test_render_network_mode_none_when_airgap_true(test_profile_path: Path, tmp_runs_dir: Path):
