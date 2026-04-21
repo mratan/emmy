@@ -149,27 +149,94 @@ Explicitly excluded. Documented to prevent scope creep.
 
 ## Traceability
 
-Which phases cover which requirements. Updated during roadmap creation.
+Which phases cover which requirements. Updated by roadmapper 2026-04-20.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (filled by roadmapper) | | |
+| SERVE-01 | Phase 1 | Pending |
+| SERVE-02 | Phase 1 | Pending |
+| SERVE-03 | Phase 4 | Pending |
+| SERVE-04 | Phase 1 | Pending |
+| SERVE-05 | Phase 2 | Pending |
+| SERVE-06 | Phase 6 | Pending |
+| SERVE-07 | Phase 1 | Pending |
+| SERVE-08 | Phase 1 | Pending |
+| SERVE-09 | Phase 1 | Pending |
+| SERVE-10 | Phase 1 | Pending |
+| SERVE-11 | Phase 1 | Pending |
+| PROFILE-01 | Phase 1 | Pending |
+| PROFILE-02 | Phase 1 | Pending |
+| PROFILE-03 | Phase 1 | Pending |
+| PROFILE-04 | Phase 1 | Pending |
+| PROFILE-05 | Phase 1 | Pending |
+| PROFILE-06 | Phase 1 | Pending |
+| PROFILE-07 | Phase 4 | Pending |
+| PROFILE-08 | Phase 4 | Pending |
+| PROFILE-09 | Phase 1 | Pending |
+| HARNESS-01 | Phase 2 | Pending |
+| HARNESS-02 | Phase 2 | Pending |
+| HARNESS-03 | Phase 2 | Pending |
+| HARNESS-04 | Phase 2 | Pending |
+| HARNESS-05 | Phase 3 | Pending |
+| HARNESS-06 | Phase 2 | Pending |
+| HARNESS-07 | Phase 2 | Pending |
+| HARNESS-08 | Phase 4 | Pending |
+| HARNESS-09 | Phase 3 | Pending |
+| HARNESS-10 | Phase 2 | Pending |
+| TOOLS-01 | Phase 2 | Pending |
+| TOOLS-02 | Phase 2 | Pending |
+| TOOLS-03 | Phase 2 | Pending |
+| TOOLS-04 | Phase 2 | Pending |
+| TOOLS-05 | Phase 2 | Pending |
+| TOOLS-06 | Phase 2 | Pending |
+| TOOLS-07 | Phase 2 | Pending |
+| TOOLS-08 | Phase 2 | Pending |
+| TOOLS-09 | Phase 2 | Pending |
+| CONTEXT-01 | Phase 2 | Pending |
+| CONTEXT-02 | Phase 3 | Pending |
+| CONTEXT-03 | Phase 2 | Pending |
+| CONTEXT-04 | Phase 2 | Pending |
+| CONTEXT-05 | Phase 2 | Pending |
+| EVAL-01 | Phase 5 | Pending |
+| EVAL-02 | Phase 5 | Pending |
+| EVAL-03 | Phase 5 | Pending |
+| EVAL-04 | Phase 5 | Pending |
+| EVAL-05 | Phase 5 | Pending |
+| EVAL-06 | Phase 5 | Pending |
+| EVAL-07 | Phase 1 | Pending |
+| EVAL-08 | Phase 5 | Pending |
+| EVAL-09 | Phase 5 | Pending |
+| TELEM-01 | Phase 3 | Pending |
+| TELEM-02 | Phase 3 | Pending |
+| TELEM-03 | Phase 3 | Pending |
+| UX-01 | Phase 2 | Pending |
+| UX-02 | Phase 3 | Pending |
+| UX-03 | Phase 3 | Pending |
+| UX-04 | Phase 4 | Pending |
+| UX-05 | Phase 2 | Pending |
+| UX-06 | Phase 5 | Pending |
+| REPRO-01 | Phase 1 | Pending |
+| REPRO-02 | Phase 7 | Pending |
+| REPRO-03 | Phase 1 | Pending |
+| REPRO-04 | Phase 1 | Pending |
 
 **Coverage:**
 
-- v1 requirements: 60 total
-  - SERVE: 11
-  - PROFILE: 9
-  - HARNESS: 10
-  - TOOLS: 9
-  - CONTEXT: 5
-  - EVAL: 9
-  - TELEM: 3
-  - UX: 6
-  - REPRO: 4 (note: SERVE-09 also overlaps reproducibility/air-gap)
-- Mapped to phases: 0 (pending roadmap)
-- Unmapped: 60 ⚠️ (will be resolved by roadmapper)
+- v1 requirements: 66 actual REQ-IDs across 9 categories
+  - SERVE: 11 (P1: 8 · P2: 1 · P4: 1 · P6: 1)
+  - PROFILE: 9 (P1: 7 · P4: 2)
+  - HARNESS: 10 (P2: 7 · P3: 2 · P4: 1)
+  - TOOLS: 9 (P2: 9)
+  - CONTEXT: 5 (P2: 4 · P3: 1)
+  - EVAL: 9 (P1: 1 · P5: 8)
+  - TELEM: 3 (P3: 3)
+  - UX: 6 (P2: 2 · P3: 2 · P4: 1 · P5: 1)
+  - REPRO: 4 (P1: 3 · P7: 1)
+- Mapped to phases: 66 / 66 ✓
+- Unmapped: 0 ✓
+
+**Note on count:** the prior version of this footer said "60 total" but the categorical sub-counts in that footer also summed to 66. The 66 figure is the verified enumerated total of REQ-IDs in the document; the 60 figure was a transcription error.
 
 ---
 *Requirements defined: 2026-04-20*
-*Last updated: 2026-04-20 after initial definition*
+*Last updated: 2026-04-20 — traceability filled by roadmapper*
