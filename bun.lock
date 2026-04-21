@@ -49,7 +49,14 @@
         "pi-emmy": "./bin/pi-emmy.ts",
       },
       "dependencies": {
+        "@emmy/provider": "workspace:*",
+        "@emmy/telemetry": "workspace:*",
+        "@emmy/tools": "workspace:*",
         "@mariozechner/pi-coding-agent": "0.68.0",
+        "js-yaml": "4.1.0",
+      },
+      "devDependencies": {
+        "@types/js-yaml": "4.0.9",
       },
     },
   },
