@@ -224,25 +224,99 @@ def test_finder_subset_includes_the_three_agent_prompts():
 # ---------------------------------------------------------------------------
 
 
+_VALID_SERVING_YAML = """\
+engine:
+  model: /models/Qwen3.6-35B-A3B-FP8
+  model_hf_id: Qwen/Qwen3.6-35B-A3B-FP8
+  served_model_name: test-model
+  container_image: nvcr.io/nvidia/vllm:26.03.post1-py3
+  container_image_digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  max_model_len: 131072
+  gpu_memory_utilization: 0.75
+  kv_cache_dtype: fp8
+  enable_prefix_caching: true
+  enable_chunked_prefill: true
+  max_num_batched_tokens: 16384
+  load_format: fastsafetensors
+  quantization: fp8
+  tool_call_parser: qwen3_coder
+  enable_auto_tool_choice: true
+  attention_backend: flashinfer
+  host: 0.0.0.0
+  port: 8000
+sampling_defaults:
+  temperature: 0.2
+  top_p: 0.95
+  top_k: 40
+  repetition_penalty: 1.05
+  max_tokens: 8192
+  stop: []
+speculative: null
+guided_decoding:
+  default_backend: xgrammar
+quirks:
+  strip_thinking_tags: false
+  promote_reasoning_to_content: false
+  buffer_tool_streams: false
+env:
+  VLLM_NO_USAGE_STATS: "1"
+  DO_NOT_TRACK: "1"
+  VLLM_LOAD_FORMAT: fastsafetensors
+  VLLM_FLASHINFER_MOE_BACKEND: latency
+  VLLM_DISABLE_COMPILE_CACHE: "1"
+  HF_HUB_OFFLINE: "1"
+  TRANSFORMERS_OFFLINE: "1"
+"""
+
+_VALID_PROFILE_YAML = """\
+profile:
+  id: test
+  version: v1
+  family: test
+  base_model: Test/Test-Model
+  description: test fixture profile
+  created: '2026-04-21'
+  hash: sha256:0000000000000000000000000000000000000000000000000000000000000000
+  hash_algorithm: sha256
+  hash_manifest_version: 1
+  tags: [test]
+  community_sources:
+    - title: test
+      url: https://example.com/
+      retrieved: '2026-04-21'
+"""
+
+
 def _setup_finder_env(tmp_path: Path) -> Path:
-    """Build a minimal profile bundle + serving.yaml shape the finder can rewrite."""
+    """Build a full schema-valid profile bundle the finder can rewrite."""
     prof = tmp_path / "v1"
     prof.mkdir()
-    (prof / "serving.yaml").write_text(
-        "engine:\n"
-        "  model: /models/test\n"
-        "  served_model_name: test-model\n"
-        "  gpu_memory_utilization: 0.75\n",
-        encoding="utf-8",
-    )
-    (prof / "profile.yaml").write_text(
-        "profile:\n"
-        "  id: test\n"
-        "  version: v1\n"
-        "  hash: sha256:0000000000000000000000000000000000000000000000000000000000000000\n",
-        encoding="utf-8",
-    )
+    (prof / "serving.yaml").write_text(_VALID_SERVING_YAML, encoding="utf-8")
+    (prof / "profile.yaml").write_text(_VALID_PROFILE_YAML, encoding="utf-8")
     return prof
+
+
+def _stub_finder_hardware(monkeypatch, bisect_mod) -> None:
+    """Patch the hardware-facing helpers so the finder can run without a live box.
+
+    Patching `subprocess.run` globally breaks `subprocess.check_output` in
+    Python 3.12 (check_output delegates to run internally). Patch specific
+    bisect helpers instead.
+    """
+    monkeypatch.setattr(bisect_mod, "_restart_vllm", lambda *a, **kw: None)
+    monkeypatch.setattr(bisect_mod, "_stop_vllm", lambda *a, **kw: None)
+    monkeypatch.setattr(bisect_mod, "_check_dmesg_oom", lambda *a, **kw: [])
+    monkeypatch.setattr(bisect_mod, "_hardware_id", lambda: "test-host")
+    # Skip the `emmy profile hash --write` subprocess call but let other
+    # subprocess.run calls (none expected here) pass through.
+    _real_run = bisect_mod.subprocess.run
+
+    def _fake_run(cmd, **kw):
+        if cmd and "emmy" in " ".join(str(c) for c in cmd):
+            return mock.Mock(returncode=0, stdout="", stderr="")
+        return _real_run(cmd, **kw)
+
+    monkeypatch.setattr(bisect_mod.subprocess, "run", _fake_run)
 
 
 def test_run_finder_converges_when_no_preemption_and_bumps_at_ceiling(
@@ -252,10 +326,7 @@ def test_run_finder_converges_when_no_preemption_and_bumps_at_ceiling(
     from emmy_serve.kv_finder import bisect
 
     profile_path = _setup_finder_env(tmp_path)
-
-    # Stub subprocess (start_emmy.sh + hash --write + docker stop/rm)
-    monkeypatch.setattr(bisect.subprocess, "run", lambda *a, **kw: mock.Mock(returncode=0))
-    monkeypatch.setattr(bisect, "_check_dmesg_oom", lambda *a, **kw: [])
+    _stub_finder_hardware(monkeypatch, bisect)
 
     # scrape_metrics returns zero preemptions every time (no preemption across run).
     monkeypatch.setattr(
@@ -306,8 +377,7 @@ def test_run_finder_backs_off_5pct_after_preemption(tmp_path: Path, monkeypatch)
     from emmy_serve.kv_finder import bisect
 
     profile_path = _setup_finder_env(tmp_path)
-    monkeypatch.setattr(bisect.subprocess, "run", lambda *a, **kw: mock.Mock(returncode=0))
-    monkeypatch.setattr(bisect, "_check_dmesg_oom", lambda *a, **kw: [])
+    _stub_finder_hardware(monkeypatch, bisect)
 
     # Sequence of scrape_metrics returns: 0,0 (no preempt iter 0 pre/post),
     # then 0,5 (preempt iter 1 post-drive), then 5,5,5,5 ... (no more preempts).
@@ -357,8 +427,7 @@ def test_run_finder_writes_summary_json(tmp_path: Path, monkeypatch):
     from emmy_serve.kv_finder import bisect
 
     profile_path = _setup_finder_env(tmp_path)
-    monkeypatch.setattr(bisect.subprocess, "run", lambda *a, **kw: mock.Mock(returncode=0))
-    monkeypatch.setattr(bisect, "_check_dmesg_oom", lambda *a, **kw: [])
+    _stub_finder_hardware(monkeypatch, bisect)
     monkeypatch.setattr(
         bisect, "scrape_metrics", lambda *a, **kw: {"vllm:num_preemptions_total": 0.0}
     )
