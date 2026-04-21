@@ -1,3 +1,16 @@
+---
+gsd_state_version: 1.0
+milestone: v0.68.0
+milestone_name: milestone
+status: Roadmap approved; awaiting first phase plan
+last_updated: "2026-04-21T01:10:48.234Z"
+progress:
+  total_phases: 7
+  completed_phases: 0
+  total_plans: 0
+  completed_plans: 0
+---
+
 # State: Emmy
 
 **Last updated:** 2026-04-20
@@ -12,6 +25,7 @@
 **Current Focus:** Phase 1 — Serving Foundation + Profile Schema
 
 **Authoritative documents:**
+
 - `.planning/PROJECT.md` — what Emmy is, constraints, key decisions
 - `.planning/ROADMAP.md` — 7-phase plan with success criteria
 - `.planning/REQUIREMENTS.md` — 66 v1 requirements with phase mappings
@@ -89,6 +103,7 @@ Per research/SUMMARY.md "Research Flags" — questions that may need deeper rese
 - **Phase 6:** Qwen3.6 MTP acceptance rates on coding workloads; whether two profiles can co-load on 128 GB UMA without container swaps.
 
 Phases with standard patterns (skip research-phase per SUMMARY.md):
+
 - **Phase 1:** stack already deeply researched; planning starts from STACK.md directly.
 - **Phase 7:** publication is process work, not technical research.
 
@@ -99,6 +114,7 @@ Phases with standard patterns (skip research-phase per SUMMARY.md):
 **Next action:** `/gsd-plan-phase 1` to decompose Phase 1 into 3–5 executable plans.
 
 **Phase 1 starting context (for plan-phase agent):**
+
 - Read research/STACK.md sections on NGC container + Qwen3.6 + FP8 + KV budget + thermal.
 - Read research/PITFALLS.md pitfalls 1, 2, 6, 7, 8, 12 (all are Phase 1 territory).
 - Read research/ARCHITECTURE.md sections 2 (profile-system design with concrete schema) and 4 (deployment topology).
