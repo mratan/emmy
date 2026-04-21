@@ -31,6 +31,7 @@ without hardware.
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 import time
@@ -90,20 +91,54 @@ def _check_dmesg_oom(since: str = "10 minutes ago") -> list[str]:
 
 
 def _rewrite_gpu_mem_util(serving_path: Path, value: float) -> None:
-    """Atomically rewrite ``serving.yaml.engine.gpu_memory_utilization``.
+    """Atomically rewrite ``serving.yaml.engine.gpu_memory_utilization`` in place.
 
     Rounds to 3 decimals (matches RESEARCH.md §8 line 1281 — finder precision
-    is per-percent, not per-basis-point). Uses ``yaml.safe_dump`` to preserve
-    the structure + comments as best PyYAML allows; serving.yaml carries the
-    prior-repo template comments, and safe_dump strips them (documented
-    behaviour — PyYAML cannot round-trip comments through safe_load/safe_dump).
-    The hash-recompute at the end of run_finder ensures profile.yaml.hash
-    tracks the resulting canonical bytes, so the validator stays GREEN.
+    is per-percent, not per-basis-point).
+
+    Comment-preserving line rewrite: PyYAML safe_dump strips comments, which
+    destroys the prior-repo template provenance AND (worse) changes the
+    canonical content hash every iteration, triggering the immutability
+    validator on every ``start_emmy.sh`` boot. Instead, we do an in-place
+    line substitution against the single ``gpu_memory_utilization:`` line —
+    no YAML round-trip, comments preserved, only the target field changes.
+
+    Early-return when the file already carries the target value: emits NO
+    write, preserving the profile bytes exactly and keeping profile.yaml.hash
+    valid across iterations that don't move the bisection point.
     """
-    raw: dict[str, Any] = yaml.safe_load(serving_path.read_text(encoding="utf-8"))
-    raw.setdefault("engine", {})
-    raw["engine"]["gpu_memory_utilization"] = round(value, 3)
-    write_text_atomic(serving_path, yaml.safe_dump(raw, sort_keys=False))
+    rounded = round(value, 3)
+    text = serving_path.read_text(encoding="utf-8")
+    new_text, substitutions = re.subn(
+        r"(^\s*gpu_memory_utilization:\s*)([0-9.]+)(.*)$",
+        lambda m: f"{m.group(1)}{rounded:g}{m.group(3)}",
+        text,
+        count=1,
+        flags=re.MULTILINE,
+    )
+    if substitutions != 1:
+        raise ValueError(
+            f"_rewrite_gpu_mem_util: could not locate gpu_memory_utilization "
+            f"line in {serving_path} (substitutions={substitutions})"
+        )
+    if new_text == text:
+        return  # value unchanged — no write, no hash churn
+    write_text_atomic(serving_path, new_text)
+
+
+def _recompute_profile_hash(profile_path: Path) -> None:
+    """Recompute profile.yaml.hash after a serving.yaml edit.
+
+    Called between bisect iterations so the immutability validator invoked
+    by ``./scripts/start_emmy.sh`` sees a self-consistent profile. The final
+    canonical hash at end-of-run is whatever the final util produces.
+    """
+    subprocess.run(
+        ["uv", "run", "emmy", "profile", "hash", str(profile_path), "--write"],
+        check=True,
+        timeout=60,
+        stdout=subprocess.DEVNULL,
+    )
 
 
 def _hardware_id() -> str:
@@ -253,8 +288,10 @@ def run_finder(
 
     while state.iters < max_iters:
         _rewrite_gpu_mem_util(serving_path, state.current_value)
-        # NOTE: do NOT recompute profile.yaml.hash here — intermediate iterations
-        # are out-of-band; the single final write (after convergence) rehashes.
+        # Recompute profile.yaml.hash so the immutability validator invoked by
+        # ./scripts/start_emmy.sh sees a self-consistent profile. The final
+        # canonical hash at end-of-run is whatever the final util produces.
+        _recompute_profile_hash(profile_path)
 
         # Restart vLLM with the new value.
         _restart_vllm(profile_path)
