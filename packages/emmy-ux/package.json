@@ -1,0 +1,15 @@
+{
+  "name": "@emmy/ux",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "bin": { "pi-emmy": "./bin/pi-emmy.ts" },
+  "dependencies": {
+    "@mariozechner/pi-coding-agent": "0.68.0"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  }
+}

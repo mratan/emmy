@@ -28,3 +28,8 @@ hf-cache/
 # Env
 .env
 .env.local
+
+# TS/Node
+node_modules/
+packages/*/dist/
+.turbo/
