@@ -59,7 +59,7 @@
   4. With the network cable physically pulled, `start_emmy.sh` boots successfully, the smoke test passes, and a 50-turn synthetic coding session produces zero outbound network packets (verified via `ss`/`tcpdump` snapshot in CI).
   5. A 2-hour sustained-load test on the actual coding workload completes with: zero vLLM preemption events in steady state, GPU clock not throttled below the documented per-profile threshold, no OOM-killer events on the harness host process.
 
-**Plans**: 5 plans
+**Plans**: 8 plans (5 initial + 3 gap-closure from 2026-04-21 verification)
 
 Plans:
 - [ ] 01-01-PLAN.md — Wave 0 scaffold: uv package + pytest config + RED test stubs for every Req-ID + .gitignore/.gitattributes + self-hosted runner doc
@@ -67,6 +67,9 @@ Plans:
 - [ ] 01-03-PLAN.md — emmy.canary (EVAL-07) + boot probe + docker-args renderer + smoke_test.py + start_emmy.sh (REPRO-01 contract) + operator NGC-digest capture checkpoint
 - [ ] 01-04-PLAN.md — D-14 thermal audit + thermal corpus + KV-finder bisection + 2-hour thermal replay + measured-values commit checkpoint
 - [ ] 01-05-PLAN.md — 50-turn air-gap fixture + D-12 layered validator + .github/workflows/airgap.yml self-hosted CI + PROFILE-06 Layer 2/3 enforcement + SC-4 demo checkpoint
+- [ ] 01-06-PLAN.md — [GAP CLOSURE] SC-1 throughput sweep: measure 4 PROFILE_NOTES.md candidate knobs with full canary suite; either close gap with winner or document as architectural
+- [ ] 01-07-PLAN.md — [GAP CLOSURE] SC-5 GPU-clock sampler fix ([N/A] on DGX Spark UMA) + 2nd --record-floors + 3rd --assert-floors reproducibility run
+- [ ] 01-08-PLAN.md — [GAP CLOSURE] SC-4 certification: trigger + verify scripts + runbook; operator registers self-hosted runner and commits green-run artifact
 
 ---
 
@@ -288,3 +291,4 @@ Hash-anchored edits (P1 differentiator from FEATURES.md) land in P2 as the **def
 *Roadmap created: 2026-04-20*
 *Granularity: Standard (5–8 phases)*
 *Total phases: 7*
+*Updated: 2026-04-21 — Phase 1 extended with 3 gap-closure plans (01-06/07/08) from VERIFICATION.md*
