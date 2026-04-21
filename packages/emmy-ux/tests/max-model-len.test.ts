@@ -1,15 +1,18 @@
 // packages/emmy-ux/tests/max-model-len.test.ts
 //
-// RED tests for computeMaxInputTokens (Plan 02-04 Task 1).
+// Tests for computeMaxInputTokens.
 //   - Happy path: (0.88, 131072, 16384) → 114688
 //   - Low gpu_memory_utilization → MaxModelLenError
 //   - Zero / negative max_model_len → MaxModelLenError
 //   - Output reserve >= max_model_len → MaxModelLenError
-//
-// Plan-07 regression (SC-5): skipped until Plan 07 fills harness.yaml v2 with the
-// computed max_input_tokens. Marker: TODO(plan-07).
+//   - Plan-07 SC-5 regression: v2 harness.yaml.context.max_input_tokens is
+//     consistent with computeMaxInputTokens(measured, serving.max_model_len, 16384).
+//     Un-skipped in Plan 02-07 once harness.yaml was filled with the honest value.
 
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { describe, expect, test } from "bun:test";
+import yaml from "js-yaml";
 import { computeMaxInputTokens, MaxModelLenError } from "@emmy/ux";
 
 describe("computeMaxInputTokens — happy path", () => {
@@ -66,11 +69,32 @@ describe("computeMaxInputTokens — error cases", () => {
   });
 });
 
-// TODO(plan-07): un-skip once Plan 07 fills
-// profiles/qwen3.6-35b-a3b/v2/harness.yaml:context.max_input_tokens with the
-// honest value matching PROFILE_NOTES.md measured_values.gpu_memory_utilization
-// and serving.yaml.engine.max_model_len. SC-5 consistency regression.
-test.skip("[TODO(plan-07)] harness.yaml v2 context.max_input_tokens is consistent with computeMaxInputTokens", () => {
-  // Intentionally left skipped. See marker above.
-  expect(true).toBe(true);
+// Plan-07 SC-5 regression (un-skipped after harness.yaml v2 was filled by Plan 02-07):
+// asserts harness.yaml.context.max_input_tokens equals
+// computeMaxInputTokens(measured_gpu_memory_utilization from PROFILE_NOTES.md,
+// max_model_len from serving.yaml, 16384 reserve). Any drift in any input file
+// without re-running scripts/compute_max_input_tokens.ts surfaces here.
+describe("Plan-07 regression — harness.yaml v2 SC-5 consistency", () => {
+  test("harness.yaml v2 context.max_input_tokens matches computeMaxInputTokens", () => {
+    const profileDir = resolve(__dirname, "../../../profiles/qwen3.6-35b-a3b/v2");
+    const serving = yaml.load(
+      readFileSync(`${profileDir}/serving.yaml`, "utf8"),
+    ) as { engine: { max_model_len: number } };
+    const harness = yaml.load(
+      readFileSync(`${profileDir}/harness.yaml`, "utf8"),
+    ) as { context: { max_input_tokens: number } };
+    const notes = readFileSync(`${profileDir}/PROFILE_NOTES.md`, "utf8");
+    const fm = notes.match(/^---\n([\s\S]*?)\n---/);
+    expect(fm).not.toBeNull();
+    const measured = yaml.load(fm![1]!) as {
+      measured_values: { gpu_memory_utilization: number };
+    };
+
+    const computed = computeMaxInputTokens({
+      measured_gpu_memory_utilization: measured.measured_values.gpu_memory_utilization,
+      max_model_len: serving.engine.max_model_len,
+      output_reserve_tokens: 16384,
+    });
+    expect(harness.context.max_input_tokens).toBe(computed.max_input_tokens);
+  });
 });

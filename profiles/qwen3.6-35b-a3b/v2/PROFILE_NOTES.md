@@ -165,3 +165,35 @@ re-validation), not as a blocking Phase 1 task.
 | Finder bug | Iteration 11's boot-timeout aborted the finder instead of classifying as "too-high → bisect down". Fixed in `fix(01-04): classify start_emmy boot-timeout as preemption-equivalent` commit. |
 
 All 10 recorded iterations completed a 10-minute sustained-load drive with zero preemption and zero dmesg OOM hits, confirming `gpu_memory_utilization=0.88` is a conservative floor. The true ceiling is between 0.93 (last clean) and 0.95 (boot failure); the 5% safety margin absorbs both any preemption ceiling below 0.95 and thermal-throttle cold-start drift.
+
+### Harness (Phase 2)
+
+Phase 2 filled every Phase-2-deferred field in `harness.yaml`. Provenance for
+every default value lives in the table below (PROFILE-05 discipline). The
+computed `context.max_input_tokens` derivation and the nested
+`tools.grammar.{path, mode}` shape both originated in CONTEXT D-11 and CONTEXT-05.
+
+| Field | Value | Source | Retrieved |
+|-------|-------|--------|-----------|
+| `serving.engine.max_model_len` | 131072 | Qwen/Qwen3.6-35B-A3B-FP8 native window (128K; well under 262K YaRN) — honest per CONTEXT-05 + `.planning/research/STACK.md`. Qwen3.6 HF model card referenced in CONTEXT.md §source_excerpts. Value unchanged from v1. | 2026-04-21 |
+| `context.max_input_tokens` | 114688 | `scripts/compute_max_input_tokens.ts` — `max_input_tokens = max_model_len(131072) - output_reserve_tokens(16384) = 114688` (measured_gpu_memory_utilization=0.88 from `measured_values` frontmatter above) | 2026-04-21 |
+| `context.default_pruning` | `head_tail` | Phase 2 planner decision (CONTEXT.md Claude's Discretion — compaction policy not finalized until Phase 3 HARNESS-05) | 2026-04-21 |
+| `prompts.edit_format` | `prompts/edit_format.md` | D-05..D-09 hash-anchored Hashline pattern. Usage examples + StaleHashError/HashResolutionError semantics. | 2026-04-21 |
+| `prompts.tool_descriptions` | `prompts/tool_descriptions.md` | HARNESS-06 (<2000 char budget; actual 1786 chars). One section per native tool with args + usage norms. | 2026-04-21 |
+| `prompts.prepend_system_text` | `""` | CONTEXT-04 locks layering order at runtime in `@emmy/ux/prompt-assembly.ts` (system.md → AGENTS.md → tool_defs → user). Profile-side prepend is therefore empty; any project-global text goes in `AGENTS.md` instead. | 2026-04-21 |
+| `tools.format` | `openai` | vLLM 0.19 + `tool_call_parser: qwen3_coder` in serving.yaml emits OpenAI-compatible `tool_calls` after parsing. Confirmed in Plan 02-02 `@emmy/provider` wire tests. | 2026-04-21 |
+| `tools.schemas` | `tool_schemas/` | 8 JSON files mirror `registerNativeTools` declarations in `packages/emmy-tools/src/native-tools.ts` (source of truth). | 2026-04-21 |
+| `tools.grammar.path` | `grammars/tool_call.lark` | CONTEXT D-11 + vLLM 0.19 `extra_body.guided_decoding.grammar` seam + XGrammar Lark format ([vLLM guided_decoding docs](https://docs.vllm.ai/en/v0.19.0/features/structured_outputs/)). | 2026-04-21 |
+| `tools.grammar.mode` | `reactive` | CONTEXT D-11 + CLAUDE.md Pitfall #6 ("grammar is a correctness backstop, not a quality lever"). `disabled` is reserved for the SC-3 no-grammar baseline (Plan 02-08, D-14). | 2026-04-21 |
+| `tools.per_tool_sampling.edit.temperature` | 0.0 | CONTEXT.md §Claude's Discretion seed. Qwen team recommendation for structured-output / deterministic edit turns ([Qwen3.6 HF model card](https://huggingface.co/Qwen/Qwen3.6-35B-A3B-FP8)). | 2026-04-21 |
+| `tools.per_tool_sampling.bash.temperature` | 0.0 | CONTEXT.md §Claude's Discretion seed. Qwen team recommendation for code-generation / command-emission turns. | 2026-04-21 |
+| `tools.per_tool_sampling.read.temperature` | 0.0 | Emmy project decision — a file-read turn is deterministic, no sampling needed. | 2026-04-21 |
+| `agent_loop.max_iterations` | 25 | Unchanged from v1. Tuned on daily-driver observation in Phase 2; revisit at Phase 5 eval. | 2026-04-21 |
+| `agent_loop.retry_on_unparseable_tool_call` | 2 | Unchanged from v1. Paired with SC-3 parse-rate gate (Plan 08). D-11 reactive-grammar retry budget. | 2026-04-21 |
+| `agent_loop.retry_on_empty_response` | 1 | Unchanged from v1. One retry before surfacing as possible SP-delivery failure (Pitfall #6). | 2026-04-21 |
+| `agent_loop.self_correction` | `enabled` | Unchanged from v1. ReAct-style self-correction on parseable tool errors. | 2026-04-21 |
+| `advanced_settings_whitelist` | `[reasoning_effort, thinking_budget]` | [Aider model settings guide](https://aider.chat/docs/config/adv-model-settings.html) — Aider allowlist pattern for Qwen-family advanced settings. Only fields that can be set per call without engine restart. | 2026-04-21 |
+
+### Phase-1 schema patch (Phase-2 D-11 discovery)
+
+During Phase 2 planning the checker surfaced that the Phase-1 `HarnessConfig.tools.grammar` model was a bare string, while the Phase-2 CONTEXT D-11 lock requires `{path, mode}`. A dated schema patch landed in `emmy_serve/profile/schema.py` via commit `feat(phase-01-schema-patch): allow nested tools.grammar.{path,mode}; resolves Phase-2 D-11 discovery` (SHA recorded in Plan 02-09 CLOSEOUT.md addendum). Phase 1 unit tests stayed green after the patch (137 pass / 1 skip — unchanged from baseline); v1's `grammar: null` still validates (nested/None is backward-compatible with Optional[str] → Optional[GrammarConfig]).
