@@ -18,6 +18,24 @@ validation_runs:
 - run_id: 20260421T092927Z_a1b62b-thermal
   hash: sha256:5a072c14e4ad3684cf5f145cad188b3b55a74c8704bfcb08d722529d202d30fd
   purpose: 2-hour thermal replay (record-floors; zero preemptions, zero OOM)
+- run_id: phase2-sc2
+  hash: sha256:e26ed4011db54a3bb9251e719bf5a3a299884dd6cfca79edbf9c0fa64cd495b6
+  purpose: SC-2 hash-anchored edit regression (5 fixtures; 0 hash-anchored string-not-found failures vs 1 baseline — Hashline disambiguation win proved)
+- run_id: phase2-sc3-reactive
+  hash: sha256:af3296773dcdb8eed6ffa5da391969425761a06174abeae01f8b0979c3f7756e
+  purpose: SC-3 parse-rate (D-12 graduated SLA; 100 turns reactive grammar; syn=1.0 real=1.0 agg=1.0 — production path, verdict=pass)
+- run_id: phase2-sc3-disabled
+  hash: sha256:66493495f30e7a2fe99a8b0667a5d353f79717a32cea9405de5e3b5ee710d279
+  purpose: SC-3 no-grammar baseline (D-14 counterfactual; 100 turns with tools.grammar.mode=disabled; syn=1.0 real=1.0 agg=1.0 — informational, no verdict gate)
+- run_id: phase2-sc3-no_per_tool_sampling
+  hash: sha256:e7318075d84be772b8fac6ac51cd0ab969ba37ee2e2f0c98a7f82fca3eb2839b
+  purpose: SC-3 without per_tool_sampling (W3 / CLAUDE.md Pitfall #5 Before/After; 100 turns with harness.yaml.tools.per_tool_sampling removed; syn=1.0 real=1.0 agg=1.0 — informational)
+- run_id: phase2-sc4
+  hash: sha256:e0deaeea6299a7752d01a75e62375a182890d1a4c5922a32f47eecd7f601d0a1
+  purpose: SC-4 MCP bridge smoke + 4 Unicode poison categories (Cf/Co/Cs/bidi) rejected at registration; in-process test MCP filesystem server exercises flat-name dispatch
+- run_id: phase2-sc5
+  hash: sha256:f7ae94a0370191d22ba1b9b84ea3b40c634cc26651f42018b20fc31f067e5f35
+  purpose: SC-5 prompt.sha256 byte-stability across 3 runs + AGENTS.md verbatim + max_input_tokens consistency (committed=computed=114688)
 ---
 
 # Qwen3.6-35B-A3B-FP8 — v1 Profile Notes
@@ -197,3 +215,24 @@ computed `context.max_input_tokens` derivation and the nested
 ### Phase-1 schema patch (Phase-2 D-11 discovery)
 
 During Phase 2 planning the checker surfaced that the Phase-1 `HarnessConfig.tools.grammar` model was a bare string, while the Phase-2 CONTEXT D-11 lock requires `{path, mode}`. A dated schema patch landed in `emmy_serve/profile/schema.py` via commit `feat(phase-01-schema-patch): allow nested tools.grammar.{path,mode}; resolves Phase-2 D-11 discovery` (SHA recorded in Plan 02-09 CLOSEOUT.md addendum). Phase 1 unit tests stayed green after the patch (137 pass / 1 skip — unchanged from baseline); v1's `grammar: null` still validates (nested/None is backward-compatible with Optional[str] → Optional[GrammarConfig]).
+
+### Phase 2 validation_runs
+
+Plan 02-08 shipped evidence for SC-2, SC-3, SC-4, SC-5 (SC-1 is the Plan 02-09 human-verify walkthrough). Every artifact carries `started_at`/`ended_at` and the profile ref embedding `{id, version, hash}`. The frontmatter `validation_runs:` list above is the canonical index; the table below is the human-readable companion.
+
+| Run ID | Artifact | SHA-256 |
+|--------|----------|---------|
+| phase2-sc2 | `runs/phase2-sc2/report.json` | sha256:e26ed4011db54a3bb9251e719bf5a3a299884dd6cfca79edbf9c0fa64cd495b6 |
+| phase2-sc3-reactive | `runs/phase2-sc3/report.json` | sha256:af3296773dcdb8eed6ffa5da391969425761a06174abeae01f8b0979c3f7756e |
+| phase2-sc3-disabled | `runs/phase2-sc3/baseline.json` | sha256:66493495f30e7a2fe99a8b0667a5d353f79717a32cea9405de5e3b5ee710d279 |
+| phase2-sc3-no_per_tool_sampling | `runs/phase2-sc3/no_per_tool_sampling.json` | sha256:e7318075d84be772b8fac6ac51cd0ab969ba37ee2e2f0c98a7f82fca3eb2839b |
+| phase2-sc4 | `runs/phase2-sc4/report.json` | sha256:e0deaeea6299a7752d01a75e62375a182890d1a4c5922a32f47eecd7f601d0a1 |
+| phase2-sc5 | `runs/phase2-sc5/report.json` | sha256:f7ae94a0370191d22ba1b9b84ea3b40c634cc26651f42018b20fc31f067e5f35 |
+
+**Key findings from Plan 02-08:**
+
+- **SC-3 (grammar reactivity pays off even when never needed):** Qwen3.6-35B-A3B-FP8 emits parseable tool-call arguments on 300/300 first-try attempts across all three variants. The reactive-grammar retry path fired 0 times — confirming D-11's design thesis: grammar is a correctness backstop, not a quality lever. The zero-cost baseline is genuine.
+- **SC-3 W3 / Pitfall #5 finding (per_tool_sampling):** removing `tools.per_tool_sampling` from harness.yaml produced IDENTICAL parse-rate (100%) on the same 100-call corpus. In Phase 2's single-turn wire-shape corpus, the per-tool-sampling knobs are unobservable — their effect manifests on tool-specific turns during multi-turn agent-loop sessions (Phase 5 eval territory). Phase 2 keeps the knobs because they cost nothing and document intent.
+- **SC-2 (Hashline win):** 0 hash-anchored failures vs 1 baseline failure on sc2_05 (near-duplicate line disambiguation). This is the canonical Hashline regression-solving case.
+- **SC-4 (MCP + poison):** In-process fs-server registered 2 tools (`fs_read_file`, `fs_list_dir`) with flat names, both dispatched successfully. All 4 Unicode poison categories (Cf U+200B, Co U+E000, Cs U+D800, bidi U+202E) rejected via PoisonError with the codepoint in hex, while a clean companion tool still registered in the same loop. D-18 blocklist wiring confirmed.
+- **SC-5:** prompt.sha256 byte-stable across 3 runs (unique_count=1), AGENTS.md verbatim included (tokens_approx=125 for a 500-byte canonical fixture), max_input_tokens committed=114688=computed (CONTEXT-05 consistency gate GREEN).

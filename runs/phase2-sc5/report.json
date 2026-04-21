@@ -1,0 +1,118 @@
+{
+  "sc": "SC-5",
+  "phase": "02",
+  "profile": {
+    "id": "qwen3.6-35b-a3b",
+    "version": "v2",
+    "hash": "sha256:0025799f3bbbb802ebed207791e5e0b39624fa93f0ad6b315d7c488e3153fa41",
+    "path": "/data/projects/emmy/profiles/qwen3.6-35b-a3b/v2"
+  },
+  "started_at": "2026-04-21T23:27:50.454Z",
+  "ended_at": "2026-04-21T23:27:50.460Z",
+  "verdict": "pass",
+  "metrics": {
+    "sha256_unique_count": 1,
+    "sha256_stable_across_runs": true,
+    "agents_md_included_verbatim": true,
+    "agents_md_tokens_approx": 125,
+    "agents_md_bytes": 500,
+    "stderr_sha256_match": true,
+    "max_input_tokens_committed": 114688,
+    "max_input_tokens_computed": 114688,
+    "max_input_tokens_consistent": true,
+    "max_input_tokens_derivation": "max_input_tokens = max_model_len(131072) - output_reserve_tokens(16384) = 114688 (measured_gpu_memory_utilization=0.88, source: PROFILE_NOTES.md measured_values)"
+  },
+  "rows": [
+    {
+      "run": 1,
+      "sha256": "f3d577782e1c5db5b666fc7879c8c097701d4aaf1b120d433ede1d9814f09cc4",
+      "layers": [
+        {
+          "name": "system.md",
+          "tokens_approx": 24,
+          "present": true
+        },
+        {
+          "name": "AGENTS.md",
+          "tokens_approx": 125,
+          "present": true
+        },
+        {
+          "name": "tool_defs",
+          "tokens_approx": 154,
+          "present": true
+        },
+        {
+          "name": "user",
+          "tokens_approx": 0,
+          "present": false
+        }
+      ],
+      "text_length": 1215,
+      "stderr_sha256_seen": "f3d577782e1c5db5b666fc7879c8c097701d4aaf1b120d433ede1d9814f09cc4"
+    },
+    {
+      "run": 2,
+      "sha256": "f3d577782e1c5db5b666fc7879c8c097701d4aaf1b120d433ede1d9814f09cc4",
+      "layers": [
+        {
+          "name": "system.md",
+          "tokens_approx": 24,
+          "present": true
+        },
+        {
+          "name": "AGENTS.md",
+          "tokens_approx": 125,
+          "present": true
+        },
+        {
+          "name": "tool_defs",
+          "tokens_approx": 154,
+          "present": true
+        },
+        {
+          "name": "user",
+          "tokens_approx": 0,
+          "present": false
+        }
+      ],
+      "text_length": 1215,
+      "stderr_sha256_seen": "f3d577782e1c5db5b666fc7879c8c097701d4aaf1b120d433ede1d9814f09cc4"
+    },
+    {
+      "run": 3,
+      "sha256": "f3d577782e1c5db5b666fc7879c8c097701d4aaf1b120d433ede1d9814f09cc4",
+      "layers": [
+        {
+          "name": "system.md",
+          "tokens_approx": 24,
+          "present": true
+        },
+        {
+          "name": "AGENTS.md",
+          "tokens_approx": 125,
+          "present": true
+        },
+        {
+          "name": "tool_defs",
+          "tokens_approx": 154,
+          "present": true
+        },
+        {
+          "name": "user",
+          "tokens_approx": 0,
+          "present": false
+        }
+      ],
+      "text_length": 1215,
+      "stderr_sha256_seen": "f3d577782e1c5db5b666fc7879c8c097701d4aaf1b120d433ede1d9814f09cc4"
+    }
+  ],
+  "environment": {
+    "profile_path": "/data/projects/emmy/profiles/qwen3.6-35b-a3b/v2",
+    "fixture_root": "/tmp/emmy-sc5-fixture-94521607",
+    "agents_md_path": "/tmp/emmy-sc5-fixture-94521607/AGENTS.md",
+    "node_version": "v24.3.0",
+    "bun_version": "1.3.13"
+  }
+}
