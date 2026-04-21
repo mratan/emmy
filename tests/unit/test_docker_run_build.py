@@ -1,8 +1,14 @@
-"""RED skeleton — SERVE-07 rendered docker-run CLI flags.
+"""GREEN — SERVE-07 rendered docker-run CLI flags.
 
 Plan 03 ships `emmy_serve.boot.runner.render_docker_args` which reads serving.yaml
-and emits a list[str] of docker-run arguments. See 01-RESEARCH.md §14 start_emmy.sh
-contract for the full flag set.
+and emits a list[str] of docker-run arguments (docker flags + image ref + vllm
+serve flags). See 01-RESEARCH.md §14 start_emmy.sh contract for the full set.
+
+Uses a tmp_path-seeded fixture bundle (rather than the on-disk profile that
+carries the `sha256:REPLACE_AT_FIRST_PULL` sentinel) so the schema validator's
+digest-sentinel rejection (see schema.py._digest_shape) does not block the
+renderer tests. The operator-captured digest lives in the on-disk profile;
+this test asserts the renderer shape.
 """
 from __future__ import annotations
 from pathlib import Path
@@ -11,10 +17,69 @@ import pytest
 runner = pytest.importorskip("emmy_serve.boot.runner")
 
 
+_VALID_SERVING_YAML = """\
+engine:
+  model: /models/Qwen3.6-35B-A3B-FP8
+  model_hf_id: Qwen/Qwen3.6-35B-A3B-FP8
+  served_model_name: qwen3.6-35b-a3b
+  container_image: nvcr.io/nvidia/vllm:26.03.post1-py3
+  container_image_digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  max_model_len: 131072
+  gpu_memory_utilization: 0.75
+  kv_cache_dtype: fp8
+  enable_prefix_caching: true
+  enable_chunked_prefill: true
+  max_num_batched_tokens: 16384
+  load_format: fastsafetensors
+  quantization: fp8
+  tool_call_parser: qwen3_coder
+  enable_auto_tool_choice: true
+  attention_backend: flashinfer
+  host: 0.0.0.0
+  port: 8000
+sampling_defaults:
+  temperature: 0.2
+  top_p: 0.95
+  top_k: 40
+  repetition_penalty: 1.05
+  max_tokens: 8192
+  stop: []
+speculative: null
+guided_decoding:
+  default_backend: xgrammar
+quirks:
+  strip_thinking_tags: false
+  promote_reasoning_to_content: false
+  buffer_tool_streams: false
+env:
+  VLLM_NO_USAGE_STATS: "1"
+  DO_NOT_TRACK: "1"
+  VLLM_LOAD_FORMAT: fastsafetensors
+  VLLM_FLASHINFER_MOE_BACKEND: latency
+  VLLM_DISABLE_COMPILE_CACHE: "1"
+  HF_HUB_OFFLINE: "1"
+  TRANSFORMERS_OFFLINE: "1"
+"""
+
+
 @pytest.fixture
-def rendered_args(profile_path: Path, tmp_runs_dir: Path) -> list[str]:
+def test_profile_path(tmp_path: Path) -> Path:
+    """Write a schema-valid serving.yaml with a real (non-sentinel) digest.
+
+    The on-disk profile carries `sha256:REPLACE_AT_FIRST_PULL` which the
+    pydantic schema rejects; these renderer tests don't depend on the real
+    captured digest, only the render shape — seed a local valid bundle.
+    """
+    bundle = tmp_path / "v1"
+    bundle.mkdir()
+    (bundle / "serving.yaml").write_text(_VALID_SERVING_YAML, encoding="utf-8")
+    return bundle
+
+
+@pytest.fixture
+def rendered_args(test_profile_path: Path, tmp_runs_dir: Path) -> list[str]:
     return runner.render_docker_args(
-        profile_path=profile_path,
+        profile_path=test_profile_path,
         run_dir=tmp_runs_dir,
         port=8002,
         airgap=False,
@@ -46,10 +111,10 @@ def test_render_includes_pinned_digest_image(rendered_args):
     assert image_refs[0].startswith("nvcr.io/nvidia/vllm@sha256:")
 
 
-def test_render_network_mode_none_when_airgap_true(profile_path: Path, tmp_runs_dir: Path):
+def test_render_network_mode_none_when_airgap_true(test_profile_path: Path, tmp_runs_dir: Path):
     """D-09 / SERVE-09: airgap=True renders `--network none`."""
     args = runner.render_docker_args(
-        profile_path=profile_path,
+        profile_path=test_profile_path,
         run_dir=tmp_runs_dir,
         port=8002,
         airgap=True,
