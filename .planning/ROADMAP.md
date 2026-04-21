@@ -121,7 +121,7 @@ Plans:
 - [x] 02-04-PLAN.md — @emmy/ux: pi-emmy CLI (real pi 0.68.0 runtime) + SP_OK gate + profile-validate pre-flight + 3-layer prompt + session transcript capture (completed 2026-04-21; commits 44c9267 + 9e4ac4d + 5f85527 + e1ea63a)
 - [x] 02-05-PLAN.md — SUPERSEDED by 02-07/08/09 (structural revision 2026-04-21 — see CLOSEOUT for narrative)
 - [x] 02-06-PLAN.md — @emmy/tools (part 2): 8 native tools (read/write/edit/bash/grep/find/ls/web_fetch) + MCP bridge + Unicode poison check (completed 2026-04-21; commits 6a23d40 + 42190b6 + 59e4258 + c5c8f4a + 2d5c358)
-- [ ] 02-07-PLAN.md — Profile v2 fill: nested tools.grammar shape + verified max_model_len + grammar + schemas + prompts + recompute hash + un-skip regression
+- [x] 02-07-PLAN.md — Profile v2 fill: nested tools.grammar shape + verified max_model_len + grammar + schemas + prompts + recompute hash + un-skip regression (completed 2026-04-21; commits 88e48a4 + 979a8d0)
 - [ ] 02-08-PLAN.md — SC-2/SC-3 (3 runs: reactive + disabled baseline + no_per_tool_sampling) / SC-4 / SC-5 evidence + PROFILE_NOTES validation_runs
 - [ ] 02-09-PLAN.md — SC-1 daily-driver walkthrough checkpoint (the only non-autonomous plan) + CLOSEOUT + REQUIREMENTS traceability + ROADMAP/STATE advance
 

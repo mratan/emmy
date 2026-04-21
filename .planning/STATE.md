@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.68.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-04-21T22:39:04Z"
+last_updated: "2026-04-21T23:00:08.383Z"
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 17
-  completed_plans: 11
-  percent: 65
+  completed_plans: 15
+  percent: 88
 ---
 
 # State: Emmy
@@ -41,7 +41,7 @@ progress:
 ## Current Position
 
 Phase: 02 (pi-harness-mvp-daily-driver-baseline) — EXECUTING
-Plan: 5 of 9 (02-04 landed 2026-04-21; 02-02 + 02-03 + 02-06 + 02-04 complete; next wave = 02-07 → 02-08 → 02-09)
+Plan: 7 of 9 (02-07 landed 2026-04-21; 02-01 + 02-02 + 02-03 + 02-04 + 02-06 + 02-07 complete; next wave = 02-08 → 02-09)
 **Phase:** 1 — Serving Foundation + Profile Schema — closed with 3 documented deferrals; see `.planning/phases/01-serving-foundation-profile-schema/01-CLOSEOUT.md`
 **Next:** `/gsd-plan-phase 2` (pi-mono harness — daily-driver bar)
 **Phase Progress:** 100% (8/8 plans landed; 3 plans carry deferrals owned by Phase 5 or Phase 7)
@@ -73,6 +73,7 @@ Current: Phase 2 (planning pending — daily-driver bar)
 |------|----------|-------|-------|
 | Phase 02 P01 | 12min | 2 tasks | 20 files |
 | Phase 02 P04 | 19min | 2 tasks | 20 files |
+| Phase 02 P07 | 8min  | 1 task + 1 Phase-1-schema patch | 21 files (12 created, 7 modified, 2 deleted) |
 
 ---
 
@@ -98,6 +99,10 @@ Current: Phase 2 (planning pending — daily-driver bar)
 - **CLI test hybrid execution model** (Plan 02-04 Rule 3 deviation). The execution sandbox does not route subprocess→parent localhost traffic; static CLI behaviors (--help, --print-environment, missing profile) use real `spawnSync`, network-touching paths (SP_OK canary, vLLM probe, profile validate) import and call `main()` in-process. Both exercise the same CLI orchestration logic. Pattern applies to future @emmy/* CLIs under the same sandbox.
 - **`EMMY_PROFILE_VALIDATE_BIN` + `EMMY_SKIP_PROFILE_VALIDATE` env vars as CLI test hooks** (Plan 02-04). Production always shells `uv run emmy profile validate`; tests override via `EMMY_PROFILE_VALIDATE_BIN=/bin/false` to simulate failure or short-circuit via `EMMY_SKIP_PROFILE_VALIDATE=1` for failure-mode tests that don't exercise this gate.
 - **`runs/phase2-sc3-capture/` transcript capture is ALWAYS ON** (Plan 02-04 / B2). No opt-in flag; every pi-emmy session writes JSONL turns so Plan 02-08's SC-3 real-replay corpus builds up passively during daily-driver use. Replay runs themselves guard against feedback by convention, not a flag.
+- **Phase-1 schema patch was needed (B3/C3 discovery)** (Plan 02-07). `emmy_serve/profile/schema.py` `ToolsConfig.grammar: Optional[str]` → `Optional[GrammarConfig]`. Nested `{path, mode}` shape locked by CONTEXT D-11. v1 still validates (backward-compatible with `None` default). Committed as dated discrete commit `88e48a4` per Plan 02-07 Step 0 so Plan 02-09 CLOSEOUT can cite the SHA in its addendum. Phase 1 tests: 137 pass / 1 skip unchanged.
+- **v2 `context.max_input_tokens = 114688`** (Plan 02-07). Derived honestly from `serving.yaml.engine.max_model_len` (131072) − `output_reserve_tokens` (16384) per CONTEXT-05 / SC-5. Computed via `scripts/compute_max_input_tokens.ts` (js-yaml + `@emmy/ux` at repo root). Plan-04 `TODO(plan-07)` max-model-len regression un-skipped: loads serving + harness + PROFILE_NOTES frontmatter, asserts `harness.yaml == computed`. Any future drift surfaces as a failed test.
+- **v2 profile hash recomputed** via `uv run emmy profile hash --write` (Plan 02-07): `sha256:b91e747…21913` (stale v1 clone) → `sha256:0025799f…53fa41` (v2 honest). The `KNOWN-STALE` warning comment is auto-stripped by `--write` (rewrites profile.yaml in canonical YAML form). v1 unchanged (byte-identical to Phase 1 closeout). Both profiles `uv run emmy profile validate` exit 0.
+- **Grammar is reactive, not always-on, and over-accepting** (Plan 02-07 landing D-11). `tools.grammar.mode: reactive` in v2/harness.yaml; `disabled` reserved for Plan 02-08's SC-3 no-grammar baseline (D-14). The XGrammar Lark (`grammars/tool_call.lark`) is deliberately over-accepting on the `arguments` object — per-tool shape validation lives in `tool_schemas/*.schema.json`. CLAUDE.md Pitfall #6 backstop-not-shape-enforcer discipline.
 
 ### Key Constraints Carried Forward
 
@@ -161,3 +166,5 @@ Phases with standard patterns (skip research-phase per SUMMARY.md):
 **Plan 02-01 completed:** 2026-04-21T21:41Z — commits `4fa82ac` (Task 1 feat: workspace + four package shells + pi-emmy shim) + `ae97e04` (Task 2 feat: v1→v2 profile clone + docs templates). SUMMARY.md at `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-01-SUMMARY.md`. Bun 1.3.13 installed during pre-flight (Rule 3 deviation: host prereq), `bun-types 1.1.42` added to workspace devDeps (Rule 3: missing types dep blocked typecheck), `bun.lock` (text, Bun 1.3 default) committed in place of legacy `bun.lockb` (Rule 3: tool format drift — reproducibility spirit preserved). All four `@emmy/*` typecheck GREEN, `pi-emmy` shim on PATH prints wave-0 message + exits 0, `profiles/qwen3.6-35b-a3b/v2/` byte-for-byte clone of v1 (9-line diff in profile.yaml only). Phase 1 guardrails held: `uv run emmy profile validate profiles/qwen3.6-35b-a3b/v1/` exits 0, `uv run pytest tests/unit -q` → 137 passed / 1 skipped. **Next (Wave 1):** Plans 02-02 + 02-03 + 02-06 can run in parallel.
 
 **Plan 02-04 completed:** 2026-04-21T22:39Z — commits `44c9267` (Task 1 RED: session primitives + transcript tests) + `9e4ac4d` (Task 1 GREEN: profile-loader + prompt-assembly + sp-ok-canary + max-model-len + session-transcript with B3 + W4 + W1 fixes) + `5f85527` (Task 2 RED: session + cli + integration tests) + `e1ea63a` (Task 2 GREEN: real pi runtime adapter + profile-validate pre-flight + pi-emmy CLI with W2 + W5 + B2 fixes). SUMMARY.md at `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-04-SUMMARY.md`. 53 new @emmy/ux tests across 8 files (37 Task 1 + 16 Task 2), 1 skipped Plan-07 regression with `TODO(plan-07)` marker. `pi-emmy --help` works after `bun link`. Rule 3 deviation: CLI tests refactored to hybrid subprocess/in-process model because the sandbox does not route subprocess→parent localhost traffic to Bun.serve mocks. Full Bun suite: 191 pass / 1 skip / 0 fail across 21 files. Phase 1 regression holds: 137/137 unit tests. **Next (Wave 3):** Plan 02-07 (profile v2 fill + hash lock + un-skip regression) unblocks 02-08 (SC-2/3/4/5 evidence runners) and 02-09 (SC-1 daily-driver walkthrough CLOSEOUT).
+
+**Plan 02-07 completed:** 2026-04-21T22:56Z — commits `88e48a4` (Phase-1-schema patch: `ToolsConfig.grammar: Optional[str]` → `Optional[GrammarConfig]`; v1 still validates) + `979a8d0` (feat: fill v2 harness.yaml with nested grammar shape + ship 8 tool schemas + XGrammar Lark + 2 prompt files + PROFILE_NOTES provenance appendix + recompute v2 hash + un-skip Plan-04 regression). SUMMARY.md at `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-07-SUMMARY.md`. Every `TODO(Phase-2)` in v2/harness.yaml filled with a real value; `context.max_input_tokens = 114688` (honest SC-5 derivation); `tools.grammar.{path: grammars/tool_call.lark, mode: reactive}` (NESTED shape per D-11). v2 hash recomputed: `sha256:b91e747…` → `sha256:0025799f…`; KNOWN-STALE comment auto-stripped. `bun test` → 192 pass / 0 fail (was 191 pass + 1 skip; +1 un-skipped SC-5 regression). `bun run typecheck` all 4 packages exit 0. `uv run pytest tests/unit -q` → 137 pass / 1 skip unchanged from Phase 1 baseline. `uv run emmy profile validate` → v1 AND v2 both exit 0. Rule 3 deviation (auto-fixed): js-yaml + @types/js-yaml + @emmy/ux added to root `package.json` devDeps so `scripts/compute_max_input_tokens.ts` resolves from repo root; Rule 1 deviation (auto-fixed): PROFILE_NOTES.md false-positive TODO narrative reworded from "TODO(Phase-2)" to "Phase-2-deferred". **Next (Wave 3):** Plan 02-08 (SC-2/3/4/5 evidence runners) targeting the now-validated v2 bundle; Plan 02-09 (SC-1 walkthrough + CLOSEOUT) referencing schema patch SHA `88e48a4` in the addendum.

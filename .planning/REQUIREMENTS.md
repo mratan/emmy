@@ -13,7 +13,8 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **SERVE-02**: System serves `Qwen/Qwen3.6-35B-A3B-FP8` as the primary model with measurable throughput (target ≥ 60 tok/s on Spark)
 - [ ] **SERVE-03**: System serves `google/gemma-4-26B-A4B-it` (the MoE variant — *not* the 31B dense, which is bandwidth-bound at 6.9 tok/s) as the second first-class model
 - [ ] **SERVE-04**: vLLM endpoint is OpenAI-compatible (`/v1/chat/completions`) and harness uses it with `extra_body` for grammar / `chat_template_kwargs` overrides
-- [ ] **SERVE-05**: Grammar-constrained tool-call output via XGrammar (vLLM 0.19 default) is enabled per profile and validated by a parse-rate smoke test
+- [x] **SERVE-05
+**: Grammar-constrained tool-call output via XGrammar (vLLM 0.19 default) is enabled per profile and validated by a parse-rate smoke test
 - [ ] **SERVE-06**: Speculative decoding is configured per profile (Qwen3-MTP for Qwen models, EAGLE-3 for Gemma when speculator is available) and gated by a paired spec-on/spec-off benchmark before being kept
 - [ ] **SERVE-07**: Long-context optimization is in place: prefix caching, chunked prefill, deliberate prompt-prefix order documented per profile so KV reuse is maximized
 - [ ] **SERVE-08**: KV-cache budget is calculated explicitly per profile (start at `gpu_memory_utilization=0.75`) and validated against zero preemption under 30-min sustained load
@@ -41,8 +42,10 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **HARNESS-03**: Tool-call format is owned by the profile (not hardcoded); each model uses what it parses best (Hermes-style XML for Qwen, function calling for Gemma 4)
 - [ ] **HARNESS-04**: Agent loop is customizable: configurable retry-with-corrective-feedback, layered ReAct stopping conditions, infinite-loop guard, structured (not length-based) tool-result truncation
 - [ ] **HARNESS-05**: Context management is owned by the harness: smart pruning, injection control, file pinning (via pi's `@file`), per-profile compaction policy
-- [ ] **HARNESS-06**: System prompt assembly is layered (global → project → user), every assembly emits a hash to logs, and the assembled prompt fits a budget (default ≤ 200 tokens base, profile may extend with rationale)
-- [ ] **HARNESS-07**: Sampling control is per-tool / per-task via the profile (planner, editor, critic can use different sampling)
+- [x] **HARNESS-06
+**: System prompt assembly is layered (global → project → user), every assembly emits a hash to logs, and the assembled prompt fits a budget (default ≤ 200 tokens base, profile may extend with rationale)
+- [x] **HARNESS-07
+**: Sampling control is per-tool / per-task via the profile (planner, editor, critic can use different sampling)
 - [ ] **HARNESS-08**: Multi-model routing is supported within a single model first (profile-routing for planner/editor/critic roles); cross-model routing deferred to v2 unless dual-load proves feasible
 - [ ] **HARNESS-09**: Observability hooks emit OTel GenAI semconv spans across the vLLM ↔ harness boundary; profile fields embedded in every event
 - [ ] **HARNESS-10**: Tool registry is extensible: adding/removing/composing tools is a simple pi extension, no fork required
@@ -65,8 +68,10 @@ Requirements for initial release. Each maps to roadmap phases.
 **: AGENTS.md / `.pi/SYSTEM.md` discipline; layered global → project → user; example AGENTS.md template shipped for emmy projects
 - [ ] **CONTEXT-02**: Auto-compaction with per-profile policy (Gemma 4 may want different aggressiveness than Qwen 3.6)
 - [ ] **CONTEXT-03**: File pinning via pi's `@file` reference + read-at-session-start
-- [ ] **CONTEXT-04**: Per-profile prompt-prefix discipline documented (system → AGENTS.md → tool defs → user; never reorder) so prefix caching is maximized
-- [ ] **CONTEXT-05**: Per-profile honest `max_model_len` — documented and constrained to what KV cache actually fits
+- [x] **CONTEXT-04
+**: Per-profile prompt-prefix discipline documented (system → AGENTS.md → tool defs → user; never reorder) so prefix caching is maximized
+- [x] **CONTEXT-05
+**: Per-profile honest `max_model_len` — documented and constrained to what KV cache actually fits
 
 ### Evaluation (EVAL) — research-grade reproducibility
 
