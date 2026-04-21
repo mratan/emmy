@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.68.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-04-21T20:45:37.020Z"
+last_updated: "2026-04-21T21:43:53.295Z"
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 17
-  completed_plans: 8
-  percent: 47
+  completed_plans: 10
+  percent: 59
 ---
 
 # State: Emmy
@@ -23,7 +23,7 @@ progress:
 
 **Project:** Emmy — fully-local coding agent on NVIDIA DGX Spark
 **Core Value:** A local coding agent good enough to be the author's daily driver, structured rigorously enough to be a public research artifact others can reproduce — with no cloud dependency anywhere in the loop.
-**Current Focus:** Phase 2 (pi-mono harness) — Phase 1 closed 2026-04-21
+**Current Focus:** Phase 02 — pi-harness-mvp-daily-driver-baseline
 
 **Authoritative documents:**
 
@@ -40,7 +40,8 @@ progress:
 
 ## Current Position
 
-Phase: 01 — CLOSED (2026-04-21)
+Phase: 02 (pi-harness-mvp-daily-driver-baseline) — EXECUTING
+Plan: 2 of 9
 **Phase:** 1 — Serving Foundation + Profile Schema — closed with 3 documented deferrals; see `.planning/phases/01-serving-foundation-profile-schema/01-CLOSEOUT.md`
 **Next:** `/gsd-plan-phase 2` (pi-mono harness — daily-driver bar)
 **Phase Progress:** 100% (8/8 plans landed; 3 plans carry deferrals owned by Phase 5 or Phase 7)
@@ -58,15 +59,19 @@ Current: Phase 2 (planning pending — daily-driver bar)
 
 ## Performance Metrics
 
-(populated after first plan executes)
-
 | Metric | Value |
 |--------|-------|
-| Phases complete | 0 / 7 |
-| v1 requirements complete | 0 / 66 |
-| Critical pitfalls addressed | 0 / 8 |
-| Daily-driver readiness | Not yet |
-| Research-artifact readiness | Not yet |
+| Phases complete | 1 / 7 |
+| v1 requirements complete | ongoing (Phase 2 in flight) |
+| Critical pitfalls addressed | 1 / 8 (Pitfall #8 reproducibility via uv.lock + bun.lock discipline) |
+| Daily-driver readiness | Not yet (blocked on Phase 2 plans 02-09) |
+| Research-artifact readiness | Not yet (blocked on Phase 5) |
+
+### Per-plan execution log
+
+| Plan | Duration | Tasks | Files |
+|------|----------|-------|-------|
+| Phase 02 P01 | 12min | 2 tasks | 20 files |
 
 ---
 
@@ -81,6 +86,12 @@ Current: Phase 2 (planning pending — daily-driver bar)
 - **Speculative decoding is Phase 6, not earlier.** Rationale: PITFALLS.md #4 — spec decode requires working profiles + eval to measure correctly via paired benchmark; sequencing earlier would measure it against an unstable baseline.
 - **Two first-class models proven at Phase 4, not Phase 1.** Rationale: adding the second model is what proves the profile abstraction is truly model-agnostic. Phase 1 ships one profile end-to-end; Phase 4 forces the abstraction by adding Gemma 4 with its own tool format and quirks.
 - **Granularity calibration:** the natural phase count came out to 7, which sits at the upper edge of Standard granularity (5–8). All 7 phases are real coherent capabilities — none are padding.
+
+### Decisions Made During Execution
+
+- **Bun 1.3 text-lockfile (`bun.lock`) committed in place of legacy `bun.lockb`** (Plan 02-01). Bun ≥1.2 defaults to text lockfiles; the binary format is deprecated. Text lockfile preserves Pitfall #8 reproducibility while adding audit-diffability. Neither `bun.lock` nor `bun.lockb` is gitignored.
+- **Profile v2 built as sibling of Phase 1-locked v1** (Plan 02-01). Preserves Phase 1 certification hash `sha256:b91e747...`; v2 harness.yaml TODO fills + hash recomputation owned by Plan 02-07.
+- **pi-coding-agent 0.68.0 pinned EXACTLY (no `^`/`~`) in all four @emmy/* packages** (Plan 02-01). TS-side analog of Phase 1's `uv.lock` discipline per T-02-01-04 threat register.
 
 ### Key Constraints Carried Forward
 
@@ -140,3 +151,5 @@ Phases with standard patterns (skip research-phase per SUMMARY.md):
 **Plan 01-07 Task 1 completed:** 2026-04-21T16:40:09Z — commits `4214b71` (RED) + `b510d1b` (GREEN); SUMMARY.md written at `.planning/phases/01-serving-foundation-profile-schema/01-07-SUMMARY.md`; GpuSampler now tolerates nvidia-smi `[N/A]` per-field (DGX Spark UMA case). 7/7 sampler tests GREEN, 124/124 unit suite GREEN (1 skip for missing shellcheck), `uv run emmy profile validate` exits 0. Awaiting DGX Spark operator for Task 2 (second 2-hour `--record-floors` replay) and Task 3 (third 2-hour `--assert-floors` replay).
 
 **Plan 01-08 Tasks 1 + 2 completed:** 2026-04-21 — commits `93fab55` (test-RED) + `78ff0be` (feat-GREEN) + `3889724` (docs); SUMMARY.md written at `.planning/phases/01-serving-foundation-profile-schema/01-08-SUMMARY.md`. SC-4 certification machinery shipped: `emmy_serve/airgap/ci_verify.py` validator + `scripts/trigger_airgap_ci.sh` + `scripts/verify_airgap_ci.sh` + 2 golden fixtures + 13 unit tests + `docs/airgap-green-run.md` runbook + `docs/ci-runner.md` §8. 137/137 unit suite GREEN (1 skip for missing shellcheck), `uv run emmy profile validate` exits 0. Awaiting DGX Spark operator for Task 3 (register runner + trigger CI + verify + commit evidence; ~5-10 min of CI time).
+
+**Plan 02-01 completed:** 2026-04-21T21:41Z — commits `4fa82ac` (Task 1 feat: workspace + four package shells + pi-emmy shim) + `ae97e04` (Task 2 feat: v1→v2 profile clone + docs templates). SUMMARY.md at `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-01-SUMMARY.md`. Bun 1.3.13 installed during pre-flight (Rule 3 deviation: host prereq), `bun-types 1.1.42` added to workspace devDeps (Rule 3: missing types dep blocked typecheck), `bun.lock` (text, Bun 1.3 default) committed in place of legacy `bun.lockb` (Rule 3: tool format drift — reproducibility spirit preserved). All four `@emmy/*` typecheck GREEN, `pi-emmy` shim on PATH prints wave-0 message + exits 0, `profiles/qwen3.6-35b-a3b/v2/` byte-for-byte clone of v1 (9-line diff in profile.yaml only). Phase 1 guardrails held: `uv run emmy profile validate profiles/qwen3.6-35b-a3b/v1/` exits 0, `uv run pytest tests/unit -q` → 137 passed / 1 skipped. **Next (Wave 1):** Plans 02-02 + 02-03 + 02-06 can run in parallel.

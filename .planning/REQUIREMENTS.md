@@ -35,7 +35,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Harness (HARNESS) — pi.dev integration & customization surfaces
 
-- [ ] **HARNESS-01**: System is built on `@mariozechner/pi-coding-agent` v0.68.0 (pi-mono); harness extends pi via its public extension API rather than forking
+- [x] **HARNESS-01
+**: System is built on `@mariozechner/pi-coding-agent` v0.68.0 (pi-mono); harness extends pi via its public extension API rather than forking
 - [ ] **HARNESS-02**: Custom pi `registerProvider` for the local vLLM endpoint, including the prior repo's compat-proxy lessons (e.g. strip `reasoning_content` if needed)
 - [ ] **HARNESS-03**: Tool-call format is owned by the profile (not hardcoded); each model uses what it parses best (Hermes-style XML for Qwen, function calling for Gemma 4)
 - [ ] **HARNESS-04**: Agent loop is customizable: configurable retry-with-corrective-feedback, layered ReAct stopping conditions, infinite-loop guard, structured (not length-based) tool-result truncation
@@ -60,7 +61,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Context (CONTEXT) — codebase comprehension
 
-- [ ] **CONTEXT-01**: AGENTS.md / `.pi/SYSTEM.md` discipline; layered global → project → user; example AGENTS.md template shipped for emmy projects
+- [x] **CONTEXT-01
+**: AGENTS.md / `.pi/SYSTEM.md` discipline; layered global → project → user; example AGENTS.md template shipped for emmy projects
 - [ ] **CONTEXT-02**: Auto-compaction with per-profile policy (Gemma 4 may want different aggressiveness than Qwen 3.6)
 - [ ] **CONTEXT-03**: File pinning via pi's `@file` reference + read-at-session-start
 - [ ] **CONTEXT-04**: Per-profile prompt-prefix discipline documented (system → AGENTS.md → tool defs → user; never reorder) so prefix caching is maximized

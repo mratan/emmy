@@ -115,7 +115,7 @@ Plans:
 **UI hint**: yes
 
 Plans:
-- [ ] 02-01-PLAN.md — Wave 0 scaffold: Bun workspace + 4 @emmy/* packages + profile v2 sibling + docs templates + committed bun.lockb
+- [x] 02-01-PLAN.md — Wave 0 scaffold: Bun workspace + 4 @emmy/* packages + profile v2 sibling + docs templates + committed bun.lock (completed 2026-04-21; commits 4fa82ac + ae97e04)
 - [ ] 02-02-PLAN.md — @emmy/provider: vLLM HTTP + OpenAI-compat strip + reactive grammar retry (nested tools.grammar.{path, mode} shape)
 - [ ] 02-03-PLAN.md — @emmy/tools (part 1): hash-anchored edit primitives + atomic write + post-hoc diff
 - [ ] 02-04-PLAN.md — @emmy/ux: pi-emmy CLI (real pi 0.68.0 runtime) + SP_OK gate + profile-validate pre-flight + 3-layer prompt + session transcript capture
