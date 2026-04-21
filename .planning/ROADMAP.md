@@ -111,8 +111,19 @@ Plans:
   4. Loading an MCP server (e.g. filesystem MCP) via `mcp_servers.yaml` exposes its tools through the same dispatch surface as native tools, and a tool poison test (hidden Unicode in description) is rejected at registration.
   5. The assembled system prompt for any session emits a stable hash to logs, the AGENTS.md from the working directory is included verbatim and counted in the prompt-token budget, and the per-profile `max_model_len` matches what KV cache actually fits (no theoretical claims).
 
-**Plans**: TBD
+**Plans**: 8 plans (structural revision 2026-04-21: split 02-03 → 02-03 + 02-06; split 02-05 → 02-07 + 02-08 + 02-09)
 **UI hint**: yes
+
+Plans:
+- [ ] 02-01-PLAN.md — Wave 0 scaffold: Bun workspace + 4 @emmy/* packages + profile v2 sibling + docs templates + committed bun.lockb
+- [ ] 02-02-PLAN.md — @emmy/provider: vLLM HTTP + OpenAI-compat strip + reactive grammar retry (nested tools.grammar.{path, mode} shape)
+- [ ] 02-03-PLAN.md — @emmy/tools (part 1): hash-anchored edit primitives + atomic write + post-hoc diff
+- [ ] 02-04-PLAN.md — @emmy/ux: pi-emmy CLI (real pi 0.68.0 runtime) + SP_OK gate + profile-validate pre-flight + 3-layer prompt + session transcript capture
+- [ ] 02-05-PLAN.md — SUPERSEDED by 02-07/08/09 (structural revision 2026-04-21 — see CLOSEOUT for narrative)
+- [ ] 02-06-PLAN.md — @emmy/tools (part 2): 8 native tools (read/write/edit/bash/grep/find/ls/web_fetch) + MCP bridge + Unicode poison check
+- [ ] 02-07-PLAN.md — Profile v2 fill: nested tools.grammar shape + verified max_model_len + grammar + schemas + prompts + recompute hash + un-skip regression
+- [ ] 02-08-PLAN.md — SC-2/SC-3 (3 runs: reactive + disabled baseline + no_per_tool_sampling) / SC-4 / SC-5 evidence + PROFILE_NOTES validation_runs
+- [ ] 02-09-PLAN.md — SC-1 daily-driver walkthrough checkpoint (the only non-autonomous plan) + CLOSEOUT + REQUIREMENTS traceability + ROADMAP/STATE advance
 
 ---
 
