@@ -1,19 +1,44 @@
 // packages/emmy-ux/tests/pi-emmy-cli.test.ts
 //
-// Subprocess-level tests for the pi-emmy CLI (Plan 02-04 Task 2).
-// Asserts:
+// Tests for the pi-emmy CLI (Plan 02-04 Task 2).
+//
+// Hybrid execution model:
+//   - Static CLI behaviors (--help, --print-environment, missing-profile exit 4)
+//     run in a real subprocess via spawnSync — these paths don't need network.
+//   - Network-touching paths (SP_OK canary, vLLM probe, profile validate) call
+//     main() in-process because the test sandbox does not route subprocess
+//     fetch() to a parent-process Bun.serve listener. In-process testing
+//     exercises the same CLI orchestration logic.
+//
+// Covered CLI contracts:
 //   - --help exits 0 and prints "Usage: pi-emmy"
 //   - --print-environment exits 0 and emits valid JSON
-//   - Happy path: exit 0, stderr carries SP_OK canary: OK + prompt.sha256 + transcript=
-//   - SP_OK failure → exit 1, stderr `SP_OK canary: FAILED`
-//   - Unreachable emmy-serve → exit 4, stderr `cannot reach emmy-serve`
-//   - W5 prereq: profile-validate failure → exit 4, stderr `profile failed validation`
+//   - Missing profile dir → exit 4, stderr "profile not found"
+//   - Unreachable emmy-serve → exit 4, stderr "cannot reach emmy-serve"
+//   - W5 prereq: profile-validate failure → exit 4, stderr "profile failed validation"
+//   - Happy path: stderr carries "SP_OK canary: OK" + "prompt.sha256=<hex>" +
+//     "transcript=" and the transcript file is created on disk.
+//   - SP_OK canary failure → exit 1, stderr "SP_OK canary: FAILED"
 
-import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+
+// Telemetry mock before importing main (session → prompt-assembly → emitEvent).
+mock.module("@emmy/telemetry", () => ({ emitEvent: (_r: unknown) => {} }));
+
+import { main } from "../bin/pi-emmy";
 
 const BUN = process.execPath;
 const CLI = join(__dirname, "..", "bin", "pi-emmy.ts");
@@ -21,20 +46,17 @@ const CLI = join(__dirname, "..", "bin", "pi-emmy.ts");
 let tmp: string;
 let profilePath: string;
 let cwd: string;
-beforeEach(() => {
-  tmp = mkdtempSync(join(tmpdir(), "emmy-ux-cli-"));
-  profilePath = join(tmp, "profile");
-  cwd = join(tmp, "proj");
-  mkdirSync(profilePath, { recursive: true });
-  mkdirSync(join(profilePath, "prompts"), { recursive: true });
+
+function writeValidProfile(path: string): void {
+  mkdirSync(path, { recursive: true });
+  mkdirSync(join(path, "prompts"), { recursive: true });
   writeFileSync(
-    join(profilePath, "prompts", "system.md"),
+    join(path, "prompts", "system.md"),
     "You are Emmy.\n",
     "utf8",
   );
-  // Minimal profile.yaml / serving.yaml / harness.yaml so loadProfile works.
   writeFileSync(
-    join(profilePath, "profile.yaml"),
+    join(path, "profile.yaml"),
     `profile:
   id: qwen3.6-35b-a3b
   version: v2
@@ -45,7 +67,7 @@ beforeEach(() => {
     "utf8",
   );
   writeFileSync(
-    join(profilePath, "serving.yaml"),
+    join(path, "serving.yaml"),
     `engine:
   served_model_name: qwen3.6-35b-a3b
   max_model_len: 131072
@@ -62,7 +84,7 @@ quirks:
     "utf8",
   );
   writeFileSync(
-    join(profilePath, "harness.yaml"),
+    join(path, "harness.yaml"),
     `prompts:
   system: prompts/system.md
 context:
@@ -76,31 +98,43 @@ agent_loop:
 `,
     "utf8",
   );
+}
+
+beforeEach(() => {
+  tmp = mkdtempSync(join(tmpdir(), "emmy-ux-cli-"));
+  profilePath = join(tmp, "profile");
+  cwd = join(tmp, "proj");
+  writeValidProfile(profilePath);
   mkdirSync(cwd, { recursive: true });
 });
 afterEach(() => {
   rmSync(tmp, { recursive: true, force: true });
 });
 
-// ---- Mock emmy-serve ----
+// ---- In-process mock emmy-serve (only reachable from current process) ----
 let mockServer: ReturnType<typeof Bun.serve> | undefined;
 let baseUrl = "";
 let spOkResponse = "[SP_OK]";
 beforeAll(() => {
   mockServer = Bun.serve({
     port: 0,
+    hostname: "127.0.0.1",
     fetch: async (r: Request) => {
       const path = new URL(r.url).pathname;
       if (path === "/v1/models") {
-        return new Response(JSON.stringify({ data: [{ id: "qwen3.6-35b-a3b" }] }), {
-          headers: { "content-type": "application/json" },
-        });
+        return new Response(
+          JSON.stringify({ data: [{ id: "qwen3.6-35b-a3b" }] }),
+          { headers: { "content-type": "application/json" } },
+        );
       }
       if (path === "/v1/chat/completions") {
         return new Response(
           JSON.stringify({
             choices: [
-              { message: { role: "assistant", content: spOkResponse }, finish_reason: "stop" },
+              {
+                message: { role: "assistant", content: spOkResponse },
+                finish_reason: "stop",
+              },
             ],
           }),
           { headers: { "content-type": "application/json" } },
@@ -112,10 +146,41 @@ beforeAll(() => {
   baseUrl = `http://127.0.0.1:${mockServer!.port}`;
 });
 afterAll(() => {
-  try { mockServer?.stop(true); } catch { /* ignore */ }
+  try {
+    mockServer?.stop(true);
+  } catch {
+    /* ignore */
+  }
 });
 
-describe("pi-emmy CLI — help / environment", () => {
+// In-process capture of console.log / console.error; we need both, because
+// main writes diagnostics to stderr and --print-environment to stdout.
+function captureConsole<T>(fn: () => Promise<T> | T): Promise<{ stdout: string; stderr: string; value: T }> {
+  const outChunks: string[] = [];
+  const errChunks: string[] = [];
+  const origLog = console.log;
+  const origErr = console.error;
+  console.log = (...a: unknown[]) => outChunks.push(a.map(String).join(" ") + "\n");
+  console.error = (...a: unknown[]) => errChunks.push(a.map(String).join(" ") + "\n");
+  // Also capture process.stderr.write (used by prompt-assembly for the sha256 log).
+  const origStderrWrite = process.stderr.write.bind(process.stderr);
+  process.stderr.write = ((chunk: unknown, ..._rest: unknown[]) => {
+    errChunks.push(typeof chunk === "string" ? chunk : String(chunk));
+    return true;
+  }) as typeof process.stderr.write;
+  return (async () => {
+    try {
+      const value = await fn();
+      return { stdout: outChunks.join(""), stderr: errChunks.join(""), value };
+    } finally {
+      console.log = origLog;
+      console.error = origErr;
+      process.stderr.write = origStderrWrite;
+    }
+  })();
+}
+
+describe("pi-emmy CLI — help / environment (subprocess)", () => {
   test("--help exits 0 and prints 'Usage: pi-emmy'", () => {
     const r = spawnSync(BUN, [CLI, "--help"], { encoding: "utf8" });
     expect(r.status).toBe(0);
@@ -133,7 +198,7 @@ describe("pi-emmy CLI — help / environment", () => {
 });
 
 describe("pi-emmy CLI — prereq failures", () => {
-  test("missing profile dir → exit 4 with 'profile not found'", () => {
+  test("missing profile dir → exit 4 with 'profile not found' (subprocess)", () => {
     const r = spawnSync(
       BUN,
       [CLI, "--profile", "/does/not/exist", "--base-url", baseUrl, "--print", "hi"],
@@ -143,65 +208,96 @@ describe("pi-emmy CLI — prereq failures", () => {
     expect(r.stderr).toContain("profile not found");
   });
 
-  test("unreachable emmy-serve → exit 4 with 'cannot reach emmy-serve'", () => {
-    const r = spawnSync(
-      BUN,
-      [CLI, "--profile", profilePath, "--base-url", "http://127.0.0.1:1", "--print", "hi"],
-      { encoding: "utf8", cwd, env: { ...process.env, EMMY_SKIP_PROFILE_VALIDATE: "1" } },
+  test("unreachable emmy-serve → exit 4 with 'cannot reach emmy-serve' (in-process)", async () => {
+    const { stderr, value: code } = await captureConsole(() =>
+      main([
+        "--profile",
+        profilePath,
+        "--base-url",
+        "http://127.0.0.1:1",
+        "--print",
+        "hi",
+      ]),
     );
-    expect(r.status).toBe(4);
-    expect(r.stderr).toContain("cannot reach emmy-serve");
+    expect(code).toBe(4);
+    expect(stderr).toContain("cannot reach emmy-serve");
   });
 
-  test("W5: profile-validate fails → exit 4 with 'profile failed validation'", () => {
-    // Simulate a broken validate CLI by using EMMY_PROFILE_VALIDATE_BIN pointing at /bin/false.
-    const r = spawnSync(
-      BUN,
-      [CLI, "--profile", profilePath, "--base-url", baseUrl, "--print", "hi"],
-      {
-        encoding: "utf8",
-        cwd,
-        env: { ...process.env, EMMY_PROFILE_VALIDATE_BIN: "/bin/false" },
-      },
-    );
-    expect(r.status).toBe(4);
-    expect(r.stderr).toContain("profile failed validation");
+  test("W5: profile-validate fails → exit 4 with 'profile failed validation' (in-process)", async () => {
+    const savedBin = process.env.EMMY_PROFILE_VALIDATE_BIN;
+    process.env.EMMY_PROFILE_VALIDATE_BIN = "/bin/false";
+    try {
+      const { stderr, value: code } = await captureConsole(() =>
+        main([
+          "--profile",
+          profilePath,
+          "--base-url",
+          baseUrl,
+          "--print",
+          "hi",
+        ]),
+      );
+      expect(code).toBe(4);
+      expect(stderr).toContain("profile failed validation");
+    } finally {
+      if (savedBin === undefined) delete process.env.EMMY_PROFILE_VALIDATE_BIN;
+      else process.env.EMMY_PROFILE_VALIDATE_BIN = savedBin;
+    }
   });
 });
 
-describe("pi-emmy CLI — runtime paths", () => {
-  test("happy path (--print): exit 0; stderr carries canary OK + prompt.sha256 + transcript=", () => {
+describe("pi-emmy CLI — runtime paths (in-process)", () => {
+  test("happy path: stderr carries canary OK + prompt.sha256= + transcript=, transcript file written", async () => {
     spOkResponse = "[SP_OK]";
-    const r = spawnSync(
-      BUN,
-      [CLI, "--profile", profilePath, "--base-url", baseUrl, "--print", "hello"],
-      {
-        encoding: "utf8",
-        cwd,
-        env: { ...process.env, EMMY_SKIP_PROFILE_VALIDATE: "1" },
-      },
-    );
-    // Some pi runtime adapters may not support one-shot .run(); we assert the
-    // canary/log stages succeeded even if the final exit reflects a no-run path.
-    expect(r.stderr).toContain("SP_OK canary: OK");
-    expect(r.stderr).toMatch(/prompt\.sha256=[0-9a-f]{64}/);
-    expect(r.stderr).toContain("transcript=");
-    // Transcript file was written to cwd/runs/phase2-sc3-capture/
-    expect(existsSync(join(cwd, "runs/phase2-sc3-capture"))).toBe(true);
+    const savedSkip = process.env.EMMY_SKIP_PROFILE_VALIDATE;
+    const savedCwd = process.cwd();
+    process.env.EMMY_SKIP_PROFILE_VALIDATE = "1";
+    process.chdir(cwd);
+    try {
+      const { stderr } = await captureConsole(() =>
+        main([
+          "--profile",
+          profilePath,
+          "--base-url",
+          baseUrl,
+          "--print",
+          "hello",
+        ]),
+      );
+      expect(stderr).toContain("SP_OK canary: OK");
+      expect(stderr).toMatch(/prompt\.sha256=[0-9a-f]{64}/);
+      expect(stderr).toContain("transcript=");
+      expect(existsSync(join(cwd, "runs/phase2-sc3-capture"))).toBe(true);
+    } finally {
+      process.chdir(savedCwd);
+      if (savedSkip === undefined) delete process.env.EMMY_SKIP_PROFILE_VALIDATE;
+      else process.env.EMMY_SKIP_PROFILE_VALIDATE = savedSkip;
+    }
   });
 
-  test("SP_OK canary failure → exit 1 with 'SP_OK canary: FAILED'", () => {
+  test("SP_OK canary failure → exit 1 with 'SP_OK canary: FAILED'", async () => {
     spOkResponse = "Thinking Process: maybe?"; // no [SP_OK]
-    const r = spawnSync(
-      BUN,
-      [CLI, "--profile", profilePath, "--base-url", baseUrl, "--print", "hi"],
-      {
-        encoding: "utf8",
-        cwd,
-        env: { ...process.env, EMMY_SKIP_PROFILE_VALIDATE: "1" },
-      },
-    );
-    expect(r.status).toBe(1);
-    expect(r.stderr).toContain("SP_OK canary: FAILED");
+    const savedSkip = process.env.EMMY_SKIP_PROFILE_VALIDATE;
+    const savedCwd = process.cwd();
+    process.env.EMMY_SKIP_PROFILE_VALIDATE = "1";
+    process.chdir(cwd);
+    try {
+      const { stderr, value: code } = await captureConsole(() =>
+        main([
+          "--profile",
+          profilePath,
+          "--base-url",
+          baseUrl,
+          "--print",
+          "hi",
+        ]),
+      );
+      expect(code).toBe(1);
+      expect(stderr).toContain("SP_OK canary: FAILED");
+    } finally {
+      process.chdir(savedCwd);
+      if (savedSkip === undefined) delete process.env.EMMY_SKIP_PROFILE_VALIDATE;
+      else process.env.EMMY_SKIP_PROFILE_VALIDATE = savedSkip;
+    }
   });
 });

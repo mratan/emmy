@@ -22,5 +22,6 @@ export {
 	transcriptDir,
 	type SessionTurn,
 } from "./session-transcript";
+export { createEmmySession, type PiRuntime } from "./session";
 
 export const PACKAGE_VERSION = "0.1.0";

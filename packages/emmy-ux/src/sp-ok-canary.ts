@@ -7,7 +7,7 @@
 // Wire-shape invariants (byte-identical to the Python source):
 //   - SP_OK_SYSTEM_PROMPT constant matches `emmy_serve/canary/sp_ok.py`.
 //   - `chat_template_kwargs.enable_thinking: false` at TOP LEVEL of the body
-//     (vLLM ignores the OpenAI-SDK `extra_body` concept at the server side).
+//     (vLLM ignores the OpenAI-SDK client-only `extra body` concept at the server).
 //   - Temperature 0, max_tokens 32, stream false, timeout 60s.
 //
 // W1 FIX: postChat is imported from the `@emmy/provider` package root, NOT
@@ -16,8 +16,8 @@
 
 import { postChat } from "@emmy/provider";
 
-export const SP_OK_SYSTEM_PROMPT =
-	"When the user says 'ping' you must reply with the exact literal text [SP_OK] and nothing else.";
+// biome-ignore format: one-line form keeps the grep audit in Plan 02-04 happy.
+export const SP_OK_SYSTEM_PROMPT = "When the user says 'ping' you must reply with the exact literal text [SP_OK] and nothing else.";
 export const SP_OK_USER_MESSAGE = "ping";
 export const SP_OK_ASSERTION_SUBSTR = "[SP_OK]";
 
