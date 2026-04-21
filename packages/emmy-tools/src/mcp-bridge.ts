@@ -1,7 +1,7 @@
 // Plan 02-06 Task 1 — MCP stdio bridge (D-15 / D-17 / D-18).
 //
 // Responsibilities:
-//   - Spawn MCP servers as stdio subprocesses (D-17, no HTTP/SSE in Phase 2).
+//   - Spawn MCP servers as stdio subprocesses (D-17 stdio-only).
 //   - Register each MCP-declared tool via pi.registerTool by its flat name (D-15).
 //   - Reject tool names/descriptions that contain blocked Unicode codepoints (D-18).
 //   - Throw ToolNameCollisionError if a flat name collides with an already-registered
@@ -13,7 +13,8 @@
 //   - Honor `alias:` from mcp_servers.yaml (Phase 3 work; Phase 2 rejects loud).
 //   - Resolve $VAR inside env values (MCP SDK's StdioClientTransport handles that
 //     through DEFAULT_INHERITED_ENV_VARS; we pass env as-is).
-//   - Support HTTP or SSE transports (D-17 locks stdio-only; see threat T-02-06-03).
+//   - Implement any non-stdio transport. D-17 locks stdio-only for Phase 2
+//     (see threat T-02-06-03). Other MCP transports are deferred to v1.x.
 
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";

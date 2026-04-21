@@ -1,9 +1,79 @@
-// RED-phase stub. GREEN fills in fetch + turndown + timeout.
+// Plan 02-06 Task 2 — web_fetch: HTTP GET → markdown.
+//
+// Contract:
+//   - Documentation-reading only (CLAUDE.md: no cloud inference). Tagged
+//     NETWORK_REQUIRED_TAG for Phase 3 offline-OK badge (UX-03).
+//   - maxBytes default 2MB; exceeding throws ToolsError('web_fetch.size').
+//   - timeoutMs default 30000ms (web-specific, tighter than provider-level).
+//   - On timeout: throws ToolsError('web_fetch.timeout') — W7 fix message MUST
+//     contain the timeoutMs literal so the caller can correlate the config value
+//     with the timeout event in logs/telemetry.
+//   - HTML → markdown via turndown (atx headings, fenced code blocks).
+//   - JSON → pretty-printed within a \`\`\`json fence.
+//   - Markdown/text → returned as-is.
+//   - Response shape: { markdown, contentType, url } where `url` is the final
+//     URL AFTER redirects (resp.url from fetch()).
+
+import TurndownService from "turndown";
+import { ToolsError } from "./errors";
+
 export const NETWORK_REQUIRED_TAG = "network-required";
+const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_MAX_BYTES = 2 * 1024 * 1024;
 
 export async function webFetch(
-  _url: string,
-  _opts: { timeoutMs?: number; maxBytes?: number } = {},
+  url: string,
+  opts: { timeoutMs?: number; maxBytes?: number } = {},
 ): Promise<{ markdown: string; contentType: string; url: string }> {
-  throw new Error("not implemented");
+  const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES;
+  const ctl = new AbortController();
+  const tm = setTimeout(() => ctl.abort(new Error("timeout")), timeoutMs);
+  try {
+    const resp = await fetch(url, {
+      signal: ctl.signal,
+      headers: {
+        accept: "text/html, text/markdown, application/json, text/plain, */*",
+      },
+    });
+    const contentType = resp.headers.get("content-type") ?? "";
+    const buf = await resp.arrayBuffer();
+    if (buf.byteLength > maxBytes) {
+      throw new ToolsError(
+        "web_fetch.size",
+        `response exceeded maxBytes=${maxBytes} (actual=${buf.byteLength})`,
+      );
+    }
+    const text = new TextDecoder("utf-8", { fatal: false }).decode(buf);
+    let markdown: string;
+    if (/application\/json/i.test(contentType)) {
+      try {
+        markdown = "```json\n" + JSON.stringify(JSON.parse(text), null, 2) + "\n```";
+      } catch {
+        markdown = text;
+      }
+    } else if (/text\/html/i.test(contentType)) {
+      const td = new TurndownService({ headingStyle: "atx", codeBlockStyle: "fenced" });
+      markdown = td.turndown(text);
+    } else {
+      markdown = text;
+    }
+    return { markdown, contentType, url: resp.url };
+  } catch (e) {
+    if (e instanceof ToolsError) throw e;
+    if (e instanceof Error && (e.name === "AbortError" || /timeout/i.test(e.message))) {
+      // W7 FIX: include configured timeoutMs so "500ms" in the error message
+      // matches the caller-supplied value — makes timeout events diagnosable.
+      throw new ToolsError(
+        "web_fetch.timeout",
+        `GET ${url} timed out after ${timeoutMs}ms`,
+      );
+    }
+    throw new ToolsError(
+      "web_fetch.network",
+      `GET ${url} failed: ${e instanceof Error ? e.message : String(e)}`,
+    );
+  } finally {
+    clearTimeout(tm);
+  }
 }
