@@ -82,37 +82,58 @@ Reordering any of 1-3 busts prefix cache. This rule is a profile contract.
 | Cold-start (fastsafetensors) | 159 s | `start_emmy.sh` ready banner | `runs/phase-b2-20260421T085621Z/boot.log` |
 | Warm 500-token decode throughput | 49.92 tok/s mean (3 runs, post-2hr-thermal) | direct httpx | Phase C measurement |
 
-## SC-1 throughput gap vs. 60 tok/s floor
+## SC-1 throughput gap vs. 60 tok/s floor — accept-architectural (2026-04-21)
 
-The measured decode throughput (49–50 tok/s warm, 48.13 tok/s p50 hour-2 under
-sustained load, 41.36 tok/s p1 hour-2) is below Phase 1 Success Criterion 1's
-60 tok/s floor. This gap persisted across the four Phase-C throughput knobs
-swept locally (see 01-03-SUMMARY.md) AND did not move measurably when the KV
-budget rose from 0.75 → 0.88, confirming the bottleneck is architectural
-(Mamba+MoE+FP8 on vLLM 0.17.1+nvinternal on GB10) rather than profile-knob.
-Candidates for Phase 2+ or a Phase 1.1 gap-closure plan:
+The gap is closed by documenting it as architectural. The Plan 01-06 sweep
+(`runs/20260421T170858Z_bd0e9e-phase1-sc1-throughput-sweep/results.json`) ran
+the four PROFILE_NOTES.md candidates + baseline against the Phase C warm-500-token
+prompt. No candidate exceeded the 60 tok/s floor without a canary regression.
 
-- FLASHINFER_TRTLLM vs. TRITON MoE backend (VLLM_FLASHINFER_MOE_BACKEND env
-  was `latency` but vLLM chose TRITON anyway — needs a different env knob,
-  likely `VLLM_USE_FLASHINFER_MOE_FP8=1`).
-- NGC CUDA forward-compat mode (driver 595 on kernel 580) overhead vs.
-  native mode.
-- vLLM 0.17.1+nvinternal FP8+Mamba prefix-caching optimization (flagged
-  experimental in this build).
-- Reasoning parser integration (Phase 2) so the common Qwen3.6 thinking
-  path stops consuming the budget on CoT prose.
+| Candidate | Mean tok/s | std | Canaries SP/TC/GEN | Disposition |
+|---|---|---|---|---|
+| k0-baseline | **49.34** | 0.48 | YYY | Reproduces documented 48–50 tok/s (pitfall-#5 control). |
+| k1-flashinfer-moe (env `VLLM_USE_FLASHINFER_MOE_FP8=1`) | 0.00 | — | NNN | **Boot failure**: `/v1/models not ready within 300s`. This env breaks vLLM startup in `emmy-serve/vllm:26.03.post1-fst`. Likely conflicts with `VLLM_FLASHINFER_MOE_BACKEND=latency` or with ordering in 0.17.1+nvinternal. Needs upstream investigation. |
+| k2-hybrid-kv-cache (env `VLLM_ALLOW_CHUNKED_LOCAL_ATTN_WITH_HYBRID_KV_CACHE=1`) | **50.65** | 0.07 | YYY | +1.3 tok/s over baseline (+2.7%). Well within measurement noise. Not a winner. |
+| k3-mamba-cache-mode (serving.yaml `engine.mamba_cache_mode=all`) | 0.00 | — | NNN | Pydantic schema rejects the field (`ServingConfig` has `extra='forbid'`). Not reachable without a schema-extension design decision. |
+| k4-reasoning-parser (serving.yaml `engine.reasoning_parser=qwen3`) | 0.00 | — | NNN | Same schema rejection as K3. |
 
-## Sampler gap: GPU clock
+Decision: **accept as architectural gap on GB10 + vLLM 0.17.1+nvinternal +
+FP8 + MoE + hybrid-attention Qwen3.6.** Re-evaluate in Phase 2 once real
+coding-workload throughput accumulates (the 48–50 tok/s microbench may or may
+not matter when the bottleneck under harness use is prompt-processing or
+tool-call roundtrips, not pure decode), and again post-vLLM-upgrade. The K3/K4
+schema rejections are a separate, useful finding: extending the profile schema
+to accept `mamba_cache_mode` or `reasoning_parser` is a design call, not a
+microbenchmark knob.
 
-The thermal replay's nvidia-smi subprocess sampler returned 0 for both
-`gpu_clock_p5_hour2_mhz` and `gpu_clock_p50_hour2_mhz`. This is either a
-permissions issue in the container-isolated sampler context (unlikely — the
-decode-throughput samplers worked fine) or a parsing bug in
-`emmy_serve/thermal/sampler.py`. Symptom is non-blocking: the floor assertions
-that matter for re-runs (`--assert-floors` next thermal) are the decode
-throughput p50/p1 values, which did land correctly. A Phase 1.1 or Phase 2
-plan should close this gap; the SC-3 (thermal replay demonstrably works +
-zero preemptions/OOM) contract is satisfied today.
+Runtime-discovery notes (Task 2, 2026-04-21):
+- `start_emmy.sh` + `render_docker_only_args` only forward 8 named envs from
+  `serving.yaml.env` into `docker run -e`. The sweep script bypasses this by
+  rendering docker args directly and injecting candidate env as `-e KEY=VAL`
+  pairs (commit `aa0cde2`).
+- Original K2 hypothesis (`CUDA_FORWARD_COMPATIBLE=0`) was empirically moot:
+  `VLLM_ENABLE_CUDA_COMPATIBILITY` defaults False in this build, so the shim is
+  already off at the vLLM layer. Replaced with the hybrid-KV-cache env above.
+- Original K3 hypothesis (`VLLM_FP8_MAMBA_PREFIX_CACHING=1`) is not in the 232-
+  entry `vllm.envs.environment_variables` registry. Replaced with the
+  EngineArgs `mamba_cache_mode` knob (which the schema then rejected).
+
+## Sampler gap: GPU clock — fix landed, re-validation deferred to Phase 5
+
+Root cause identified 2026-04-21: `emmy_serve/thermal/sampler.py::GpuSampler._sample`
+dropped any nvidia-smi row containing `[N/A]` in ANY field, including the DGX
+Spark UMA's `[N/A]` for `memory.used`. Fix committed as `b510d1b` (Plan 01-07
+Task 1): per-field parsing tolerates `[N/A]`/`N/A` per column, preserving valid
+numeric fields while setting missing ones to `None`. 7 regression unit tests
+pin the observed DGX Spark UMA row shape.
+
+Re-validation (second `--record-floors` replay + third `--assert-floors` replay,
+originally planned as 01-07 Tasks 2/3) is **deferred to Phase 5 (research-artifact
+bar)**. Rationale: the decode-throughput floor (48.1 tok/s p50, 41.4 tok/s p1)
+was recorded correctly in the 2026-04-21 run and is the floor `--assert-floors`
+actually gates on. GPU-clock percentiles will be recorded during the next
+natural thermal re-run (Phase 2 harness-workload replay or Phase 5
+re-validation), not as a blocking Phase 1 task.
 
 ## Validation runs (D-16)
 
