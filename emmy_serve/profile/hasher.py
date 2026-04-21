@@ -23,6 +23,15 @@ TEXT_EXTS = {".md", ".yaml", ".yml", ".json", ".lark", ".txt", ".py"}
 EXCLUDE_NAMES = {".DS_Store", "Thumbs.db", "desktop.ini"}
 EXCLUDE_SUFFIXES = (".swp", ".swo", "~")
 
+# profile.yaml is the MANIFEST — it carries the computed hash back. Including it
+# in the hash computation creates a chicken-and-egg fixed-point problem (writing
+# the hash into the manifest changes the manifest bytes, which changes the
+# hash). RESEARCH.md §4 example manifest (lines 716-723) omits profile.yaml,
+# confirming this is the intended canonicalization. `profile.yaml` at the bundle
+# ROOT is excluded; a file named `profile.yaml` nested under a subdirectory
+# (unusual but not forbidden) is still hashed.
+EXCLUDE_ROOT_FILES = {"profile.yaml"}
+
 # bumped if canonicalization rules change (e.g. add .toml to TEXT_EXTS)
 HASH_MANIFEST_VERSION = 1
 
@@ -97,13 +106,17 @@ def compute_manifest(bundle_dir: Path) -> list[tuple[str, str]]:
             continue
         if _should_exclude(p):
             continue
+        rel = p.relative_to(bundle_dir).as_posix()
+        # Exclude the manifest at the bundle root (see EXCLUDE_ROOT_FILES
+        # comment above — avoids the hash-chicken-and-egg problem).
+        if rel in EXCLUDE_ROOT_FILES:
+            continue
         # Dot-hidden files: allow only .gitkeep; reject anything else explicitly.
         if p.name.startswith(".") and not _is_allowed_dotfile(p):
             raise HasherError(
                 f"disallowed dot-file in profile: {p} "
                 f"(only '.gitkeep' is permitted under bundle root)"
             )
-        rel = p.relative_to(bundle_dir).as_posix()
         items.append((rel, _hash_file(p)))
 
     items.sort(key=lambda t: t[0])
@@ -128,6 +141,7 @@ __all__ = [
     "TEXT_EXTS",
     "EXCLUDE_NAMES",
     "EXCLUDE_SUFFIXES",
+    "EXCLUDE_ROOT_FILES",
     "HasherError",
     "hash_bundle",
     "compute_manifest",
