@@ -23,6 +23,13 @@ from .corpus import (
     ThermalPrompt,
     get_prompt,
 )
+from .replay import (
+    assert_floors,
+    compute_floors,
+    record_floors_first_run,
+    run_replay,
+)
+from .sampler import GpuSampler, VllmMetricsSampler
 
 __all__ = [
     "ThermalPrompt",
@@ -33,4 +40,10 @@ __all__ = [
     "get_prompt",
     "AuditReport",
     "audit_corpus",
+    "run_replay",
+    "compute_floors",
+    "assert_floors",
+    "record_floors_first_run",
+    "GpuSampler",
+    "VllmMetricsSampler",
 ]
