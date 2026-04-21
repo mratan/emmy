@@ -3,15 +3,15 @@ gsd_state_version: 1.0
 milestone: v0.68.0
 milestone_name: milestone
 status: executing
-last_updated: "2026-04-21T16:40:30Z"
+last_updated: "2026-04-21T17:30:00Z"
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 8
   completed_plans: 5
   percent: 63
-  in_progress_plans: ["01-06", "01-07"]
-  in_progress_task: "Plan 01-07 Task 1 COMPLETE (sampler fix); Tasks 2 + 3 PENDING (DGX Spark ~4 hours GPU total). Plan 01-06 Task 2 also PENDING (DGX Spark ~60-90 min GPU)."
+  in_progress_plans: ["01-06", "01-07", "01-08"]
+  in_progress_task: "Plan 01-08 Tasks 1+2 COMPLETE on-machine (certification machinery + runbook); Task 3 PENDING (operator runner-registration + trigger + verify + commit evidence). Plan 01-07 Task 1 COMPLETE (sampler fix); Tasks 2 + 3 PENDING (DGX Spark ~4 hours GPU total). Plan 01-06 Task 2 also PENDING (DGX Spark ~60-90 min GPU)."
 ---
 
 # State: Emmy
@@ -127,7 +127,9 @@ Phases with standard patterns (skip research-phase per SUMMARY.md):
 
 **Plan 01-07 Task 3 resume signal (depends on Task 2 being complete first):** Type `"sc5 reproducibility green"` once the third 2-hour `--assert-floors` replay exits 0 with "All floors pass", `validation_runs` has ≥3 entries, `emmy profile validate` exits 0, and the feat commit lands.
 
-**Next action (operator):** `/gsd-execute-phase 1` with whichever of the three resume signals arrives first. The three DGX Spark tasks can be serialised in any order (01-06 Task 2 and 01-07 Task 2 are independent; 01-07 Task 3 must follow 01-07 Task 2).
+**Plan 01-08 Task 3 resume signal:** Type `"sc4 certified"` once the operator has (a) registered the self-hosted DGX Spark runner with label `dgx-spark` per `docs/ci-runner.md` §1-§7, (b) run `./scripts/trigger_airgap_ci.sh` from a feature branch (not main) and observed the PR create, (c) both `profile-hash-integrity` AND `airgap-replay` jobs on the PR completed GREEN, (d) `./scripts/verify_airgap_ci.sh` exited 0 with the "airgap-report OK: passes=True, 4 layers green, failures=[]" summary, (e) the airgap-report.json artifact has been committed under `.planning/phases/01-serving-foundation-profile-schema/evidence/airgap-report-sc4-certification.json`, and (f) `uv run pytest tests/unit -q` is all-green. See `.planning/phases/01-serving-foundation-profile-schema/01-08-SUMMARY.md` and `docs/airgap-green-run.md` for the full runbook.
+
+**Next action (operator):** `/gsd-execute-phase 1` with whichever of the four resume signals arrives first. Three of the DGX Spark tasks can be serialised in any order (01-06 Task 2, 01-07 Task 2, 01-08 Task 3 are independent); 01-07 Task 3 must follow 01-07 Task 2. 01-08 Task 3 is the lowest-GPU-cost of the four (~5-10 min CI time vs. 2-hour thermal replays) and is a reasonable first action after runner registration.
 
 **Resume signal:** STATE.md current focus + ROADMAP.md Phase 1 success criteria together fully specify what "Phase 1 done" means. Plans must satisfy success criteria 1–5 of Phase 1 to advance. SC-1 closure gates Plan 01-06; SC-5 closure (sampler + reproducibility) gates Plan 01-07.
 
@@ -140,3 +142,5 @@ Phases with standard patterns (skip research-phase per SUMMARY.md):
 **Plan 01-06 Task 1 completed:** 2026-04-21 — commits `feea40c` (RED) + `742fd9b` (GREEN); SUMMARY.md written; awaiting DGX Spark operator for Task 2.
 
 **Plan 01-07 Task 1 completed:** 2026-04-21T16:40:09Z — commits `4214b71` (RED) + `b510d1b` (GREEN); SUMMARY.md written at `.planning/phases/01-serving-foundation-profile-schema/01-07-SUMMARY.md`; GpuSampler now tolerates nvidia-smi `[N/A]` per-field (DGX Spark UMA case). 7/7 sampler tests GREEN, 124/124 unit suite GREEN (1 skip for missing shellcheck), `uv run emmy profile validate` exits 0. Awaiting DGX Spark operator for Task 2 (second 2-hour `--record-floors` replay) and Task 3 (third 2-hour `--assert-floors` replay).
+
+**Plan 01-08 Tasks 1 + 2 completed:** 2026-04-21 — commits `93fab55` (test-RED) + `78ff0be` (feat-GREEN) + `3889724` (docs); SUMMARY.md written at `.planning/phases/01-serving-foundation-profile-schema/01-08-SUMMARY.md`. SC-4 certification machinery shipped: `emmy_serve/airgap/ci_verify.py` validator + `scripts/trigger_airgap_ci.sh` + `scripts/verify_airgap_ci.sh` + 2 golden fixtures + 13 unit tests + `docs/airgap-green-run.md` runbook + `docs/ci-runner.md` §8. 137/137 unit suite GREEN (1 skip for missing shellcheck), `uv run emmy profile validate` exits 0. Awaiting DGX Spark operator for Task 3 (register runner + trigger CI + verify + commit evidence; ~5-10 min of CI time).
