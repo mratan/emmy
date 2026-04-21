@@ -59,7 +59,14 @@
   4. With the network cable physically pulled, `start_emmy.sh` boots successfully, the smoke test passes, and a 50-turn synthetic coding session produces zero outbound network packets (verified via `ss`/`tcpdump` snapshot in CI).
   5. A 2-hour sustained-load test on the actual coding workload completes with: zero vLLM preemption events in steady state, GPU clock not throttled below the documented per-profile threshold, no OOM-killer events on the harness host process.
 
-**Plans**: TBD
+**Plans**: 5 plans
+
+Plans:
+- [ ] 01-01-PLAN.md — Wave 0 scaffold: uv package + pytest config + RED test stubs for every Req-ID + .gitignore/.gitattributes + self-hosted runner doc
+- [ ] 01-02-PLAN.md — pydantic v2 profile schema + canonical hasher + 3-layer immutability validator CLI + profile bundle populated
+- [ ] 01-03-PLAN.md — emmy.canary (EVAL-07) + boot probe + docker-args renderer + smoke_test.py + start_emmy.sh (REPRO-01 contract) + operator NGC-digest capture checkpoint
+- [ ] 01-04-PLAN.md — D-14 thermal audit + thermal corpus + KV-finder bisection + 2-hour thermal replay + measured-values commit checkpoint
+- [ ] 01-05-PLAN.md — 50-turn air-gap fixture + D-12 layered validator + .github/workflows/airgap.yml self-hosted CI + PROFILE-06 Layer 2/3 enforcement + SC-4 demo checkpoint
 
 ---
 
