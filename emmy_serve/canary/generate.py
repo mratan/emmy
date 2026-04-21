@@ -12,7 +12,15 @@ import httpx
 
 
 def run_generate(base_url: str, served_model_name: str) -> tuple[bool, dict, float]:
-    """Returns (ok, data, elapsed_seconds)."""
+    """Returns (ok, data, elapsed_seconds).
+
+    ``chat_template_kwargs.enable_thinking=false`` isolates raw decode throughput
+    from a reasoning-capable model's CoT emission. Without this, Qwen3.6-class
+    models spend the 100-token budget on "Thinking Process:" prose rather than
+    the requested count, producing a tok/s reading that measures thinking
+    throughput rather than decode throughput. Non-thinking models / vLLM
+    versions without this hook ignore the field.
+    """
     payload = {
         "model": served_model_name,
         "messages": [
@@ -21,6 +29,7 @@ def run_generate(base_url: str, served_model_name: str) -> tuple[bool, dict, flo
         "temperature": 0.0,
         "max_tokens": 100,
         "stream": False,
+        "chat_template_kwargs": {"enable_thinking": False},
     }
     t0 = time.monotonic()
     r = httpx.post(f"{base_url}/v1/chat/completions", json=payload, timeout=120.0)
