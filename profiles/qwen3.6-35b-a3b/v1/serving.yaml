@@ -7,8 +7,8 @@ engine:
   model: /models/Qwen3.6-35B-A3B-FP8            # container-internal path (matches -v mount)
   model_hf_id: Qwen/Qwen3.6-35B-A3B-FP8         # for documentation + HF cache lookup
   served_model_name: qwen3.6-35b-a3b             # name vLLM exposes on /v1/models
-  container_image: nvcr.io/nvidia/vllm:26.03.post1-py3
-  container_image_digest: sha256:REPLACE_AT_FIRST_PULL  # RESEARCH.md §12; validator fails if "REPLACE_AT_FIRST_PULL"
+  container_image: emmy-serve/vllm:26.03.post1-fst                   # emmy-derived image; docker/Dockerfile layers fastsafetensors on NGC 26.03.post1-py3
+  container_image_digest: sha256:77321e416cf49702ed6f04af9e5d39945726fea48970bb013617fddc659f9486  # docker inspect --format '{{.Id}}' of the derived image; see scripts/build_emmy_image.sh
 
   # --- context + memory ---
   max_model_len: 131072                          # 128K; well under 262K native, honest per CONTEXT-05

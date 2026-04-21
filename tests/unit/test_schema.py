@@ -12,12 +12,6 @@ schema = pytest.importorskip("emmy_serve.profile.schema")
 loader = pytest.importorskip("emmy_serve.profile.loader")
 
 
-@pytest.mark.xfail(
-    reason="Plan 02 commits sha256:REPLACE_AT_FIRST_PULL placeholder digest "
-    "which the schema's field_validator rejects; Plan 03 operator task captures "
-    "the NGC digest, after which this test GREENs",
-    strict=False,
-)
 def test_serving_yaml_valid(profile_path: Path):
     """PROFILE-03: serving.yaml loads and all required engine fields are present."""
     cfg = loader.load_serving(profile_path / "serving.yaml")

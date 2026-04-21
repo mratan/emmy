@@ -5,7 +5,7 @@ profile:
   base_model: Qwen/Qwen3.6-35B-A3B-FP8
   description: Qwen3.6-35B-A3B-FP8 primary coding profile, Phase 1 baseline
   created: '2026-04-20'
-  hash: sha256:ad220bd324184c1d2142e1b61f4499ce4cefafbee20f9e06eaba479e4b1ebe9b
+  hash: sha256:c1ddd7ff34ea7c87b356b5282a4d587593ee62d3672bbde7f32fc2b482380f04
   hash_algorithm: sha256
   hash_manifest_version: 1
   tags:
