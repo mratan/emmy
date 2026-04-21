@@ -31,3 +31,28 @@ export interface EditResult {
 	before_hash_file: string;
 	after_hash_file: string;
 }
+
+// --- Plan 02-06 types (MCP bridge + native tools) ---
+export interface McpServerSpec {
+	command: string;
+	args: string[];
+	env?: Record<string, string>;
+	alias?: string;
+}
+
+export interface McpServersConfig {
+	servers: Record<string, McpServerSpec>;
+}
+
+export interface PiToolSpec {
+	name: string;
+	description: string;
+	parameters: Record<string, unknown>;
+	invoke: (args: Record<string, unknown>) => Promise<unknown>;
+}
+
+export interface NativeToolOpts {
+	cwd: string;
+	profileRef: { id: string; version: string; hash: string };
+	bashDenylist?: string[];
+}

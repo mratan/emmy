@@ -45,3 +45,51 @@ export class HashResolutionError extends ToolsError {
 		this.name = "HashResolutionError";
 	}
 }
+
+// --- Plan 02-06 error classes (MCP bridge + Unicode poison blocklist) ---
+export class PoisonError extends ToolsError {
+	constructor(
+		public readonly codepoint: number,
+		public readonly categoryOrRange: string,
+		public readonly whichField: "name" | "description",
+	) {
+		super(
+			"mcp.poison",
+			`rejected ${whichField}: U+${codepoint.toString(16).toUpperCase().padStart(4, "0")} (${categoryOrRange})`,
+		);
+		this.name = "PoisonError";
+	}
+}
+
+export class ToolNameCollisionError extends ToolsError {
+	constructor(
+		public readonly toolName: string,
+		public readonly sources: string[],
+	) {
+		super(
+			"mcp.collision",
+			`MCP tool name '${toolName}' collides with: ${sources.join(", ")} — add an 'alias:' to the mcp_servers.yaml entry to remediate`,
+		);
+		this.name = "ToolNameCollisionError";
+	}
+}
+
+export class McpServerSpawnError extends ToolsError {
+	constructor(
+		public readonly serverName: string,
+		detail: string,
+	) {
+		super("mcp.spawn", `server '${serverName}' failed to spawn: ${detail}`);
+		this.name = "McpServerSpawnError";
+	}
+}
+
+export class McpServersConfigError extends ToolsError {
+	constructor(
+		public readonly at: string,
+		detail: string,
+	) {
+		super("mcp.config", `${at}: ${detail}`);
+		this.name = "McpServersConfigError";
+	}
+}
