@@ -1,0 +1,12 @@
+{
+  "task_id": "sc2_02",
+  "source": "prior-repo CODE_03 (adapted for edit-coverage)",
+  "exercises_edit": true,
+  "title": "Add false-negative test to existing pytest suite (edit-heavy)",
+  "fixture_files": {
+    "test_email_validator.py": "import re\nimport pytest\n\ndef is_valid_email(email: str) -> bool:\n    if not isinstance(email, str):\n        return False\n    pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$'\n    return bool(re.match(pattern, email))\n\n@pytest.mark.parametrize(\"addr\", [\n    \"a@b.co\",\n    \"user.name+tag@example.com\",\n    \"x@y.z\",\n])\ndef test_valid(addr):\n    assert is_valid_email(addr) is True\n\n@pytest.mark.parametrize(\"addr\", [\n    \"\",\n    \"nope\",\n    \"@no.com\",\n])\ndef test_invalid(addr):\n    assert is_valid_email(addr) is False\n"
+  },
+  "prompt": "Edit test_email_validator.py to add a new `\"user..dots@example.com\"` entry to the EXISTING `test_invalid` parametrize list (between the existing entries and the closing `])`). Specifically: change the line `    \"@no.com\",` (last existing invalid entry) by replacing it so the list ends with `    \"@no.com\",\\n    \"user..dots@example.com\",` (one new entry added).\n\nUse the edit tool with a SINGLE precise `edits` operation on the `    \"@no.com\",` line (replace it with the two-line equivalent — but since edit `new_content` cannot contain \\n, you must use TWO operations: one `edits` to keep the line unchanged (or omit), and one `inserts` with after_hash pointing at the `    \"@no.com\",` hash and insert=[`    \"user..dots@example.com\",`]).\n\nShort form: use a single `inserts` with after_hash = the 8-hex hash of the line `    \"@no.com\",` and insert value `[\"    \\\"user..dots@example.com\\\",\"]`. Then call done().",
+  "expected_rubric": "Insert applied targeted (not full-file rewrite). Hash-anchored edit insert count >= 1. No 'string not found' failures on hash-anchored path. Final file contains 'test_false_negative'.",
+  "notes": "D-10 edit-heavy augmentation of CODE_03. Forces use of the insert operation on the edit tool (insert after last line), distinct from replace."
+}

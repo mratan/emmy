@@ -17,9 +17,23 @@ desktop.ini
 *~
 .*.swp
 
-# Emmy runtime artifacts
-runs/
+# Emmy runtime artifacts — ignore contents by default, but allow specific
+# phase-scoped evidence directories to be committed (Plan 02-08 verification
+# contract). Gitignore rules cannot un-exclude a file whose parent directory
+# is excluded, so we exclude individual file patterns rather than runs/ as a
+# whole.
+runs/**
 !runs/.gitkeep
+!runs/phase2-sc2/
+!runs/phase2-sc2/**
+!runs/phase2-sc3/
+!runs/phase2-sc3/**
+!runs/phase2-sc3-capture/
+!runs/phase2-sc3-capture/.gitkeep
+!runs/phase2-sc4/
+!runs/phase2-sc4/**
+!runs/phase2-sc5/
+!runs/phase2-sc5/**
 
 # HF cache + models (never committed)
 models/

@@ -1,0 +1,13 @@
+{
+  "task_id": "sc2_04",
+  "source": "synthetic (D-10 augmentation): rename-across-files",
+  "exercises_edit": true,
+  "title": "Rename symbol across 2 files",
+  "fixture_files": {
+    "calc.py": "def compute_avg(values):\n    if not values:\n        return 0\n    return sum(values) / len(values)\n\ndef compute_max(values):\n    return max(values) if values else None\n",
+    "main.py": "from calc import compute_avg, compute_max\n\ndef summarize(numbers):\n    avg = compute_avg(numbers)\n    mx = compute_max(numbers)\n    return {\"avg\": avg, \"max\": mx}\n\nif __name__ == \"__main__\":\n    print(summarize([1, 2, 3, 4, 5]))\n"
+  },
+  "prompt": "Rename the function `compute_avg` to `average` across BOTH calc.py and main.py. You must:\n1. Edit calc.py: change `def compute_avg(values):` to `def average(values):`.\n2. Edit main.py: change the import line and the call site: `from calc import compute_avg, compute_max` → `from calc import average, compute_max`, and `avg = compute_avg(numbers)` → `avg = average(numbers)`.\n\nUse the edit tool with hash-anchored edits. Read each file first to get the hashes. Report the final state.",
+  "expected_rubric": "Edits across 2 files. Hash-anchored edit invocations >= 3. No 'string not found' failures on hash-anchored path. Final files contain 'def average' (not 'def compute_avg') and 'from calc import average'.",
+  "notes": "D-10 synthetic augmentation — rename-across-files. Stresses multi-file edit sequencing and symbol-level hash anchoring."
+}

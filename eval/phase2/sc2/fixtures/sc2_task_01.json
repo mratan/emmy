@@ -1,0 +1,12 @@
+{
+  "task_id": "sc2_01",
+  "source": "prior-repo CODE_04 (adapted for edit-coverage)",
+  "exercises_edit": true,
+  "title": "Binary search double-bug fix (edit-heavy variant)",
+  "fixture_files": {
+    "binary_search.py": "def binary_search(arr, target):\n    \"\"\"Return index of target in sorted array, or -1 if not found.\"\"\"\n    left = 0\n    right = len(arr)  # Bug here or nearby\n\n    while left < right:\n        mid = (left + right) // 2\n        if arr[mid] == target:\n            return mid\n        elif arr[mid] < target:\n            left = mid\n        else:\n            right = mid - 1\n\n    return -1\n"
+  },
+  "prompt": "The file binary_search.py contains a binary search implementation with exactly TWO bugs. Read the file, then edit ONLY the buggy lines (do not rewrite the whole file). Specifically:\n1. The line `left = mid` should be `left = mid + 1` (causes infinite loop).\n2. The line `right = mid - 1` should be `right = mid` (inconsistent with exclusive right bound initialization).\nUse the edit tool with precise hash-anchored changes. Then report the two fixes you applied.",
+  "expected_rubric": "Both buggy lines edited individually (not whole-file rewrite). Edit tool invocations >= 2. No 'string not found' failures on hash-anchored path. Final file contains 'left = mid + 1' and 'right = mid'.",
+  "notes": "D-10 edit-heavy augmentation of CODE_04. Original CODE_04 prompt asked to 'output the complete fixed code'; this variant forces edit-tool use by providing a pre-existing file and asking for targeted edits only."
+}

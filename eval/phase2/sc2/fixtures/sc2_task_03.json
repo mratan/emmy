@@ -1,0 +1,12 @@
+{
+  "task_id": "sc2_03",
+  "source": "prior-repo CODE_02 (adapted for edit-coverage)",
+  "exercises_edit": true,
+  "title": "Fibonacci — fix memoization bug via targeted edit",
+  "fixture_files": {
+    "fib.py": "import time\n\ndef fib_recursive(n):\n    if n < 2:\n        return n\n    return fib_recursive(n - 1) + fib_recursive(n - 2)\n\ndef fib_memo(n, memo=None):\n    if memo is None:\n        memo = {}\n    if n < 2:\n        return n\n    # BUG: forgets to check memo before computing\n    result = fib_memo(n - 1, memo) + fib_memo(n - 2, memo)\n    memo[n] = result\n    return result\n\ndef fib_iterative(n):\n    if n < 2:\n        return n\n    a, b = 0, 1\n    for _ in range(n - 1):\n        a, b = b, a + b\n    return b\n\nif __name__ == \"__main__\":\n    print(fib_recursive(30), fib_memo(30), fib_iterative(30))\n"
+  },
+  "prompt": "The file fib.py has a memoization bug in `fib_memo`: the function stores computed results in `memo` but never checks `memo` BEFORE recomputing. This makes it asymptotically no faster than the naive recursive version.\n\nEdit the function to add a memo-lookup check at the start of `fib_memo`. The fix is to insert one line: `if n in memo: return memo[n]` immediately after `memo = {}` line is handled (i.e., before the `if n < 2` line).\n\nUse the edit tool's insert operation with a precise hash anchor. Do NOT rewrite the function. Then report the single inserted line.",
+  "expected_rubric": "Insert (not full-file rewrite) applied. Hash-anchored edit insert count >= 1. No 'string not found' failures on hash-anchored path. Final file contains 'if n in memo: return memo[n]'.",
+  "notes": "D-10 edit-heavy augmentation of CODE_02. Forces insert-after-hash-anchor usage — the exact Hashline capability that string-replace often struggles with when there are multiple similar-looking lines."
+}

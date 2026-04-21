@@ -1,0 +1,12 @@
+{
+  "task_id": "sc2_05",
+  "source": "synthetic (D-10 augmentation): duplicate-substring disambiguation (Hashline signature win)",
+  "exercises_edit": true,
+  "title": "Disambiguate near-duplicate lines via hash anchoring",
+  "fixture_files": {
+    "nested.py": "def process_nested(data):\n    result = []\n    for outer in data:\n        if isinstance(outer, list):\n            for inner in outer:\n                if inner > 0:\n                    result.append(inner)\n        else:\n            if outer > 0:\n                result.append(outer)\n    return result\n"
+  },
+  "prompt": "The file nested.py has TWO lines that contain `result.append(` — one inside the nested loop with indent 16 (`                result.append(inner)`) and one in the else branch with indent 12 (`            result.append(outer)`). They differ only in whitespace and argument name.\n\nYour task: change the nested-loop version (indent 16, argument `inner`) to `result.append(inner * 2)`. Leave the else-branch version untouched.\n\nUse the edit tool. Read the file first to get per-line hashes. Apply a SINGLE targeted edit. Then report which hash you edited.",
+  "expected_rubric": "Exactly 1 edit applied (not whole-file rewrite). Hash-anchored succeeds cleanly: the 2 near-duplicate lines have distinct hashes (different indentation and different argument), so the precise line is picked without ambiguity. Baseline string-replace FAILS if the model picks a too-short substring like 'result.append(' (2 matches → ambiguous). With disciplined prompting the baseline can pick a unique old_string — but empirically weak models often pick too-short substrings, which is exactly the Hashline win.",
+  "notes": "D-10 synthetic augmentation — re-designed for our content-only hash implementation. The two lines have DIFFERENT hashes (distinct whitespace + distinct argument), so hash-anchored picks cleanly. The baseline variant exhibits the weak-model pattern: picking too-short old_string yields ambiguous_match. The 'string_not_found' count here captures baseline's ambiguous_match failures — the tangible regression Hashline solves."
+}
