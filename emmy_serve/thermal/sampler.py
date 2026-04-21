@@ -13,9 +13,14 @@ of 1440 samples per 2h at 5s interval).
 
 nvidia-smi runs on the host, not inside the NGC container (§9.6); the
 ``GpuSampler`` invokes the host binary via subprocess. If nvidia-smi is
-missing or permission-denied, samples are dropped silently — the thermal
-floor computation tolerates missing GPU rows (``compute_floors()`` falls
-back to decode-throughput floor alone if no GPU samples exist).
+missing or permission-denied, structurally-malformed rows drop silently
+— the thermal floor computation tolerates missing GPU rows
+(``compute_floors()`` falls back to decode-throughput floor alone if no
+GPU samples exist). Individual per-field `[N/A]` values (DGX Spark UMA
+returns this for ``memory.used`` because the GPU shares host memory) are
+omitted from the row but the remaining numeric fields are kept — this is
+the Plan 01-07 fix that lets ``compute_floors`` observe real clock
+percentiles on UMA hardware.
 """
 from __future__ import annotations
 
@@ -26,6 +31,29 @@ from pathlib import Path
 
 from ..diagnostics.atomic import append_jsonl_atomic
 from ..kv_finder.metrics import scrape_metrics
+
+
+# nvidia-smi CSV sentinels for "unsupported on this GPU" — chiefly observed on
+# the DGX Spark GB10 SoC where ``memory.used`` returns ``[N/A]`` because the
+# GPU shares host UMA memory (no dedicated VRAM bank to report).
+_NA_SENTINELS = frozenset({"[n/a]", "n/a", "", "nan"})
+
+
+def _parse_float_or_none(raw: str) -> float | None:
+    """Return ``float(raw)`` or ``None`` if ``raw`` is an nvidia-smi sentinel.
+
+    Recognised sentinels (case-insensitive): ``"[N/A]"``, ``"N/A"``, ``""``,
+    ``"nan"``. Any ValueError from ``float()`` also degrades to ``None`` rather
+    than raising — the sampler never aborts the whole row on a single-field
+    parse issue.
+    """
+    s = (raw or "").strip()
+    if s.casefold() in _NA_SENTINELS:
+        return None
+    try:
+        return float(s)
+    except ValueError:
+        return None
 
 
 class GpuSampler(threading.Thread):
@@ -76,10 +104,22 @@ class GpuSampler(threading.Thread):
 
     @staticmethod
     def _sample() -> dict | None:
-        """Return one nvidia-smi sample or None if unavailable.
+        """Return one nvidia-smi sample or ``None`` if structurally unavailable.
 
         Query fields (in order): timestamp, utilization.gpu,
         clocks.current.graphics, temperature.gpu, memory.used.
+
+        Structurally unavailable = subprocess failure / timeout / empty
+        stdout / fewer than 5 CSV fields. In those cases the caller gets
+        ``None`` and this tick is dropped.
+
+        Well-formed rows with ``[N/A]`` / ``N/A`` / empty / ``nan`` in
+        individual numeric fields keep the other fields; the unparseable
+        key is simply OMITTED from the returned dict. This matches the
+        ``compute_floors`` contract (``if "gpu_clock_mhz" in s``) and is
+        the Plan 01-07 fix for the DGX Spark UMA case where
+        ``memory.used`` returns ``[N/A]`` because the GPU shares host
+        memory.
         """
         try:
             out = subprocess.check_output(
@@ -102,16 +142,17 @@ class GpuSampler(threading.Thread):
         if len(parts) < 5:
             return None
         ts, util, clock, temp, mem = parts
-        try:
-            return {
-                "ts": ts,
-                "gpu_util_pct": float(util),
-                "gpu_clock_mhz": float(clock),
-                "gpu_temp_c": float(temp),
-                "memory_used_mb": float(mem),
-            }
-        except ValueError:
-            return None
+        sample: dict = {"ts": ts}
+        for key, raw in (
+            ("gpu_util_pct", util),
+            ("gpu_clock_mhz", clock),
+            ("gpu_temp_c", temp),
+            ("memory_used_mb", mem),
+        ):
+            value = _parse_float_or_none(raw)
+            if value is not None:
+                sample[key] = value
+        return sample
 
 
 class VllmMetricsSampler(threading.Thread):
