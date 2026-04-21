@@ -1,0 +1,48 @@
+{
+  "ts": "2026-04-22T03:00:00Z",
+  "container": "emmy-serve",
+  "passes": true,
+  "failures": [],
+  "layers": [
+    {
+      "layer": "a",
+      "name": "network_devices",
+      "passed": true,
+      "detail": "only loopback present; networks=['none']",
+      "commands_run": [
+        "docker inspect emmy-serve --format {{json .NetworkSettings.Networks}}",
+        "docker exec emmy-serve ip -o addr"
+      ]
+    },
+    {
+      "layer": "b",
+      "name": "dns_audit",
+      "passed": true,
+      "detail": "no external DNS reachable (huggingface.co resolution failed as required)",
+      "commands_run": [
+        "docker exec emmy-serve cat /etc/resolv.conf",
+        "docker exec emmy-serve getent hosts huggingface.co"
+      ]
+    },
+    {
+      "layer": "c",
+      "name": "telemetry_env",
+      "passed": true,
+      "detail": "VLLM_NO_USAGE_STATS=1 DO_NOT_TRACK=1",
+      "commands_run": [
+        "docker exec emmy-serve printenv VLLM_NO_USAGE_STATS",
+        "docker exec emmy-serve printenv DO_NOT_TRACK"
+      ]
+    },
+    {
+      "layer": "d",
+      "name": "hf_offline_env",
+      "passed": true,
+      "detail": "HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1",
+      "commands_run": [
+        "docker exec emmy-serve printenv HF_HUB_OFFLINE",
+        "docker exec emmy-serve printenv TRANSFORMERS_OFFLINE"
+      ]
+    }
+  ]
+}

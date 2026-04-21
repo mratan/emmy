@@ -1,0 +1,40 @@
+{
+  "ts": "2026-04-22T03:00:00Z",
+  "container": "emmy-serve",
+  "passes": false,
+  "failures": [
+    "layer (a) network_devices FAILED: expected only 'none' network, got ['bridge']"
+  ],
+  "layers": [
+    {
+      "layer": "a",
+      "name": "network_devices",
+      "passed": false,
+      "detail": "expected only 'none' network, got ['bridge']",
+      "commands_run": [
+        "docker inspect emmy-serve --format {{json .NetworkSettings.Networks}}"
+      ]
+    },
+    {
+      "layer": "b",
+      "name": "dns_audit",
+      "passed": true,
+      "detail": "no external DNS reachable (huggingface.co resolution failed as required)",
+      "commands_run": []
+    },
+    {
+      "layer": "c",
+      "name": "telemetry_env",
+      "passed": true,
+      "detail": "VLLM_NO_USAGE_STATS=1 DO_NOT_TRACK=1",
+      "commands_run": []
+    },
+    {
+      "layer": "d",
+      "name": "hf_offline_env",
+      "passed": true,
+      "detail": "HF_HUB_OFFLINE=1 TRANSFORMERS_OFFLINE=1",
+      "commands_run": []
+    }
+  ]
+}
