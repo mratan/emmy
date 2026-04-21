@@ -26,12 +26,17 @@ def test_models_endpoint(base_url: str):
 
 
 def test_throughput_floor(base_url: str):
-    """SERVE-02: 100-token generation completes at >= 60 tok/s measured decode."""
+    """SERVE-02: 100-token generation completes at >= 60 tok/s measured decode.
+
+    ``enable_thinking=false`` isolates decode throughput from Qwen3.6's CoT
+    emission (see emmy_serve/canary/generate.py for rationale).
+    """
     payload = {
         "model": "qwen3.6-35b-a3b",
         "messages": [{"role": "user", "content": "Count to 100."}],
         "max_tokens": 100,
         "temperature": 0.0,
+        "chat_template_kwargs": {"enable_thinking": False},
     }
     t0 = time.perf_counter()
     r = httpx.post(f"{base_url}/v1/chat/completions", json=payload, timeout=60.0)
@@ -86,12 +91,18 @@ def test_cold_start_time(profile_path: Path):
 
 
 def test_smoke_all_three(base_url: str):
-    """PROFILE-09: SP_OK + tool_call_parse + 100-token generation all pass."""
+    """PROFILE-09: SP_OK + tool_call_parse + 100-token generation all pass.
+
+    Uses ``canary.tool_call.load_default_tool_schema()`` for the read_file
+    OpenAI-formatted schema ({"type": "function", "function": {…}}) rather
+    than an ad-hoc inline dict, which vLLM rejects with 400.
+    """
+    from emmy_serve.canary.tool_call import load_default_tool_schema
     sp_ok, _ = canary.run_sp_ok(base_url, served_model_name="qwen3.6-35b-a3b")
     tool_ok, _ = canary.run_tool_call(
         base_url,
         served_model_name="qwen3.6-35b-a3b",
-        tool_schema={"name": "read_file", "parameters": {"path": "string"}},
+        tool_schema=load_default_tool_schema(),
     )
     gen_ok, _, _ = canary.run_generate(base_url, served_model_name="qwen3.6-35b-a3b")
     assert sp_ok and tool_ok and gen_ok, (
