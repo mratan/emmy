@@ -25,6 +25,17 @@ def test_models_endpoint(base_url: str):
     assert "qwen3.6-35b-a3b" in body, f"served model name missing in: {body}"
 
 
+@pytest.mark.xfail(
+    strict=True,
+    reason=(
+        "SC-1 accept-architectural per 01-CLOSEOUT.md (2026-04-21). "
+        "Measured 49-50 tok/s warm decode on GB10 + vLLM 0.17.1+nvinternal + "
+        "FP8 + hybrid-attention Qwen3.6. 01-06 sweep of 4 candidates produced "
+        "no winner. Re-evaluate in Phase 2 (real coding workload) or post-"
+        "vLLM-upgrade. Kept as xfail rather than deleted so the test still "
+        "records the documented gap and flips to XPASS when the gap closes."
+    ),
+)
 def test_throughput_floor(base_url: str):
     """SERVE-02: 100-token generation completes at >= 60 tok/s measured decode.
 

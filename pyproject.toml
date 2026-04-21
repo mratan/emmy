@@ -40,3 +40,9 @@ markers = [
     "airgap: runs only in air-gap CI on self-hosted DGX Spark runner — opt in with --run-airgap",
 ]
 asyncio_mode = "auto"
+
+[dependency-groups]
+dev = [
+    "requests>=2.33.1",
+    "transformers>=5.5.4",
+]

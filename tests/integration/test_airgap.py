@@ -47,12 +47,20 @@ def test_env_transformers_offline():
 
 
 def test_ip_addr_only_loopback():
-    """D-12 layer (a): `ip addr` shows only `lo:`; no eth0/ens*."""
-    r = _docker_exec(["ip", "addr"])
+    """D-12 layer (a): only `lo` interface present; no eth0/ens*.
+
+    Uses `/sys/class/net/` rather than `ip addr` because the NGC vLLM container
+    doesn't ship iproute2. `/sys/class/net/` exists on every Linux kernel and
+    lists one entry per network interface.
+    """
+    r = _docker_exec(["ls", "/sys/class/net/"])
     assert r.returncode == 0, r.stderr
-    assert "lo:" in r.stdout or "lo@" in r.stdout, f"no loopback in: {r.stdout}"
-    assert "eth0" not in r.stdout, f"eth0 present (air-gap violated): {r.stdout}"
-    assert "ens" not in r.stdout, f"ens* interface present: {r.stdout}"
+    ifaces = set(r.stdout.split())
+    assert "lo" in ifaces, f"no loopback in: {ifaces}"
+    non_loopback = ifaces - {"lo"}
+    assert not non_loopback, (
+        f"non-loopback interface(s) present (air-gap violated): {non_loopback}"
+    )
 
 
 def test_dns_resolution_fails():

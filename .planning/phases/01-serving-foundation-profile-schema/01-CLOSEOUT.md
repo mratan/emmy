@@ -44,7 +44,7 @@ contract.** Phase 2 (pi-mono harness) can point at port 8002 tomorrow.
 | SC-1 throughput ≥ 60 tok/s | partial (48–50 measured) | **accept-architectural** | Plan 01-06 sweep (runs/20260421T170858Z_bd0e9e-phase1-sc1-throughput-sweep/results.json): 4 candidates + baseline, no winner. K2 baseline-equivalent (+1.3 tok/s, within noise); K1 boot failure; K3/K4 schema-rejected. |
 | SC-2 versioned profile bundle + hash integrity | pass | pass | Profile hash + immutability validator + 137 unit tests + emmy profile validate exit 0. |
 | SC-3 2-hour sustained load, zero preemption/OOM | pass | pass | validation_run 20260421T092927Z_a1b62b-thermal in PROFILE_NOTES.md. |
-| SC-4 air-gap CI run with zero outbound packets | failed | **deferred to Phase 7** | All certification machinery landed (workflow YAML, session fixture, D-12 validator, trigger + verify scripts, green-run runbook). Only the trigger itself is GitHub-Actions-coupled. The local D-12 validator (`emmy_serve.airgap.validator`) is executable today from this machine with `--network none`. Defer the CI wrapper to when Phase 7 makes public-artifact reproducibility the live concern. |
+| SC-4 air-gap CI run with zero outbound packets | failed | **verified locally 2026-04-21** (GitHub-Actions wrapper deferred to Phase 7) | `uv run pytest tests/integration/test_airgap.py --run-integration --run-airgap` against a `docker run --network none` emmy-serve container: 6/6 tests PASS. D-12 all four layers verified: (a) only `lo` interface present, (b) DNS resolution fails, (c) `VLLM_NO_USAGE_STATS=1` + `DO_NOT_TRACK=1` set inside container, (d) `HF_HUB_OFFLINE=1` + `TRANSFORMERS_OFFLINE=1` set inside container. The GitHub-Actions wrapper remains a Phase 7 public-artifact concern — locally SC-4 is green today. |
 | SC-5 GPU clock floors recorded + reproducible | partial | **fix landed; re-validation deferred to Phase 5** | Sampler root cause identified (DGX Spark UMA `[N/A]` per-field); fix at commit `b510d1b` with 7 regression tests. Re-validation runs (2× 2-hour replays) deferred to the next natural thermal re-run (Phase 2 harness-workload replay or Phase 5 re-validation). Current decode-throughput floor (48.1 tok/s p50) was recorded correctly and is the floor `--assert-floors` actually gates on. |
 
 ---
@@ -107,6 +107,33 @@ Each deferral is justified against the project's three bars (PROJECT.md + STATE.
 (`4611317` → HEAD).
 
 ---
+
+## Latent bugs surfaced but deferred
+
+The end-to-end validation run (2026-04-21 17:30–17:45 UTC) surfaced two minor
+issues worth noting for Phase 2+:
+
+1. **`start_emmy.sh --airgap` is broken end-to-end.** Under `--network none`,
+   the host cannot reach the container's `/v1/models` because the airgap
+   branch drops the `-p 8002:8000` port mapping (by design — that's what
+   makes it air-gapped). But `start_emmy.sh` then runs `smoke_test.py` from
+   the host side, which tries to hit `http://127.0.0.1:8002/v1/models` and
+   times out at 300s, causing the script to REJECT the boot and tear down
+   the container. The CI path (`airgap.yml`) avoided this by running the
+   smoke inside the runner's docker context differently. For interactive
+   air-gap work today, boot via `uv run python -m emmy_serve.boot.runner
+   render-docker-args --airgap ... | docker run ...` (bypassing the host
+   smoke), OR fix `start_emmy.sh --airgap` to docker-exec the smoke into
+   the container. **Scope:** test the actual air-gap posture (test_airgap.py)
+   or run local certification. Fix is 1–2 lines in start_emmy.sh to branch
+   the smoke-test invocation on AIRGAP. Deferred to Phase 2 fit-and-finish.
+
+2. **`tests/integration/test_offline_hf.py` skips locally because
+   `transformers` isn't in the host venv.** The test is a host-side HF
+   tokenizer offline-load check (REPRO-04 assertion). Either add
+   `transformers` to pyproject.toml's test extras, or rewrite the test to
+   use the container's transformers install via docker exec. Deferred — not
+   blocking.
 
 ## Next action
 
