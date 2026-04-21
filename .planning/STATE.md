@@ -2,13 +2,13 @@
 gsd_state_version: 1.0
 milestone: v0.68.0
 milestone_name: milestone
-status: executing
+status: "Phase 1 executing — Waves 1–2 complete; Wave 3 (plan 01-03) paused at human checkpoint awaiting DGX Spark operator: capture NGC digest, first-boot, integration tests"
 last_updated: "2026-04-21T03:13:41.892Z"
 progress:
   total_phases: 7
   completed_phases: 0
   total_plans: 5
-  completed_plans: 0
+  completed_plans: 2
   percent: 0
 ---
 
