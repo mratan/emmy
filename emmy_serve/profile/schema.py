@@ -187,11 +187,30 @@ class ContextConfig(BaseModel):
     default_pruning: Literal["head_tail", "recency_window", "importance"]
 
 
+class GrammarConfig(BaseModel):
+    """Nested grammar config (Phase-2 D-11 lock — see CONTEXT.md §D-11).
+
+    The pre-revision shape was a bare `str` (path only). Phase 2 locks a nested
+    `{path, mode}` shape so the harness can carry the reactive/disabled knob
+    alongside the grammar file. The `reactive` mode is Phase 2's production path
+    per CLAUDE.md Pitfall #6 ("grammar is a correctness backstop, not a quality
+    lever"); the `disabled` mode is reserved for the SC-3 no-grammar baseline
+    (Plan 02-08, D-14).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    path: str
+    mode: Literal["reactive", "disabled"] = "reactive"
+
+
 class ToolsConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     format: Literal["openai", "hermes"]
     schemas: Optional[str] = None
-    grammar: Optional[str] = None
+    # Phase-2 D-11: nested GrammarConfig. None = no grammar configured (Phase 1
+    # v1 default; the reactive-retry path fails loud with `no_grammar_configured`
+    # when a model emits an unparseable tool-call).
+    grammar: Optional[GrammarConfig] = None
     per_tool_sampling: dict[str, Any] = {}
 
 
@@ -271,6 +290,7 @@ __all__ = [
     "ServingConfig",
     "PromptsConfig",
     "ContextConfig",
+    "GrammarConfig",
     "ToolsConfig",
     "AgentLoopConfig",
     "HarnessConfig",
