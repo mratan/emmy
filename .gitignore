@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+.venv/
+.uv/
+dist/
+build/
+
+# Editor / OS (MUST match emmy_serve.profile.hasher exclusion list — §4)
+.DS_Store
+Thumbs.db
+desktop.ini
+*.swp
+*.swo
+*~
+.*.swp
+
+# Emmy runtime artifacts
+runs/
+!runs/.gitkeep
+
+# HF cache + models (never committed)
+models/
+hf-cache/
+
+# Env
+.env
+.env.local
