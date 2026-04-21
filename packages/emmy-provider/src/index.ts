@@ -9,12 +9,15 @@
 // the package root so downstream plans (Plan 04 sp-ok-canary, eval runners)
 // import via `@emmy/provider` — no `@emmy/provider/src/...` subpaths.
 
+import { callWithReactiveGrammar } from "./grammar-retry";
 import { postChat } from "./http";
 import { stripNonStandardFields } from "./openai-compat";
 import type { ChatRequest, ChatResponse, ProfileSnapshot } from "./types";
 
 // W1 FIX: package-root re-exports. Plan 04 sp-ok-canary imports `postChat`
-// from here; do NOT remove.
+// from here; Plan 08 eval corpus imports `callWithReactiveGrammar`. Do NOT
+// remove — the exports map routes everything through "./src/index.ts".
+export { callWithReactiveGrammar } from "./grammar-retry";
 export { postChat } from "./http";
 export { stripNonStandardFields } from "./openai-compat";
 export * from "./types";
@@ -38,20 +41,26 @@ export function registerEmmyProvider(
 	pi.registerProvider(providerName, {
 		name: providerName,
 		chat: async (req: unknown, _signal?: AbortSignal): Promise<ChatResponse> => {
-			// Task 2 replaces this body with a call to callWithReactiveGrammar.
-			// For Task 1, we issue an unconstrained POST only.
+			// Task 2 wiring: route through reactive XGrammar retry (D-11).
+			// First POST is always unconstrained; retry only on tool-call parse
+			// failure. postChat is still imported above to keep the module
+			// self-contained; the re-export at package root preserves the
+			// bare-import contract (W1 fix).
+			void postChat;
 			const payload = shapeRequest(req as ChatRequest, profile);
-			const resp = await postChat(baseUrl, payload);
-			for (const c of resp.choices) {
+			const { response } = await callWithReactiveGrammar(
+				baseUrl,
+				payload,
+				profile,
+				{ turnId: opts.turnIdProvider?.() },
+			);
+			for (const c of response.choices) {
 				stripNonStandardFields(
 					c.message as unknown as Record<string, unknown>,
 					profile.serving.quirks,
 				);
 			}
-			// opts.turnIdProvider is reserved for Task 2 telemetry wiring; Task 1
-			// intentionally does not consume it (unconstrained-only path).
-			void opts.turnIdProvider;
-			return resp;
+			return response;
 		},
 	});
 }
