@@ -67,37 +67,60 @@ def _boot_with_env(
     profile: Path,
     port: int,
     extra_env: dict[str, str],
-    start_script: Path,
+    start_script: Path,  # kept for signature compat; unused on this path
+    run_dir: Path | None = None,
 ) -> None:
-    """Boot emmy-serve with candidate env vars exported on top of serving.yaml.env.
+    """Boot emmy-serve with candidate env vars injected into the container.
 
-    Relies on start_emmy.sh inheriting the caller's process env. The current
-    start_emmy.sh (Plan 01-03) does NOT explicitly forward arbitrary env vars
-    to `docker run -e` — it renders docker args from serving.yaml.env only.
-    This means env-based candidates (K1/K2/K3) may require the sweep script
-    to bypass start_emmy.sh and invoke docker run directly via
-    `emmy_serve.boot.runner.render_docker_args` + extra `-e KEY=VAL` pairs.
+    DISCOVERED-AT-TASK-2-RUNTIME (2026-04-21): `start_emmy.sh` + the running
+    `render_docker_only_args` (emmy_serve/boot/runner.py:101-148) only forward
+    8 named envs from serving.yaml.env into `docker run -e`. Host env vars are
+    NOT propagated. To honestly measure env-based candidates (K1, K2) we must
+    bypass `start_emmy.sh` and render the docker args directly, then inject
+    the candidate env as additional `-e KEY=VAL` pairs before the image ref.
 
-    DISCOVERED-AT-TASK-2-RUNTIME: the operator confirms which path works on
-    the DGX Spark. If start_emmy.sh propagation works (vLLM inherits the env),
-    this function remains correct. If not, the sweep script logs the issue
-    into results.json.notes and the operator adjusts this function to render
-    docker args directly.
+    Serving.yaml-patch candidates (K3, K4) still work via the rendered args
+    because render_docker_args rereads serving.yaml at each invocation —
+    `_apply_serving_yaml_patch` already mutates the file before this call.
     """
-    env = os.environ.copy()
-    env.update(extra_env)
-    # Also set the engine.env fields — serving.yaml already has VLLM_NO_USAGE_STATS=1
-    # but we re-assert here so the sweep's air-gap discipline doesn't regress.
-    env["VLLM_NO_USAGE_STATS"] = "1"
+    # 1. Render the complete docker argv via the boot.runner module, but
+    #    inject run_dir under the profile-internal "runs" convention.
+    if run_dir is None:
+        run_dir = Path("runs") / f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-sweep-boot"
+    run_dir.mkdir(parents=True, exist_ok=True)
 
     r = subprocess.run(
-        [str(start_script), "--profile", str(profile), "--port", str(port)],
-        env=env,
+        [
+            "uv", "run", "python", "-m", "emmy_serve.boot.runner", "render-docker-args",
+            "--profile", str(profile),
+            "--run-dir", str(run_dir),
+            "--port", str(port),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=60,
     )
     if r.returncode != 0:
         raise RuntimeError(
-            f"start_emmy.sh exited {r.returncode} "
-            f"(candidate env={extra_env}); see runs/boot-failures/"
+            f"render-docker-args exited {r.returncode}: {r.stderr.strip()}"
+        )
+    # 2. Split and inject the candidate env as `-e KEY=VAL` pairs. Prepend so
+    #    the extra env lands among the flags (before the image ref / vllm CLI).
+    import shlex
+    rendered = shlex.split(r.stdout.strip())
+    extra_env_flags: list[str] = []
+    for k, v in extra_env.items():
+        extra_env_flags += ["-e", f"{k}={v}"]
+    # 3. Tear down any prior container and launch detached.
+    _stop_container()
+    argv = ["docker", "run", "--name", "emmy-serve", "--detach"] + extra_env_flags + rendered
+    boot_log = run_dir / "docker-run.log"
+    with open(boot_log, "wb") as f:
+        r2 = subprocess.run(argv, stdout=f, stderr=subprocess.STDOUT, timeout=120)
+    if r2.returncode != 0:
+        tail = boot_log.read_text(errors="replace")[-2000:]
+        raise RuntimeError(
+            f"docker run exited {r2.returncode} (candidate env={extra_env}); tail:\n{tail}"
         )
 
 

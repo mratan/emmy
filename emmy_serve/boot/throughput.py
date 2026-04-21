@@ -97,31 +97,42 @@ SWEEP_CANDIDATES: list[CandidateKnob] = [
         ),
     ),
     CandidateKnob(
-        id="k2-cuda-native",
-        label="CUDA_FORWARD_COMPATIBLE=0",
-        env_overrides={"CUDA_FORWARD_COMPATIBLE": "0"},
+        id="k2-hybrid-kv-cache",
+        label="VLLM_ALLOW_CHUNKED_LOCAL_ATTN_WITH_HYBRID_KV_CACHE=1",
+        env_overrides={"VLLM_ALLOW_CHUNKED_LOCAL_ATTN_WITH_HYBRID_KV_CACHE": "1"},
         notes=(
-            "PROFILE_NOTES.md §'SC-1 throughput gap' bullet 2: NGC 26.03 "
-            "runs via the CUDA forward-compat shim (driver 595 on kernel 580), "
-            "which may add per-kernel-launch overhead. Exact env-var name is "
-            "an approximation from PROFILE_NOTES.md; verify at task-2 runtime "
+            "PROFILE_NOTES.md §'SC-1 throughput gap' bullet 2 (rewritten at "
+            "task-2 runtime 2026-04-21 against the live container). "
+            "Original hypothesis (CUDA forward-compat overhead, "
+            "CUDA_FORWARD_COMPATIBLE=0) is empirically moot: "
+            "`VLLM_ENABLE_CUDA_COMPATIBILITY` is unset → False by default in "
+            "this vLLM build, so the vLLM-layer forward-compat shim is already "
+            "disabled. A remaining driver/kernel-layer shim exists (driver 595 "
+            "on kernel 580) but is not per-boot toggleable. Replaced with a "
+            "hybrid-attention-specific env that directly applies to Qwen3.6 "
+            "(architecture Qwen3_5MoeForConditionalGeneration; layer_types "
+            "interleave 3× linear_attention + 1× full_attention). Discovered "
             "via `docker exec emmy-serve python3 -c 'from vllm import envs; "
-            "print(envs.__all__)'` and adjust the override if needed. If the "
-            "actual mechanism is a docker-run flag rather than an env var, "
-            "the sweep script documents the discovery in results.json.notes."
+            "print([e for e in envs.environment_variables if \"HYBRID\" in e])'`."
         ),
     ),
     CandidateKnob(
-        id="k3-fp8-mamba-prefix",
-        label="VLLM_FP8_MAMBA_PREFIX_CACHING=1",
-        env_overrides={"VLLM_FP8_MAMBA_PREFIX_CACHING": "1"},
+        id="k3-mamba-cache-mode",
+        label="engine.mamba_cache_mode=all (serving.yaml)",
+        serving_yaml_patch={"engine": {"mamba_cache_mode": "all"}},
         notes=(
-            "PROFILE_NOTES.md §'SC-1 throughput gap' bullet 3: vLLM 0.17.1+"
-            "nvinternal flags an experimental FP8+Mamba prefix-caching path. "
-            "Exact env var may differ; verify at task-2 runtime via "
-            "`docker exec emmy-serve python3 -c 'from vllm import envs; "
-            "print([e for e in envs.__all__ if \"MAMBA\" in e or \"FP8\" in e])'`. "
-            "The discovered env name lands in results.json for reproducibility."
+            "PROFILE_NOTES.md §'SC-1 throughput gap' bullet 3 (rewritten at "
+            "task-2 runtime 2026-04-21). Original hypothesis "
+            "(VLLM_FP8_MAMBA_PREFIX_CACHING=1 env) is empirically moot: no "
+            "Mamba-related env exists in vLLM 0.17.1+bd67d66a.nvinternal's "
+            "232-entry environment_variables registry. Replaced with the real "
+            "EngineArgs knob that controls linear-attention prefix-cache "
+            "behaviour: `mamba_cache_mode: Literal['all','align','none']` "
+            "defaults to 'none'; setting to 'all' extends the existing "
+            "enable_prefix_caching=true (already on in baseline serving.yaml) "
+            "into the 3-of-4 linear_attention layers. Serving.yaml patch (not "
+            "env) — bumps profile hash for the duration of this candidate's "
+            "window; sweep script restores + rehashes after the iteration."
         ),
     ),
     CandidateKnob(

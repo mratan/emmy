@@ -37,8 +37,8 @@ def test_sweep_candidates_have_all_four_profile_notes_ids():
     assert ids[0] == "k0-baseline"
     assert {
         "k1-flashinfer-moe",
-        "k2-cuda-native",
-        "k3-fp8-mamba-prefix",
+        "k2-hybrid-kv-cache",
+        "k3-mamba-cache-mode",
         "k4-reasoning-parser",
     }.issubset(ids)
 
@@ -59,20 +59,31 @@ def test_k1_is_env_override_only():
     assert k1.serving_yaml_patch is None
 
 
-def test_k2_is_cuda_env_override():
+def test_k2_is_hybrid_kv_env_override():
+    """K2 (discovered-at-task-2-runtime rewrite 2026-04-21): the original
+    CUDA_FORWARD_COMPATIBLE hypothesis is empirically moot — VLLM_ENABLE_CUDA_COMPATIBILITY
+    defaults to False in this vLLM build. Replaced with a hybrid-attention-specific env
+    that directly applies to Qwen3.6's linear_attention + full_attention layer mix."""
     from emmy_serve.boot.throughput import SWEEP_CANDIDATES
 
-    k2 = next(c for c in SWEEP_CANDIDATES if c.id == "k2-cuda-native")
-    assert k2.env_overrides == {"CUDA_FORWARD_COMPATIBLE": "0"}
+    k2 = next(c for c in SWEEP_CANDIDATES if c.id == "k2-hybrid-kv-cache")
+    assert k2.env_overrides == {
+        "VLLM_ALLOW_CHUNKED_LOCAL_ATTN_WITH_HYBRID_KV_CACHE": "1"
+    }
     assert k2.serving_yaml_patch is None
 
 
-def test_k3_is_mamba_env_override():
+def test_k3_is_mamba_cache_mode_serving_yaml_patch():
+    """K3 (discovered-at-task-2-runtime rewrite 2026-04-21): the original
+    VLLM_FP8_MAMBA_PREFIX_CACHING hypothesis is empirically moot — no such env
+    exists in vLLM 0.17.1+nvinternal. Replaced with the real EngineArgs knob
+    (mamba_cache_mode: Literal['all','align','none']; default 'none') set via
+    serving.yaml patch."""
     from emmy_serve.boot.throughput import SWEEP_CANDIDATES
 
-    k3 = next(c for c in SWEEP_CANDIDATES if c.id == "k3-fp8-mamba-prefix")
-    assert k3.env_overrides == {"VLLM_FP8_MAMBA_PREFIX_CACHING": "1"}
-    assert k3.serving_yaml_patch is None
+    k3 = next(c for c in SWEEP_CANDIDATES if c.id == "k3-mamba-cache-mode")
+    assert k3.env_overrides == {}
+    assert k3.serving_yaml_patch == {"engine": {"mamba_cache_mode": "all"}}
 
 
 def test_k4_is_serving_yaml_patch_not_env():
@@ -184,7 +195,7 @@ def test_measure_warm_throughput_captures_httpx_exception(monkeypatch):
     out = mod.measure_warm_throughput(
         "http://localhost:8002",
         "qwen3.6-35b-a3b",
-        candidate_id="k2-cuda-native",
+        candidate_id="k2-hybrid-kv-cache",
         n_samples=1,
         warmup_discard=0,
     )
@@ -194,7 +205,7 @@ def test_measure_warm_throughput_captures_httpx_exception(monkeypatch):
     assert out.canary_sp_ok is False
     assert out.canary_tool_call is False
     assert out.canary_generate is False
-    assert out.candidate_id == "k2-cuda-native"
+    assert out.candidate_id == "k2-hybrid-kv-cache"
 
 
 def test_measure_warm_throughput_rejects_zero_completion_tokens(monkeypatch):
@@ -289,7 +300,7 @@ def test_decide_winner_picks_first_clean_candidate_above_floor():
     measurements = [
         _mk("k0-baseline", 50.0),
         _mk("k1-flashinfer-moe", 65.0),  # first winner
-        _mk("k3-fp8-mamba-prefix", 70.0),
+        _mk("k3-mamba-cache-mode", 70.0),
     ]
     assert decide_winner(measurements, floor_tokps=60.0) == "k1-flashinfer-moe"
 
@@ -308,9 +319,9 @@ def test_decide_winner_rejects_canary_failure():
 
     measurements = [
         _mk("k0-baseline", 50.0),
-        _mk("k3-fp8-mamba-prefix", 71.0, sp=False),  # canary regression
+        _mk("k3-mamba-cache-mode", 71.0, sp=False),  # canary regression
         _mk("k1-flashinfer-moe", 66.0, tc=False),  # canary regression
-        _mk("k2-cuda-native", 62.0, gen=False),  # canary regression
+        _mk("k2-hybrid-kv-cache", 62.0, gen=False),  # canary regression
     ]
     assert decide_winner(measurements, floor_tokps=60.0) is None
 
