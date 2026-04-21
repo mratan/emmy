@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.68.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-04-21T21:43:53.295Z"
+last_updated: "2026-04-21T22:39:04Z"
 progress:
   total_phases: 7
   completed_phases: 1
   total_plans: 17
-  completed_plans: 10
-  percent: 59
+  completed_plans: 11
+  percent: 65
 ---
 
 # State: Emmy
@@ -41,7 +41,7 @@ progress:
 ## Current Position
 
 Phase: 02 (pi-harness-mvp-daily-driver-baseline) — EXECUTING
-Plan: 2 of 9
+Plan: 5 of 9 (02-04 landed 2026-04-21; 02-02 + 02-03 + 02-06 + 02-04 complete; next wave = 02-07 → 02-08 → 02-09)
 **Phase:** 1 — Serving Foundation + Profile Schema — closed with 3 documented deferrals; see `.planning/phases/01-serving-foundation-profile-schema/01-CLOSEOUT.md`
 **Next:** `/gsd-plan-phase 2` (pi-mono harness — daily-driver bar)
 **Phase Progress:** 100% (8/8 plans landed; 3 plans carry deferrals owned by Phase 5 or Phase 7)
@@ -72,6 +72,7 @@ Current: Phase 2 (planning pending — daily-driver bar)
 | Plan | Duration | Tasks | Files |
 |------|----------|-------|-------|
 | Phase 02 P01 | 12min | 2 tasks | 20 files |
+| Phase 02 P04 | 19min | 2 tasks | 20 files |
 
 ---
 
@@ -92,6 +93,11 @@ Current: Phase 2 (planning pending — daily-driver bar)
 - **Bun 1.3 text-lockfile (`bun.lock`) committed in place of legacy `bun.lockb`** (Plan 02-01). Bun ≥1.2 defaults to text lockfiles; the binary format is deprecated. Text lockfile preserves Pitfall #8 reproducibility while adding audit-diffability. Neither `bun.lock` nor `bun.lockb` is gitignored.
 - **Profile v2 built as sibling of Phase 1-locked v1** (Plan 02-01). Preserves Phase 1 certification hash `sha256:b91e747...`; v2 harness.yaml TODO fills + hash recomputation owned by Plan 02-07.
 - **pi-coding-agent 0.68.0 pinned EXACTLY (no `^`/`~`) in all four @emmy/* packages** (Plan 02-01). TS-side analog of Phase 1's `uv.lock` discipline per T-02-01-04 threat register.
+- **Plan 02-04 chose pi's `createAgentSession` (SDK path) + `SessionManager.inMemory(cwd)` over the full `createAgentSessionRuntime` machinery.** Rationale: Phase 2 needs a real AgentSession + turn subscription for transcript capture, not session-replacement / fork / import flows. Plan 02-09's SC-1 walkthrough can upgrade to `AgentSessionRuntime` if interactive-TUI bindings require it; for now the adapter exposes `.session` for callers who need to drive pi directly.
+- **Narrow `PiRuntime` adapter pattern** (Plan 02-04). Presents `{registerProvider, registerTool, on, session}` because @emmy/provider and @emmy/tools already target this shape. Pi's real `ExtensionAPI` is richer; adapter's `registerProvider/registerTool` are no-ops in Phase 2 (calls are ordered + observed) because Phase 2 does not plumb @emmy tools through pi's tool pipeline — that's a Phase 3 extension-runner binding.
+- **CLI test hybrid execution model** (Plan 02-04 Rule 3 deviation). The execution sandbox does not route subprocess→parent localhost traffic; static CLI behaviors (--help, --print-environment, missing profile) use real `spawnSync`, network-touching paths (SP_OK canary, vLLM probe, profile validate) import and call `main()` in-process. Both exercise the same CLI orchestration logic. Pattern applies to future @emmy/* CLIs under the same sandbox.
+- **`EMMY_PROFILE_VALIDATE_BIN` + `EMMY_SKIP_PROFILE_VALIDATE` env vars as CLI test hooks** (Plan 02-04). Production always shells `uv run emmy profile validate`; tests override via `EMMY_PROFILE_VALIDATE_BIN=/bin/false` to simulate failure or short-circuit via `EMMY_SKIP_PROFILE_VALIDATE=1` for failure-mode tests that don't exercise this gate.
+- **`runs/phase2-sc3-capture/` transcript capture is ALWAYS ON** (Plan 02-04 / B2). No opt-in flag; every pi-emmy session writes JSONL turns so Plan 02-08's SC-3 real-replay corpus builds up passively during daily-driver use. Replay runs themselves guard against feedback by convention, not a flag.
 
 ### Key Constraints Carried Forward
 
@@ -153,3 +159,5 @@ Phases with standard patterns (skip research-phase per SUMMARY.md):
 **Plan 01-08 Tasks 1 + 2 completed:** 2026-04-21 — commits `93fab55` (test-RED) + `78ff0be` (feat-GREEN) + `3889724` (docs); SUMMARY.md written at `.planning/phases/01-serving-foundation-profile-schema/01-08-SUMMARY.md`. SC-4 certification machinery shipped: `emmy_serve/airgap/ci_verify.py` validator + `scripts/trigger_airgap_ci.sh` + `scripts/verify_airgap_ci.sh` + 2 golden fixtures + 13 unit tests + `docs/airgap-green-run.md` runbook + `docs/ci-runner.md` §8. 137/137 unit suite GREEN (1 skip for missing shellcheck), `uv run emmy profile validate` exits 0. Awaiting DGX Spark operator for Task 3 (register runner + trigger CI + verify + commit evidence; ~5-10 min of CI time).
 
 **Plan 02-01 completed:** 2026-04-21T21:41Z — commits `4fa82ac` (Task 1 feat: workspace + four package shells + pi-emmy shim) + `ae97e04` (Task 2 feat: v1→v2 profile clone + docs templates). SUMMARY.md at `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-01-SUMMARY.md`. Bun 1.3.13 installed during pre-flight (Rule 3 deviation: host prereq), `bun-types 1.1.42` added to workspace devDeps (Rule 3: missing types dep blocked typecheck), `bun.lock` (text, Bun 1.3 default) committed in place of legacy `bun.lockb` (Rule 3: tool format drift — reproducibility spirit preserved). All four `@emmy/*` typecheck GREEN, `pi-emmy` shim on PATH prints wave-0 message + exits 0, `profiles/qwen3.6-35b-a3b/v2/` byte-for-byte clone of v1 (9-line diff in profile.yaml only). Phase 1 guardrails held: `uv run emmy profile validate profiles/qwen3.6-35b-a3b/v1/` exits 0, `uv run pytest tests/unit -q` → 137 passed / 1 skipped. **Next (Wave 1):** Plans 02-02 + 02-03 + 02-06 can run in parallel.
+
+**Plan 02-04 completed:** 2026-04-21T22:39Z — commits `44c9267` (Task 1 RED: session primitives + transcript tests) + `9e4ac4d` (Task 1 GREEN: profile-loader + prompt-assembly + sp-ok-canary + max-model-len + session-transcript with B3 + W4 + W1 fixes) + `5f85527` (Task 2 RED: session + cli + integration tests) + `e1ea63a` (Task 2 GREEN: real pi runtime adapter + profile-validate pre-flight + pi-emmy CLI with W2 + W5 + B2 fixes). SUMMARY.md at `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-04-SUMMARY.md`. 53 new @emmy/ux tests across 8 files (37 Task 1 + 16 Task 2), 1 skipped Plan-07 regression with `TODO(plan-07)` marker. `pi-emmy --help` works after `bun link`. Rule 3 deviation: CLI tests refactored to hybrid subprocess/in-process model because the sandbox does not route subprocess→parent localhost traffic to Bun.serve mocks. Full Bun suite: 191 pass / 1 skip / 0 fail across 21 files. Phase 1 regression holds: 137/137 unit tests. **Next (Wave 3):** Plan 02-07 (profile v2 fill + hash lock + un-skip regression) unblocks 02-08 (SC-2/3/4/5 evidence runners) and 02-09 (SC-1 daily-driver walkthrough CLOSEOUT).
