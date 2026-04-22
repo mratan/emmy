@@ -1,13 +1,13 @@
 ---
 phase: 03-observability-agent-loop-hardening-lived-experience
 verified: 2026-04-22T00:00:00Z
-status: gaps_found
-score: 4/5 must-haves verified (SC-3 blocked on pi 0.68 TUI wire-through gap discovered post-verification during operator protocol)
+status: human_needed
+score: 5/5 must-haves verified (SC-3-TUI-WIRE gap resolved 2026-04-22 via Plan 03-08)
 overrides_applied: 0
 sc_verdicts:
   SC-1: operator-gated
   SC-2: partial
-  SC-3: gap (library pass; interactive TUI wiring missing)
+  SC-3: pass (library + live TTY end-to-end via Plan 03-08 pi.registerShortcut wiring + emmy monotonic turn counter)
   SC-4: pass
   SC-5: operator-gated
 req_ids_closed:
@@ -23,22 +23,26 @@ human_verification:
   - test: "Open browser to http://localhost:3000 after `bash scripts/start_observability.sh`, create a Langfuse account + project + API keys, set LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY in observability/langfuse/.env, then run `bash scripts/sc1_trace_walkthrough.sh` and confirm the Langfuse UI Traces view shows one trace per turn with spans carrying emmy.profile.id, emmy.profile.version, emmy.profile.hash"
     expected: "Langfuse UI renders the trace tree with at least one span per turn; every span has the three emmy.profile.* attributes visible in the span detail panel; at least one span has gen_ai.system=vllm"
     why_human: "Requires browser interaction for account setup and visual trace inspection; cannot be programmatically verified without live Langfuse API keys provisioned through the UI. Resume signal: p3-02 trace green."
-  - test: "In a live pi-emmy TUI session on DGX Spark, press Alt+Up on the most recent turn, then Alt+Down and enter a comment at the prompt"
-    expected: "Alt+Up writes a +1 row to ~/.emmy/telemetry/feedback.jsonl with all 13 fields populated; Alt+Down opens a free-text input prompt and writes a -1 row with the typed comment. Idempotent: pressing Alt+Up again on the same turn upserts (does not duplicate)."
-    why_human: "Requires an interactive TTY session running pi-emmy against live emmy-serve; the ANSI key-intercept (x1b[1;3A/x1b[1;3B) fires at the pi input-event level which cannot be simulated in unit tests with the same fidelity as a live keypress. Resume signal: p3-05 feedback green."
+  - test: "RESOLVED 2026-04-22 via Plan 03-08 gap-closure. Live TTY walkthrough on DGX Spark via pexpect PTY: shift+ctrl+up/down (pi 0.68 unclaimed chords) delivered through real pi.registerShortcut handler → handleFeedbackRating → feedback.jsonl (2 distinct rows, 13 fields each, v3 profile hash stamped, idempotent upsert on same turn, kill-switch suppresses both chords, --export-hf roundtrip HF-datasets-loadable). Evidence: runs/p3-w5-gap-walkthrough/walkthrough.md + walkthrough-attempt-2.log + feedback-attempt-2.jsonl."
+    expected: "SC-3 PASS — all 6 walkthrough steps green; commits ea159e2 fix + 42da230 evidence."
+    why_human: "Was operator-gated; now verified via pexpect-driven PTY walkthrough on live DGX Spark. Resume signal `p3-05 feedback green` and `p3-08 tui green` both closed."
   - test: "In a live pi-emmy TUI session, issue a prompt that triggers web_fetch to a non-allowlisted hostname (e.g. https://github.com)"
     expected: "The badge in the footer flips from green OFFLINE OK to red NETWORK USED before (or at) the moment web_fetch returns its ToolError; the session continues rather than terminating"
     why_human: "Requires a live interactive pi-emmy session with a real prompt that exercises the web_fetch-allowlist enforcement hot path and triggers the setStatus badge update visible in the TUI. Resume signal: p3-06 badge green."
   - test: "SC-2 live-mode: run `bash scripts/sc2_200turn_compaction.sh --mode=live --variant=default` with emmy-serve active on DGX Spark"
     expected: "200-turn fixture exceeds max_input_tokens threshold; emmyCompactionTrigger fires via engine.summarize() postChat round-trip; report.json shows verdict=pass, all 5 invariants green (goalPreserved, lastNVerbatim, errorResultsVerbatim, filePinsVerbatim, compactionEvent); per-tool truncation rate visible in events.jsonl"
     why_human: "Live-mode requires the engine.summarize() → live emmy-serve wire (postChat round-trip), approximately 2 hours of GPU time for the 200-turn fixture, and the DGX Spark physically running. Stub-mode matrix (3/3 variants) is already green. Resume signal: p3-07 sc2 live green."
-gaps:
+gaps: []
+resolved:
   - id: SC-3-TUI-WIRE
     sc: SC-3
-    severity: blocking
-    summary: "pi 0.68 interactive TUI wire-through (runtime.runTui) not implemented — Plan 02-04 SDK-path deferral inherited by Plan 03-01 Wave 1. Blocks daily-driver use of pi-emmy (interactive), blocks end-to-end Alt+Up/Down keypress evidence, blocks --export-hf accumulating a real daily-driver corpus."
-    evidence: "runs/p3-w3-walkthrough/03-05-library-probe.md (SC-3 library-proven end-to-end via direct handleFeedbackKey call; feedback.jsonl 2 rows, 13 fields each, idempotent upsert + kill-switch honored). Interactive invocation `pi-emmy --profile .../v3` on the Spark bailed with 'TUI unavailable in this pi 0.68.0 adapter — use --print or --json for now, or run pi directly' at packages/emmy-ux/bin/pi-emmy.ts:337."
-    remediation: "New Phase-3 gap plan to wire pi 0.68 interactive TUI: either implement runtime.runTui on the current adapter, or graduate to createAgentSessionRuntime and bind pi's input event to handleFeedbackKey via pi.on('input', ...). Must preserve the Phase 2/3 seams: SP_OK canary ordering, before_provider_request hook, setStatus('emmy.footer'/'emmy.badge', ...) keys, feedback.jsonl path conventions."
+    resolved_at: 2026-04-22
+    via: "Plan 03-08 gap-closure (03-08-PLAN.md) — commits 8fe750d RED (runtime-tui + runtime-tui-wiring tests) + 7e7da29 GREEN (buildRealPiRuntimeTui via createAgentSessionRuntime + InteractiveMode; removed TUI-unavailable bail) + ea159e2 fix (pi.registerShortcut with shift+ctrl+up/down; monotonic emmy turn counter replacing pi's resettable turnIndex) + 42da230 walkthrough evidence."
+    live_evidence: "runs/p3-w5-gap-walkthrough/walkthrough.md + walkthrough-attempt-2.log + feedback-attempt-2.jsonl — pexpect-driven PTY walkthrough against live DGX Spark: TUI launches cleanly, shift+ctrl+up appends row with rating=+1 (all 13 fields + v3 profile hash), idempotent upsert on repress, shift+ctrl+down opens free-text prompt + appends row with rating=-1 + comment, EMMY_TELEMETRY=off kill-switch suppresses both chords, Ctrl-D clean teardown (pi binds Ctrl-C to app.clear per dist/core/keybindings.js defaults; app.exit is Ctrl-D on empty editor)."
+    discovered_defects:
+      - "Plan 03-05's D-18 RESEARCH Pattern 4 assertion was wrong: pi 0.68's on('input', handler) is a message-SUBMISSION event (payload {text, images, source}), NOT a keybind intercept. Keybindings flow through pi-tui's CustomEditor onAction / extension-shortcut table. Plan 03-08 uses pi.registerShortcut(KeyId, {handler}) instead."
+      - "Pi 0.68 resets _turnIndex = 0 on every agent_start (dist/core/agent-session.js:376). Every user message's first turn_end carries turnIndex: 0, collapsing Plan 03-05's `turn_id = sessionId:turnIndex` scheme. Plan 03-08 threads an emmy-side monotonic counter through buildTurnMeta."
+      - "alt+up/alt+down are claimed by pi's app.message.dequeue/requeue built-ins; pi's extension runner silently skips colliding shortcuts (runner.js:267). Plan 03-08 uses shift+ctrl+up / shift+ctrl+down — verified unclaimed by defaults scan."
 deferred: []
 ---
 
