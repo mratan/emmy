@@ -48,7 +48,8 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **HARNESS-07
 **: Sampling control is per-tool / per-task via the profile (planner, editor, critic can use different sampling)
 - [ ] **HARNESS-08**: Multi-model routing is supported within a single model first (profile-routing for planner/editor/critic roles); cross-model routing deferred to v2 unless dual-load proves feasible
-- [ ] **HARNESS-09**: Observability hooks emit OTel GenAI semconv spans across the vLLM ↔ harness boundary; profile fields embedded in every event
+- [x] **HARNESS-09
+**: Observability hooks emit OTel GenAI semconv spans across the vLLM ↔ harness boundary; profile fields embedded in every event
 - [x] **HARNESS-10**: Tool registry is extensible: adding/removing/composing tools is a simple pi extension, no fork required
 
 ### Tools (TOOLS) — table-stakes coding-agent toolset
@@ -90,7 +91,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Telemetry (TELEM) — observability + lived experience
 
-- [ ] **TELEM-01**: Self-hosted Langfuse v3 over OTel GenAI semconv runs locally (Docker Compose); spans propagate across vLLM ↔ harness boundary
+- [x] **TELEM-01
+**: Self-hosted Langfuse v3 over OTel GenAI semconv runs locally (Docker Compose); spans propagate across vLLM ↔ harness boundary
 - [ ] **TELEM-02**: Lived-experience telemetry: Alt+Up / Alt+Down to thumb a turn, free-text prompt for thumbs-down; appended to JSONL with `{session_id, turn_id, profile_id, rating, comment, model_response, tool_calls, latency_ms, kv_used, tokens_in, tokens_out}`
 - [ ] **TELEM-03**: Telemetry is 100% local, opt-out via flag, exportable to HuggingFace dataset format (the daily-driver corpus is itself a publishable artifact)
 

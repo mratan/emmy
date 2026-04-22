@@ -154,7 +154,7 @@ Plans:
 
 Plans:
 - [x] 03-01-PLAN.md — Track B wire-through atomic wave: @emmy/provider streamSimple + tools customTools + 3-layer prompt authoritative + enable_thinking:false + reactive grammar live-path + a17f4a9 <think>-strip removal + SC-1 walkthrough **(complete 2026-04-22; verdict `sc1 green`; commits ab4648f RED + d4cd189 GREEN + 5e0ba97 walkthrough evidence + b18b257 SUMMARY)**
-- [ ] 03-02-PLAN.md — Langfuse v3 compose stack + @emmy/telemetry dual-sink (JSONL + OTLP) + OTel SDK init + EmmyProfileStampProcessor + EMMY_TELEMETRY=off kill-switch (HARNESS-09 + TELEM-01)
+- [x] 03-02-PLAN.md — Langfuse v3 compose stack + @emmy/telemetry dual-sink (JSONL + OTLP) + OTel SDK init + EmmyProfileStampProcessor + EMMY_TELEMETRY=off kill-switch (HARNESS-09 + TELEM-01) **(complete 2026-04-22; commits f410bfd infra + 02d46c5 RED + d11f13e GREEN + 946da4d healthcheck fix; Task 4 SC-1 trace walkthrough operator-gated — resume signal `p3-02 trace green`)**
 - [ ] 03-03-PLAN.md — @emmy/context package: emmyCompactionTrigger (reuses pi prepareCompaction+compact) + D-14 preservation pre-filter + D-16 fallback + D-12 fail-loud + SC-2 200-turn fixture (HARNESS-05 + CONTEXT-02)
 - [ ] 03-04-PLAN.md — 1 Hz TUI footer: vllm:gpu_cache_usage_perc parser + nvidia-smi TS port (N/A tolerant) + 5-sample sliding-window tok/s rate + graceful degrade + spec-accept placeholder (UX-02)
 - [ ] 03-05-PLAN.md — Lived-experience rating: Alt+Up/Alt+Down via pi input event (ANSI x1b[1;3A/B) + 13-field feedback.jsonl schema + idempotent upsert + pi-emmy --export-hf + HF-datasets loadable (TELEM-02 + TELEM-03)

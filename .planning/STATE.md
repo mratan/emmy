@@ -3,19 +3,19 @@ gsd_state_version: 1.0
 milestone: v0.68.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-04-22T05:55:00.000Z"
+last_updated: "2026-04-22T06:40:11.590Z"
 progress:
   total_phases: 7
   completed_phases: 2
   total_plans: 24
-  completed_plans: 18
-  percent: 75
+  completed_plans: 19
+  percent: 79
 ---
 
 # State: Emmy
 
 **Last updated:** 2026-04-22
-**Updated by:** executor (Phase 3 — Plan 03-01 complete; sc1 green)
+**Updated by:** executor (Phase 3 — Plan 03-02 complete; observability dual-sink live; operator-gated SC-1 trace walkthrough pending)
 
 ---
 
@@ -41,18 +41,18 @@ progress:
 ## Current Position
 
 Phase: 03 (observability-agent-loop-hardening-lived-experience) — EXECUTING
-Plan: 2 of 7 (plan 03-01 complete 2026-04-22; plan 03-02 next)
+Plan: 3 of 7 (plan 03-01 complete 2026-04-22; plan 03-02 complete 2026-04-22 with operator-gated Task 4; plan 03-03 next)
 **Phase 1:** Serving Foundation + Profile Schema — closed 2026-04-21 with 3 documented deferrals; see `.planning/phases/01-serving-foundation-profile-schema/01-CLOSEOUT.md`
 **Phase 2:** Pi-Harness MVP — Daily-Driver Baseline — closed 2026-04-21 with SC-1 green + SC-2/3/4/5 pass; 5 Phase-3 wire-through deferrals; see `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-CLOSEOUT.md`
-**Next:** `/gsd-execute-phase 3` — Wave 2 (plan 03-02 Langfuse OTel; Wave 2 must execute sequentially because 03-02+03-03 co-modify session.ts + pi-emmy-extension.ts at before_provider_request seam)
+**Next:** `/gsd-execute-phase 3` — Wave 2 continues with plan 03-03 (per-profile auto-compaction); sequential with 03-02 because both co-modify session.ts + pi-emmy-extension.ts at before_provider_request seam. Also: operator resume-signal `p3-02 trace green` for 03-02 Task 4 SC-1 walkthrough.
 **Phase 2 Progress:** 100% (9/9 plans landed; Phase-2-close certified v2 hash `sha256:24be3eea...85d8b`)
-**Phase 3 Progress:** 14% (1/7 plans landed; plan 03-01 verdict `sc1 green` 2026-04-22)
+**Phase 3 Progress:** 29% (2/7 plans landed; plan 03-01 verdict `sc1 green` 2026-04-22; plan 03-02 dual-sink live + 6/6 Langfuse services healthy 2026-04-22)
 
 **Daily-driver bar: REACHED (end of Phase 2) — 2026-04-21.** SC-1 walkthrough verdict `sc1 green`; author ran pi-emmy against a clean repo, agent completed multi-file task on Qwen3.6 via local vLLM endpoint, no cloud call.
 
 ```
 Phases: [✓][✓][▢][▢][▢][▢][▢]   2/7 phases complete
-Current: Phase 3 (executing — 1/7 plans landed; 03-01 complete sc1 green; 03-02 next in Wave 2)
+Current: Phase 3 (executing — 2/7 plans landed; 03-02 dual-sink live + operator-gated SC-1 pending; 03-03 next in Wave 2)
 ```
 
 **Daily-driver bar:** end of Phase 2 — **REACHED**
@@ -70,6 +70,7 @@ Current: Phase 3 (executing — 1/7 plans landed; 03-01 complete sc1 green; 03-0
 | Critical pitfalls addressed | 5 / 8 (#1 KV theory, #3 grammar fights, #5 more-prompting via SC-3 three-run discipline, #6 SP-delivery via SP_OK canary, #8 hidden cloud deps via bun.lock + uv.lock + air-gap) |
 | Daily-driver readiness | **REACHED 2026-04-21** (SC-1 green on Qwen3.6-35B-A3B-FP8 via pi-emmy --print) |
 | Research-artifact readiness | Not yet (blocked on Phase 5 eval harness) |
+| Phase 03 P02 | 28min | 4 tasks | 26 files |
 
 ### Per-plan execution log
 
@@ -81,6 +82,7 @@ Current: Phase 3 (executing — 1/7 plans landed; 03-01 complete sc1 green; 03-0
 | Phase 02 P08 | 135min | 2 tasks | 30 files (25 created, 5 modified) |
 | Phase 02 P09 | ~25min | 2 tasks (1 SC-1 walkthrough checkpoint + 1 CLOSEOUT) | 7 files (3 created, 4 modified) + 4 live bug-fix commits (2c22018, 4049d95, 85fa910, a17f4a9) |
 | Phase 03 P01 | ~3h | 3 tasks (RED + GREEN + SC-1-class walkthrough checkpoint) | 19 files (12 created, 7 modified) |
+| Phase 03 P02 | ~28min | 4 tasks (infra + RED + GREEN + Rule-3 healthcheck fix; Task 4 SC-1 trace walkthrough operator-gated) | 26 files (19 created, 7 modified) |
 
 ---
 
@@ -216,5 +218,7 @@ All three are operator-gated (DGX Spark GPU time); each has a documented runbook
 **Phase 2 CLOSED:** 2026-04-21 — Plan 02-09 completed; SC-1 walkthrough verdict `sc1 green` (author ran pi-emmy --print against /tmp/emmy-sc1-walkthrough; agent created src/{foo,bar,baz}.ts + tests; bun test 3/3 green; no cloud call). Four live bug fixes landed during the walkthrough cycle (`2c22018` + `4049d95` + `85fa910` + `a17f4a9`) + CLOSEOUT + REQUIREMENTS flip (23 REQ-IDs) + ROADMAP + STATE. Daily-driver bar REACHED. Phase-2-close certified v2 hash: `sha256:24be3eea0067102f1f61bd32806a875d019fe02cb114697cd5f3ca4e39985d8b`. Five architectural deferrals carry to Phase 3 (library-available, pi-pipeline wire-through pending). See `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-CLOSEOUT.md`. **Next:** `/gsd-plan-phase 3` — observability + agent-loop hardening + lived-experience.
 
 **Plan 02-08 completed:** 2026-04-21 — commits `dfb8627` (test: SC-2 fixtures + runner + report (verdict=pass) + SC-3 corpora + corpus_fill) + `507623f` (feat: SC-3/4/5 evidence captured + PROFILE_NOTES validation_runs + v2 hash re-locked). SUMMARY.md at `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-08-SUMMARY.md`. Four automated SC drivers shipped and executed against live emmy-serve (127.0.0.1:8002, Qwen3.6-35B-A3B-FP8). All four pass verdicts locked: SC-2 (hash-anchored 0-failures vs baseline 1-failure; Hashline disambiguation win on sc2_05); SC-3 reactive (syn/real/agg = 1.0/1.0/1.0 over 100 calls, verdict=pass per D-12 graduated SLA) + SC-3 disabled baseline (D-14; informational, same 1.0) + SC-3 no_per_tool_sampling (W3/Pitfall-#5; informational, same 1.0); SC-4 (4/4 poison categories rejected, 2/2 in-process MCP fs-server tools dispatched flat); SC-5 (3/3 sha256 stable, AGENTS.md verbatim, max_input_tokens committed=computed=114688). Harness.yaml mutation-restore discipline (tmp backup + try/finally + post-run `uv run emmy profile validate` gate) held across all three SC-3 variants. v2 profile hash re-recomputed at Phase 2 close: `sha256:0025799f...53fa41` → `sha256:24be3eea...85d8b` (PROFILE_NOTES.md content changed; validation_runs extended with 6 Phase-2 SC entries). `bun test` → 192 pass / 0 fail; `uv run pytest tests/unit -q` → 137 pass / 1 skip (unchanged). `packages/*/src/` untouched per plan invariant (plan 08 is pure evidence-capture). 6 Rule-based auto-fix deviations all folded into the two task commits. **Next (Wave 5):** Plan 02-09 (SC-1 daily-driver walkthrough + Phase 2 CLOSEOUT) references the Phase-1-schema-patch SHA `88e48a4` + Phase-2-close v2 hash `sha256:24be3eea...85d8b`.
+
+**Plan 03-02 completed:** 2026-04-22T06:35Z — commits `f410bfd` (Task 1 infra: Langfuse v3 compose stack — 6 services, all 6 images digest-pinned via `docker inspect .RepoDigests` captured 2026-04-22; start_observability.sh auto-generates .env via openssl rand + 90s health gate; stop_observability.sh; test_stack_healthy.sh; .env.example + README) + `02d46c5` (Task 2 test RED: 5 telemetry tests + 1 Pitfall-#2 guard test in @emmy/ux; all 5 fail at import-resolution for missing ../src/atomic-append + ../src/otel-sdk + ../src/profile-stamp-processor + new exports from ../src/index) + `d11f13e` (Task 3 feat GREEN: @emmy/telemetry dual-sink body — atomic-append.ts TS port of emmy_serve/diagnostics/atomic.py with PIPE_BUF-aware append+fsync vs tempfile+rename; profile-stamp-processor.ts SpanProcessor.onStart auto-stamps emmy.profile.{id,version,hash} on EVERY span per D-10; otel-sdk.ts initOtel+shutdownOtel+resolveTelemetryEnabled with NodeSDK + BatchSpanProcessor(OTLPTraceExporter) at http://127.0.0.1:3000/api/public/otel/v1/traces with Basic auth + x-langfuse-ingestion-version:4; session-context.ts module-level ctx so emitEvent stays argless at all 19 existing call sites across 8 files; span-factory.ts GenAI semconv helpers for Plan 03-03; index.ts replaced NO-OP body with dual-sink JSONL-authoritative + OTLP-best-effort; pi-emmy.ts initOtel ordered AFTER loadProfile BEFORE createEmmySession per Pitfall #2 + 3-mode boot banner; session.ts adds session.start emitEvent; pi-emmy-extension.ts adds harness.assembly emitEvent per wire-level chat request; 6 @opentelemetry/* deps exact-pinned per Phase 2 D-02) + `946da4d` (Task 4 Rule-3 auto-fix surfaced during live compose-up: langfuse-web healthcheck uses $HOSTNAME not localhost because Next.js 16 binds container-IP-only; start_period 45s→90s for first-boot Prisma+ClickHouse migrations). SUMMARY.md at `.planning/phases/03-observability-agent-loop-hardening-lived-experience/03-02-SUMMARY.md`. All 7 must_haves.truths satisfied. Two Rule-3 auto-fixes folded in (healthcheck + bun mock.module workaround in dual-sink.test.ts). Langfuse v3 stack LIVE-validated: `bash scripts/start_observability.sh` → 6/6 services healthy within ~90s first boot; OTLP endpoint returns HTTP 401 without auth (confirms route wired); /api/public/health returns HTTP 200. 19 existing emitEvent call sites across grammar-retry + native-tools + mcp-bridge + session + prompt-assembly NEEDED ZERO CHANGES (Phase 2 D-01 signature-stable dividend). TELEM-01 + HARNESS-09 REQ-IDs flipped complete. Four-way regression at `946da4d`: `bun test` → 240 pass / 0 fail / 707 expect() across 33 files (+28 vs Plan 03-01 close 212); `bun run typecheck` all 4 packages exit 0; `uv run pytest tests/unit -q` → 137 pass / 1 skip (unchanged); `uv run emmy profile validate v1+v2` both exit 0. **Task 4 SC-1 trace walkthrough is OPERATOR-GATED** — requires live emmy-serve (DGX Spark GPU scope) + Langfuse UI first-login browser flow + LANGFUSE_PUBLIC_KEY/SECRET_KEY pasted into observability/langfuse/.env. Programmatic scaffolding (scripts/sc1_trace_walkthrough.sh driver + walkthrough steps) is ready. Resume signal: `p3-02 trace green` after operator completes walkthrough. **Next (Wave 2 sequential):** Plan 03-03 (per-profile auto-compaction) is UNBLOCKED; co-modifies session.ts + pi-emmy-extension.ts at before_provider_request seam (same seam this plan established); can reuse span-factory's startChatSpan/endChatSpan helpers for compaction-round-trip chat spans.
 
 **Plan 03-01 completed:** 2026-04-22T05:55Z — commits `ab4648f` (Task 1 test RED: 6 test files, 10 tests, all fail for the right reasons) + `d4cd189` (Task 2 feat GREEN: five wire-throughs landed in ONE atomic commit per D-01 atomic-wave lock — @emmy/provider through pi ModelRegistry.streamSimple + 8 native tools + MCP via createAgentSessionFromServices({customTools}) + Emmy 3-layer assembled prompt authoritative via before_provider_request + chat_template_kwargs.enable_thinking:false at hook with a17f4a9 render-time <think>-strip DELETED + reactive XGrammar retry on live pi path via WeakMap<AbortSignal, RetryState>) + `5e0ba97` (Task 3 test: SC-1-class Track B walkthrough evidence — verdict `sc1 green`) + `b18b257` (docs SUMMARY). SUMMARY.md at `.planning/phases/03-observability-agent-loop-hardening-lived-experience/03-01-SUMMARY.md`. Walkthrough ran a deliberately-richer-than-Phase-2-SC-1 prompt (forces read + grep/ls/find + in-place edit + write + bash in one session) against live emmy-serve (Qwen3.6-35B-A3B-FP8 at 127.0.0.1:8002, profile v2 hash `sha256:24be3eea...85d8b`). All 7 acceptance criteria green: (a) 6/6 files present, (b) bun test final 3 pass / 0 fail in 11 ms, (c) 0 `<think>` leaks in stdout, (d) SP_OK canary fired at session boot BEFORE pi runtime built, (e) 6 distinct tools invoked (read×12, bash×8, edit×6, ls×4, write×4, find×2), (f) 0 "string not found" edit failures (hash-anchored path held on real in-place greet.ts fix), (g) 0 non-loopback connections. Phase-3 regressions added: MCP D-18 poison gate re-asserted on NEW `buildMcpToolDefs` path (assertNoPoison on BOTH `tool.name` AND `tool.description` BEFORE ToolDefinition emit; regression test constructs U+202E via `String.fromCodePoint(0x202E)`); WeakMap-only retry-state storage (no LRU / no size-bound; `grep -c 'LRU' packages/emmy-provider/src/grammar-retry.ts` = 0). Four-way regression at `5e0ba97`: `bun test` → 212 pass / 0 fail / 537 expect() across 27 files (+20 vs Phase-2-close 192); `bun run typecheck` all 4 packages exit 0; `uv run pytest tests/unit -q` → 137 pass / 1 skip (unchanged); `uv run emmy profile validate profiles/qwen3.6-35b-a3b/v{1,2}/` both exit 0. Two Observations (non-blocking): agent initially used `/home/user/...` paths for read/ls/find on 3 early turns and self-recovered to `./` on next turn (pretraining prior; tracked for Phase 5 eval harness as candidate prompt-level nudge); initial walkthrough prompt was Phase-2-SC-1-style simple write+bash-only and failed criterion (e) ≥ 4 distinct tools, re-ran with deliberately richer prompt (6 distinct tools invoked, green). **Wave 2 unblocked but must execute SEQUENTIALLY:** plans 03-02 (Langfuse OTel span attach) + 03-03 (per-profile auto-compaction) co-modify `packages/emmy-ux/src/session.ts` + `packages/emmy-ux/src/pi-emmy-extension.ts` at the `before_provider_request` seam; parallel execution would conflict. Plan 03-05 (input extension via `pi.on('input', ...)`) is file-disjoint and can parallelize with either 03-02 or 03-03 (but not both). **Next:** Plan 03-02 (Langfuse v3 compose stack + @emmy/telemetry dual-sink + OTel SDK init + EmmyProfileStampProcessor + EMMY_TELEMETRY=off kill-switch).
