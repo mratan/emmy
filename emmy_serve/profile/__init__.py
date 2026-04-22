@@ -26,6 +26,7 @@ from .loader import (
 from .schema import (
     AgentLoopConfig,
     CommunitySource,
+    CompactionConfig,
     ContextConfig,
     EngineConfig,
     EnvVars,
@@ -40,6 +41,7 @@ from .schema import (
     SamplingDefaults,
     ServingConfig,
     ToolsConfig,
+    WebFetchConfig,
 )
 
 __all__ = [
@@ -54,8 +56,10 @@ __all__ = [
     "Quirks",
     "EnvVars",
     "PromptsConfig",
+    "CompactionConfig",
     "ContextConfig",
     "GrammarConfig",
+    "WebFetchConfig",
     "ToolsConfig",
     "AgentLoopConfig",
     "CommunitySource",

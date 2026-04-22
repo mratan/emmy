@@ -179,12 +179,31 @@ class PromptsConfig(BaseModel):
     prepend_system_text: str
 
 
+class CompactionConfig(BaseModel):
+    """Per-profile auto-compaction policy (Phase 3 D-11..D-17).
+
+    Shipped in v3 as the first profile to carry the block; v2 (and v1) validate
+    without it (Optional[CompactionConfig] = None on ContextConfig). See
+    CONTEXT.md D-11..D-17 + ``packages/emmy-context/`` for the runtime that
+    consumes this.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    soft_threshold_pct: float = Field(..., ge=0.0, le=1.0)
+    preserve_recent_turns: int = Field(..., ge=0)
+    summarization_prompt_path: str = Field(..., min_length=1)
+    preserve_tool_results: Literal["error_only", "none", "all"] = "error_only"
+
+
 class ContextConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     max_input_tokens: int = Field(gt=0)
     include_repo_map: bool
     repo_map_max_tokens: int = Field(ge=0)
     default_pruning: Literal["head_tail", "recency_window", "importance"]
+    # D-15 — optional per-profile compaction policy. v1/v2 validate without it;
+    # v3 ships the block. Presence is opt-in; absence means compaction disabled.
+    compaction: Optional[CompactionConfig] = None
 
 
 class GrammarConfig(BaseModel):
@@ -203,6 +222,19 @@ class GrammarConfig(BaseModel):
     mode: Literal["reactive", "disabled"] = "reactive"
 
 
+class WebFetchConfig(BaseModel):
+    """web_fetch allowlist policy (Phase 3 D-26..D-28).
+
+    Shipped in v3; v1/v2 validate without it (Optional[WebFetchConfig] = None on
+    ToolsConfig). Hostname-EXACT matching enforced at runtime by
+    ``packages/emmy-tools/src/web-fetch-allowlist.ts`` (Plan 03-06). An empty
+    allowlist means default-deny (all non-loopback hosts blocked).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    allowlist: list[str] = Field(default_factory=list)
+
+
 class ToolsConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     format: Literal["openai", "hermes"]
@@ -212,6 +244,9 @@ class ToolsConfig(BaseModel):
     # when a model emits an unparseable tool-call).
     grammar: Optional[GrammarConfig] = None
     per_tool_sampling: dict[str, Any] = {}
+    # D-26..D-28 — per-profile web_fetch allowlist. v1/v2 validate without it;
+    # v3 ships the block. Runtime enforcement in @emmy/tools/web-fetch-allowlist.
+    web_fetch: Optional[WebFetchConfig] = None
 
 
 class AgentLoopConfig(BaseModel):
@@ -289,8 +324,10 @@ __all__ = [
     "EnvVars",
     "ServingConfig",
     "PromptsConfig",
+    "CompactionConfig",
     "ContextConfig",
     "GrammarConfig",
+    "WebFetchConfig",
     "ToolsConfig",
     "AgentLoopConfig",
     "HarnessConfig",
