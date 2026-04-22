@@ -29,17 +29,20 @@ import { SpOkCanaryError, UxError } from "../src/errors";
 import { loadProfile } from "../src/profile-loader";
 import { createEmmySession } from "../src/session";
 
-// Resolve the default profile directory. Precedence:
-//   1. $EMMY_PROFILE_ROOT (explicit override — points at a dir containing `profiles/`)
-//   2. The emmy install root, derived from this script's path (packages/emmy-ux/bin/pi-emmy.ts -> ../../..).
-// Using cwd would break pi-emmy from any repo other than /data/projects/emmy — surfaced by SC-1 walkthrough.
-function defaultProfilePath(): string {
+// Resolve the emmy install root. Derived from this script's path
+// (packages/emmy-ux/bin/pi-emmy.ts -> ../../..), overridable via $EMMY_PROFILE_ROOT.
+// Both the default profile path AND the `uv run emmy` subprocess need this — running
+// from any other cwd would fail: profile lookup and Python entry-point resolution both
+// break. Surfaced by SC-1 walkthrough.
+function emmyInstallRoot(): string {
 	const envRoot = process.env.EMMY_PROFILE_ROOT;
-	if (envRoot && envRoot.length > 0) {
-		return resolve(envRoot, "profiles/qwen3.6-35b-a3b/v2");
-	}
+	if (envRoot && envRoot.length > 0) return resolve(envRoot);
 	const scriptDir = dirname(fileURLToPath(import.meta.url));
-	return resolve(scriptDir, "../../..", "profiles/qwen3.6-35b-a3b/v2");
+	return resolve(scriptDir, "../../..");
+}
+
+function defaultProfilePath(): string {
+	return resolve(emmyInstallRoot(), "profiles/qwen3.6-35b-a3b/v2");
 }
 
 type Mode = "tui" | "print" | "json";
@@ -166,6 +169,7 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
 				execFileSync("uv", ["run", "emmy", "profile", "validate", args.profilePath], {
 					stdio: "inherit",
 					encoding: "utf8",
+					cwd: emmyInstallRoot(),
 				});
 			}
 		} catch (e) {
