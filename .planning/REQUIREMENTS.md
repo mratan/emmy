@@ -103,7 +103,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **UX-01**: TUI is the primary surface (pi-tui-based)
 - [x] **UX-02
 **: GPU/KV/spec-accept TUI footer (`[GPU 87% • KV 34% • spec accept 71% • tok/s 38]`) — reads `nvidia-smi` + vLLM `/metrics`
-- [ ] **UX-03**: Offline-OK badge — startup audits tool registry; green "OFFLINE OK" if every path is local, red "NETWORK USED" if any tool went external
+- [x] **UX-03**: Offline-OK badge — startup audits tool registry; green "OFFLINE OK" if every path is local, red "NETWORK USED" if any tool went external
 - [ ] **UX-04**: Model-swap UX — visible progress during `/profile` swap (`stopping vLLM`, `loading weights X%`, `warmup`, `ready`); no crash UX
 - [x] **UX-05**: CLI / scripted mode (one-shot prompts, JSON I/O) — pi `print` and `json` modes; needed for eval automation
 - [ ] **UX-06**: SDK / RPC mode (programmatic embedding) — eval harness uses pi SDK directly
@@ -226,7 +226,7 @@ Which phases cover which requirements. Updated by roadmapper 2026-04-20.
 | TELEM-03 | Phase 3 | Pending |
 | UX-01 | Phase 2 | Done |
 | UX-02 | Phase 3 | Pending |
-| UX-03 | Phase 3 | Pending |
+| UX-03 | Phase 3 | Done (Plan 03-06; 2026-04-22) |
 | UX-04 | Phase 4 | Pending |
 | UX-05 | Phase 2 | Done |
 | UX-06 | Phase 5 | Pending |
