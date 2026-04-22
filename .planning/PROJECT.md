@@ -14,22 +14,24 @@ A local coding agent good enough to be the author's daily driver, structured rig
 
 <!-- Shipped and confirmed valuable. -->
 
-(None yet — ship to validate)
+- [x] **Specialized vLLM serving stack on DGX Spark with first-class profile for Qwen 3.6** — validated in Phase 1 (NGC container, FP8, fastsafetensors boot, KV-budgeted, thermally-validated, air-gap CI, SP_OK canary). Gemma 4 profile deferred to Phase 4. **Closed 2026-04-21.**
+- [x] **First-class model profile abstraction shared by serving and harness layers** — validated across Phase 1 (v1 schema + hash discipline + immutable versioning + Python loader) and Phase 2 (TS loader, v2 profile fill, Phase-1-schema-patch for nested grammar shape backward-compatible). Profile is the only shared contract between serving and harness; evidence that it holds: Qwen3.6 profile v2 loads end-to-end through @emmy/ux without model-shaped code. **Closed 2026-04-22.**
+- [x] **pi.dev-based harness with full control over tool-call format, tools, prompt, session, transcript** — validated in Phase 2 (@emmy/provider + @emmy/tools + @emmy/ux shipped; 192 tests green; SC-1 daily-drive green). Five wire-through bindings (emmy-provider→pi.streamSimple, hash-edit→pi.customTools, MCP→pi tool source, 3-layer prompt→pi.BeforeProviderRequestEvent, enable_thinking:false at request level) documented as Phase 3 scope in CLOSEOUT carry-forward. **Closed 2026-04-22.**
+- [x] **Daily-driver UX bar reached** — validated in Phase 2 SC-1 walkthrough: author ran `pi-emmy --print` from a clean repo, Qwen3.6 completed multi-file task (3 files created + tests written + `bun test` 3/3 green), no cloud traffic, no leaving pi-emmy. **Closed 2026-04-22.**
+- [x] **Self-hosted end-to-end** — validated in Phase 1 (50-turn air-gap CI proves zero outbound packets) and re-validated in Phase 2 (SC-1 session had zero outbound ESTAB connections). **Closed 2026-04-22.**
 
 ### Active
 
 <!-- Current scope. Building toward these. Hypotheses until shipped. -->
 
-- [ ] Specialized vLLM serving stack on DGX Spark with first-class profiles for Gemma 4 and Qwen 3.6
-- [ ] Coding-tuned sampling defaults (per-model, per-task) sourced from community best practice; only run new experiments where consensus does not exist
-- [ ] Grammar-constrained / structured tool-call output so weaker models always emit parseable tool calls
-- [ ] Long-context optimization (KV cache strategy, prompt caching, attention handling) sized for real codebases
-- [ ] Speculative decoding (draft + target) for latency without quality loss
-- [ ] pi.dev-based harness with full control over: tool-call format, agent loop / retry / self-correction, context injection and pruning, system prompt layering, sampling per tool/task, multi-model routing, observability hooks, tool extensibility
-- [ ] First-class **model profile** abstraction shared by serving and harness layers — known-good configs are versioned artifacts, not buried in code
-- [ ] Reproducible benchmark suite that extends the Phase 1 prompts from `../setup_local_opencode` so anyone can re-run and verify claims
-- [ ] Daily-driver UX: emmy is good enough that the author reaches for it instead of Claude Code on real personal projects
-- [ ] Self-hosted: vLLM and pi.dev both run on the DGX Spark; no cloud inference or hosted services in the critical path
+- [ ] **Gemma 4 26B A4B MoE profile** — second first-class model proves the profile abstraction (Phase 4)
+- [ ] **Coding-tuned sampling defaults** — per-tool defaults shipped in Phase 2 (profile harness.yaml `tools.per_tool_sampling`); Phase 5 validates against benchmark suite
+- [ ] **Grammar-constrained tool output** — XGrammar reactive retry library shipped in Phase 2 (`@emmy/provider` + lark grammar + 8 tool schemas); Phase 3 wires through pi's `streamSimple` hook so retries fire on the live wire path (currently library-available but never exercised — SC-3 evidence showed 0 retries needed, 100/100 parse rate)
+- [ ] **Long-context optimization** — KV budget + prefix caching + chunked prefill validated in Phase 1; smart context management / per-profile compaction is Phase 3
+- [ ] **Speculative decoding** — Phase 6 (Qwen3-MTP + EAGLE-3 for Gemma; paired spec-on/spec-off benchmark gate)
+- [ ] **Observability + lived-experience telemetry** — Langfuse v3 + OTel GenAI semconv + Alt+Up/Down feedback (Phase 3)
+- [ ] **Reproducible benchmark suite extending Phase 1 prompts** — terminal-bench 2.0 + prior-repo prompts + SWE-bench Verified + LiveCodeBench (Phase 5)
+- [ ] **Multi-model routing within a model (planner/editor/critic)** — Phase 4 after Gemma 4 proves the abstraction
 
 ### Out of Scope
 
@@ -115,4 +117,4 @@ This document evolves at phase transitions and milestone boundaries.
 4. Update Context with current state
 
 ---
-*Last updated: 2026-04-20 after initialization*
+*Last updated: 2026-04-22 after Phase 2 close (daily-driver bar reached)*
