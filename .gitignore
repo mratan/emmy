@@ -41,6 +41,9 @@ runs/**
 models/
 hf-cache/
 
+# Phase 3 SC-2 fixture — deterministic regenerable; hash is authoritative.
+eval/phase3/fixtures/
+
 # Env
 .env
 .env.local
