@@ -44,6 +44,7 @@ hf-cache/
 # Env
 .env
 .env.local
+observability/langfuse/.env
 
 # TS/Node
 node_modules/
