@@ -53,6 +53,11 @@ import {
 } from "@emmy/provider";
 import { emitEvent } from "@emmy/telemetry";
 
+import {
+	startFooterPoller,
+	type FooterPollerHandle,
+} from "./metrics-poller";
+
 export interface EmmyExtensionOptions {
 	profile: ProfileSnapshot;
 	/**
@@ -70,6 +75,19 @@ export interface EmmyExtensionOptions {
 	 * trigger a real parse failure first.
 	 */
 	getRetryStateForSignal?: (signal: AbortSignal) => RetryState | undefined;
+	/**
+	 * Plan 03-04 (UX-02): vLLM endpoint the 1 Hz footer poller scrapes for
+	 * `/metrics`. If omitted, the footer poller is not started — useful for
+	 * tests and for stripped-down CLI invocations (e.g. `--print-environment`).
+	 */
+	baseUrl?: string;
+	/**
+	 * Plan 03-04 test hook: inject a custom footer-poller starter. Defaults to
+	 * `startFooterPoller` from @emmy/ux/src/metrics-poller. Tests override this
+	 * to assert the poller was started exactly once on session_start and
+	 * stopped on agent_end, without driving real network / subprocess code.
+	 */
+	startFooterPollerImpl?: typeof startFooterPoller;
 }
 
 /**
@@ -82,8 +100,40 @@ export interface EmmyExtensionOptions {
 export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactory {
 	const { profile, assembledPromptProvider } = opts;
 	const retryLookup = opts.getRetryStateForSignal ?? getRetryStateForSignal;
+	const startPoller = opts.startFooterPollerImpl ?? startFooterPoller;
+
+	// Plan 03-04: footer poller handle lives at factory-closure scope so both
+	// session_start (start) and agent_end (stop) handlers can see it.
+	let footerHandle: FooterPollerHandle | null = null;
 
 	return (pi: ExtensionAPI): void => {
+		// Plan 03-04 UX-02: start the 1 Hz footer poller on session_start and
+		// stop it on agent_end. baseUrl is the vLLM endpoint (defaults from
+		// opts.baseUrl passed at extension construction by session.ts).
+		// EMMY_TELEMETRY=off is honored by startFooterPoller itself (returns a
+		// no-op handle if set — matches Plan 03-02's kill-switch discipline).
+		pi.on("session_start", (_event, ctx) => {
+			if (!opts.baseUrl) return;
+			// Safety: never start two concurrent pollers (defensive — pi emits
+			// session_start exactly once per AgentSession, but this guards
+			// future callers that create multiple sessions in one process).
+			if (footerHandle) {
+				footerHandle.stop();
+				footerHandle = null;
+			}
+			footerHandle = startPoller({
+				baseUrl: opts.baseUrl,
+				setStatus: (key, text) => ctx.ui?.setStatus?.(key, text),
+			});
+		});
+
+		pi.on("agent_end", () => {
+			if (footerHandle) {
+				footerHandle.stop();
+				footerHandle = null;
+			}
+		});
+
 		pi.on("before_provider_request", (event, ctx) => {
 			// Cast event.payload (declared as `unknown` in pi 0.68 types) to our
 			// structural shape. Pi's onPayload surfaces the OpenAI-compat chat

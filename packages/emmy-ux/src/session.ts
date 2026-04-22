@@ -199,9 +199,12 @@ async function buildRealPiRuntime(
 
 	// 4. Services — Plan 03-01: install the Emmy ExtensionFactory here so pi's
 	// before_provider_request hook is authoritative on every wire request.
+	// Plan 03-04 (UX-02): pass baseUrl so the extension can start a 1 Hz
+	// footer poller on session_start (scrapes vLLM /metrics + nvidia-smi).
 	const emmyExtension = createEmmyExtension({
 		profile,
 		assembledPromptProvider,
+		baseUrl,
 	});
 	const services = await createAgentSessionServices({
 		cwd,

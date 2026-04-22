@@ -160,6 +160,12 @@ describe("startFooterPoller (1 Hz metrics poller)", () => {
 		const timer = manualTimer();
 
 		let fetchCallIdx = 0;
+		// Pattern: priming-tick + fires. The poller's priming tick (issued inside
+		// startFooterPoller) is call #1. Explicit fires are calls #2..#N.
+		// We want: primer=success (establishes lastValue=50), fires 1-2=fail,
+		// fire 3=success (resets failCount), fires 4-6=3 failures (degrade
+		// marker still visible since <=maxFailures=3).
+		const successCalls = new Set([1, 4]); // primer + fire #3
 		const handle = startFooterPoller({
 			baseUrl: "http://127.0.0.1:8002",
 			setStatus: (_k, t) => statuses.push(t ?? ""),
@@ -167,9 +173,7 @@ describe("startFooterPoller (1 Hz metrics poller)", () => {
 			intervalImpl: timer.intervalImpl,
 			fetchMetricsImpl: async () => {
 				fetchCallIdx++;
-				// pattern: success, fail, fail, success, fail, fail, fail, fail → should
-				// blank only at the 4th consecutive failure AFTER the second success
-				if ([1, 4].includes(fetchCallIdx)) {
+				if (successCalls.has(fetchCallIdx)) {
 					return {
 						"vllm:gpu_cache_usage_perc": 0.5,
 						"vllm:generation_tokens_total": 100,
@@ -180,12 +184,11 @@ describe("startFooterPoller (1 Hz metrics poller)", () => {
 			sampleNvidiaSmiImpl: () => null,
 		});
 
-		// Seven ticks total
-		for (let i = 0; i < 7; i++) await timer.fire();
+		// Fire 6 times (calls 2..7 — the 7th call is the 3rd consecutive
+		// failure after the reset at call #4). failCount after calls 5,6,7 is
+		// 1,2,3 — still <=maxFailures=3, so degrade marker visible.
+		for (let i = 0; i < 6; i++) await timer.fire();
 
-		// After tick 4 (success), failCount reset. Ticks 5+6+7 are 3 consecutive
-		// failures — still within maxFailures=3, so KV should still render `?`.
-		// (An 8th failure would blank.)
 		const last = statuses[statuses.length - 1]!;
 		expect(last).toContain("KV 50%?");
 

@@ -28,4 +28,29 @@ export { createEmmySession, type PiRuntime } from "./session";
 // overwrite + reactive-grammar injection) on every live wire request.
 export { createEmmyExtension, type EmmyExtensionOptions } from "./pi-emmy-extension";
 
+// Plan 03-04 (UX-02): TUI footer components.
+//   - formatFooter: pure renderer producing `GPU N% • KV N% • spec accept - • tok/s N`
+//   - startFooterPoller: 1 Hz metrics poller + setStatus dispatcher
+//   - vLLM /metrics parser + nvidia-smi subprocess wrapper
+export { formatFooter, type FooterValues } from "./footer";
+export {
+	startFooterPoller,
+	stopFooterPoller,
+	type FooterPollerHandle,
+	type FooterPollerOpts,
+} from "./metrics-poller";
+export {
+	fetchVllmMetrics,
+	parseMetrics,
+	TokRateTracker,
+	computeTokRate,
+	type MetricSnapshot,
+	type MetricSample,
+} from "./vllm-metrics";
+export {
+	sampleNvidiaSmi,
+	parseFloatOrUndefined,
+	type NvidiaSample,
+} from "./nvidia-smi";
+
 export const PACKAGE_VERSION = "0.1.0";
