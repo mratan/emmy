@@ -340,6 +340,17 @@ export async function createEmmySession(
 		ts: new Date().toISOString(),
 		profile: opts.profile.ref,
 	});
+	// Plan 03-02: first event in the session carries the session-scope
+	// metadata so downstream JSONL readers + Langfuse traces have a
+	// self-describing header row.
+	emitEvent({
+		event: "session.start",
+		ts: new Date().toISOString(),
+		profile: opts.profile.ref,
+		cwd: opts.cwd,
+		mode: opts.mode,
+		base_url: opts.baseUrl,
+	});
 
 	// 2. Read profile's system.md.
 	const systemMdPath = join(opts.profile.ref.path, "prompts", "system.md");

@@ -4,6 +4,21 @@
 // Emmy's before_provider_request payload mutator on every chat request
 // flowing through a pi AgentSession.
 //
+// Plan 03-02 (this plan) — extends the before_provider_request hook with a
+// single emitEvent("harness.assembly", ...) call per wire request so Langfuse
+// and the JSONL sink both carry one record per chat request with:
+//   model                = payload.model
+//   emmy.prompt.sha256   = assembledPrompt.sha256
+//   emmy.profile.*       = profile.ref (auto-stamped by SpanProcessor too)
+//   gen_ai.system        = "vllm"
+//   gen_ai.request.model = payload.model
+// This is D-10's "every span carries profile stamp" invariant realized on
+// the chat-request boundary. The existing emitEvent call sites elsewhere
+// (session.* / grammar.retry.* / tool.* / prompt.assembled / mcp.*) continue
+// to fire unchanged; this adds one additional structured event per wire-level
+// chat request, giving Langfuse at least (N chat turns * 1) assembly spans
+// in addition to the other event types.
+//
 // Wire sequence (per pi 0.68 SDK path, sdk.js:195-200):
 //   pi's openai-completions stream calls `onPayload(payload)` right before
 //   sending the POST to the model backend. If any extension registered a
@@ -30,6 +45,7 @@ import {
 	type ProfileSnapshot,
 	type RetryState,
 } from "@emmy/provider";
+import { emitEvent } from "@emmy/telemetry";
 
 export interface EmmyExtensionOptions {
 	profile: ProfileSnapshot;
@@ -68,11 +84,42 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 			// request body; field names match our BeforeProviderRequestPayload.
 			const payload = event.payload as BeforeProviderRequestPayload;
 			const retryState = ctx.signal ? retryLookup(ctx.signal) ?? null : null;
+			const snapshot = assembledPromptProvider();
 			handleBeforeProviderRequest({
 				payload,
 				profile,
-				assembledPrompt: assembledPromptProvider(),
+				assembledPrompt: snapshot,
 				retryState,
+			});
+
+			// SP_OK canary requests carry a sentinel on `payload.emmy.is_sp_ok_canary`
+			// and MUST NOT be emitted into the lived-experience JSONL — they have a
+			// deliberately-terse system prompt that would pollute the trace readout
+			// (T-03-02-01 mitigation). Plan 03-01's handleBeforeProviderRequest
+			// early-returns on that sentinel; we belt-and-suspenders here too.
+			const isCanary =
+				typeof (payload as { emmy?: { is_sp_ok_canary?: boolean } }).emmy === "object" &&
+				(payload as { emmy?: { is_sp_ok_canary?: boolean } }).emmy?.is_sp_ok_canary === true;
+			if (isCanary) return;
+
+			// One "harness.assembly" event per wire-level chat request. Span name
+			// follows Plan 03-02 naming (emmy.harness.assembly). Attributes cover
+			// the model + prompt sha256 (per D-10 + HARNESS-09), and the profile is
+			// auto-stamped by EmmyProfileStampProcessor.onStart AND by emitEvent's
+			// profile flattening. Keep the payload small: we never log
+			// payload.messages content here (T-03-02-01).
+			const modelName = typeof (payload as { model?: unknown }).model === "string"
+				? ((payload as { model: string }).model)
+				: "";
+			emitEvent({
+				event: "harness.assembly",
+				ts: new Date().toISOString(),
+				profile: profile.ref,
+				model: modelName,
+				"gen_ai.system": "vllm",
+				"gen_ai.request.model": modelName,
+				"emmy.prompt.sha256": snapshot.sha256,
+				...(retryState?.wantsGrammar ? { "emmy.grammar.retry": true } : {}),
 			});
 		});
 

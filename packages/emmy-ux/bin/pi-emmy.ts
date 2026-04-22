@@ -19,10 +19,16 @@
 
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { dirname, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { ProviderError } from "@emmy/provider";
+import {
+	configureTelemetry,
+	initOtel,
+	resolveTelemetryEnabled,
+	shutdownOtel,
+} from "@emmy/telemetry";
 import { ToolsError } from "@emmy/tools";
 
 import { SpOkCanaryError, UxError } from "../src/errors";
@@ -185,6 +191,13 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
 	}
 
 	// Load profile (W4 + B3 enforcement via profile-loader).
+	//
+	// CRITICAL ordering (RESEARCH Pitfall #2 + plan-checker WARNING):
+	//   parseCliArgs -> loadProfile -> initOtel -> createEmmySession
+	// loadProfile is emitEvent-free BY CONSTRUCTION (verified at test-time by
+	// packages/emmy-ux/test/profile-loader-no-telemetry.test.ts). If that
+	// invariant ever breaks, Bun's ESM hoisting would emit spans before the
+	// OTel SDK is live -- we would silently lose every profile-load event.
 	let profile;
 	try {
 		profile = await loadProfile(args.profilePath);
@@ -193,8 +206,52 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
 		return 1;
 	}
 
+	// Initialize OTel SDK + JSONL sink (D-06, D-08). This runs BEFORE
+	// createEmmySession so every emitEvent fired during session bootstrap
+	// (SP_OK canary, session.tools.registered, session.transcript.open) lands
+	// in events.jsonl and fans out to Langfuse via OTLP.
+	const telemetryEnabled = resolveTelemetryEnabled({ env: process.env, argv });
+	const sessionId = `${new Date().toISOString().replace(/[:.]/g, "-")}-${profile.ref.hash.slice(0, 8)}`;
+	const runsDir = resolve(process.cwd(), "runs", sessionId);
+	const jsonlPath = join(runsDir, "events.jsonl");
+	const lfPk = process.env.LANGFUSE_PUBLIC_KEY ?? "";
+	const lfSk = process.env.LANGFUSE_SECRET_KEY ?? "";
+	let otelSdk: Awaited<ReturnType<typeof initOtel>> = null;
+	if (telemetryEnabled && (!lfPk || !lfSk)) {
+		console.error(
+			"[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only",
+		);
+	}
+	if (telemetryEnabled && lfPk && lfSk) {
+		otelSdk = await initOtel({
+			langfusePublicKey: lfPk,
+			langfuseSecretKey: lfSk,
+			profile: { id: profile.ref.id, version: profile.ref.version, hash: profile.ref.hash },
+			enabled: true,
+		});
+	} else if (!telemetryEnabled) {
+		// Emits "OBSERVABILITY: OFF" banner.
+		await initOtel({
+			langfusePublicKey: "",
+			langfuseSecretKey: "",
+			profile: { id: profile.ref.id, version: profile.ref.version, hash: profile.ref.hash },
+			enabled: false,
+		});
+	}
+	configureTelemetry({
+		jsonlPath: telemetryEnabled ? jsonlPath : null,
+		tracer: null, // configureTelemetry picks up global tracer when enabled=true
+		enabled: telemetryEnabled,
+	});
+
+	// Boot banner distinguishes the three telemetry modes (D-06).
+	const telemetryMode = !telemetryEnabled
+		? "OFF"
+		: otelSdk
+			? "JSONL+Langfuse"
+			: "JSONL-only";
 	console.error(
-		`pi-emmy starting (profile=${profile.ref.id}@${profile.ref.version}, base_url=${args.baseUrl})`,
+		`pi-emmy starting (profile=${profile.ref.id}@${profile.ref.version}, base_url=${args.baseUrl}, telemetry=${telemetryMode})`,
 	);
 
 	try {
@@ -247,6 +304,10 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
 		} else {
 			console.log(result.text);
 		}
+		// Flush OTel spans before exit so the final turn_end span is visible
+		// in Langfuse immediately (otherwise the BatchSpanProcessor could drop
+		// pending spans on process.exit).
+		await shutdownOtel(otelSdk);
 		return 0;
 	} catch (e) {
 		if (e instanceof SpOkCanaryError) {
