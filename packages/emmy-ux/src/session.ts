@@ -43,7 +43,10 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import { registerEmmyProvider, type ProfileSnapshot } from "@emmy/provider";
-import { emitEvent } from "@emmy/telemetry";
+import {
+	emitEvent,
+	type EmmyToolRegistration,
+} from "@emmy/telemetry";
 import {
 	buildMcpToolDefs,
 	buildNativeToolDefs,
@@ -69,6 +72,12 @@ import {
 } from "@mariozechner/pi-coding-agent";
 
 import { SpOkCanaryError } from "./errors";
+import {
+	flipToViolation,
+	renderBadgePlain,
+	runBootOfflineAudit,
+	setInitialAudit,
+} from "./offline-badge";
 import { createEmmyExtension } from "./pi-emmy-extension";
 import { assemblePrompt } from "./prompt-assembly";
 import {
@@ -431,9 +440,23 @@ export async function createEmmySession(
 	//    - MCP: only invoked if ~/.emmy or ./.emmy has a non-empty config. The
 	//      D-18 poison gate is re-asserted inside buildMcpToolDefs (regression
 	//      test: packages/emmy-ux/test/session.mcp-poison.test.ts).
+	// Plan 03-06 (UX-03 / D-26 + D-27): extract the web_fetch allowlist from
+	// the profile harness block (Phase-2 v2 has no such block → empty array →
+	// default-deny). The onViolation callback flips the module-level badge
+	// state to red; if the pi extension has already bound ctx (Plan 03-01
+	// session_start), the flip renders immediately; otherwise it replays on
+	// the next bindBadge call.
+	const webFetchAllowlist: readonly string[] =
+		opts.profile.harness.tools.web_fetch?.allowlist ?? [];
+	const webFetchOnViolation = (details: { url: string; hostname: string }): void => {
+		flipToViolation("web_fetch", details.hostname);
+	};
+
 	const nativeTools: ToolDefinitionLike[] = buildNativeToolDefs({
 		cwd: opts.cwd,
 		profileRef: opts.profile.ref,
+		webFetchAllowlist,
+		webFetchOnViolation,
 	});
 	const registeredToolNames = new Set<string>(NATIVE_TOOL_NAMES);
 	let mcpTools: ToolDefinitionLike[] = [];
@@ -456,6 +479,39 @@ export async function createEmmySession(
 		throw e;
 	}
 	const customTools: ToolDefinitionLike[] = [...nativeTools, ...mcpTools];
+
+	// 7b. Plan 03-06 (UX-03): boot-time offline audit (D-26). Runs AFTER
+	// native + MCP tool defs are assembled so the audit sees the full
+	// registered set. Pure-local tools (all 8 native + stdio-only MCP per
+	// Phase 2 D-15) declare required_hosts=[]; web_fetch's dynamic hosts
+	// are gated at call time by enforceWebFetchAllowlist (D-27). Result
+	// drives:
+	//   - Stderr [emmy] OFFLINE OK/NETWORK USED banner
+	//   - setInitialAudit → module-level badge state (rendered when pi
+	//     extension binds ctx on session_start)
+	//   - emitEvent("session.offline_audit.complete") for Langfuse + JSONL
+	const toolRegistrations: EmmyToolRegistration[] = [
+		...NATIVE_TOOL_NAMES.map((name) => ({ name, required_hosts: [] as string[] })),
+		// MCP tools are stdio-only per Phase 2 D-15 — they declare no
+		// required_hosts. If a future profile binds MCP to HTTP transport,
+		// buildMcpToolDefs would surface the required_hosts here.
+		...mcpTools.map((t) => ({ name: t.name, required_hosts: [] as string[] })),
+	];
+	const auditResult = runBootOfflineAudit({
+		toolRegistrations,
+		allowlist: webFetchAllowlist,
+	});
+	setInitialAudit(auditResult);
+	emitEvent({
+		event: "session.offline_audit.complete",
+		ts: new Date().toISOString(),
+		profile: opts.profile.ref,
+		offline_ok: auditResult.offline_ok,
+		violating_tool: auditResult.violating_tool,
+		violating_host: auditResult.violating_host,
+		allowlist_size: webFetchAllowlist.length,
+		plain_banner: renderBadgePlain(auditResult),
+	});
 
 	// 8. Build the pi runtime (W2 FIX — real pi factory unless overridden).
 	//    Phase-3 wire: customTools are passed through so pi's AgentSession
@@ -491,11 +547,15 @@ export async function createEmmySession(
 	// for introspection side effects. The live customTools path above is the
 	// authoritative tool registry; this call is a no-op on the real adapter
 	// (adapter.registerTool body is a no-op by design, per D-01 no-split-brain).
+	// Plan 03-06: plumb the allowlist + violation hook so stub-piFactory tests
+	// that exercise the legacy path see the same enforcement surface.
 	registerNativeTools(
 		pi as unknown as { registerTool: (spec: unknown) => void } as Parameters<typeof registerNativeTools>[0],
 		{
 			cwd: opts.cwd,
 			profileRef: opts.profile.ref,
+			webFetchAllowlist,
+			webFetchOnViolation,
 		},
 	);
 

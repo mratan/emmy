@@ -16,6 +16,11 @@
 
 import TurndownService from "turndown";
 import { ToolsError } from "./errors";
+import {
+	enforceWebFetchAllowlist,
+	WebFetchAllowlistError,
+	type EnforcementContext,
+} from "./web-fetch-allowlist";
 
 export const NETWORK_REQUIRED_TAG = "network-required";
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -77,3 +82,52 @@ export async function webFetch(
     clearTimeout(tm);
   }
 }
+
+// ---- Plan 03-06 (D-27 + D-28): allowlist-enforcing wrapper -----------------
+//
+// webFetchWithAllowlist is the pi-tool-call surface: it runs
+// enforceWebFetchAllowlist BEFORE the HTTP GET and, on a WebFetchAllowlistError,
+// returns a ToolError-shaped result (isError: true + content: [{type:text}]) so
+// pi's agent loop receives a well-formed tool response and CONTINUES the session
+// (D-28 warn-and-continue). Plain `webFetch` above remains for eval drivers and
+// non-agent call sites that need raw network semantics.
+
+export interface WebFetchToolErrorResult {
+	isError: true;
+	content: Array<{ type: "text"; text: string }>;
+}
+
+export interface WebFetchToolOkResult {
+	isError?: false;
+	markdown: string;
+	contentType: string;
+	url: string;
+}
+
+export type WebFetchToolResult = WebFetchToolErrorResult | WebFetchToolOkResult;
+
+export async function webFetchWithAllowlist(
+	url: string,
+	enforcement: EnforcementContext,
+	opts: { timeoutMs?: number; maxBytes?: number } = {},
+): Promise<WebFetchToolResult> {
+	try {
+		enforceWebFetchAllowlist(url, enforcement);
+	} catch (e) {
+		if (e instanceof WebFetchAllowlistError) {
+			return {
+				isError: true,
+				content: [
+					{
+						type: "text",
+						text: `Error: ${e.message}`,
+					},
+				],
+			};
+		}
+		throw e;
+	}
+	const r = await webFetch(url, opts);
+	return { markdown: r.markdown, contentType: r.contentType, url: r.url };
+}
+

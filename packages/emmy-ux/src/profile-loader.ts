@@ -130,6 +130,15 @@ export async function loadProfile(profileDir: string): Promise<ProfileSnapshot> 
 			{ temperature?: number; top_p?: number; max_tokens?: number }
 		>) ?? {};
 
+	// Plan 03-06 (UX-03 / D-26): parse tools.web_fetch.allowlist (new Phase-3
+	// field; Phase-2 v2 does not declare it → absent → default-deny / empty).
+	const webFetchRaw = toolsRaw.web_fetch as Record<string, unknown> | undefined;
+	const webFetchAllowlist: string[] | undefined = Array.isArray(webFetchRaw?.allowlist)
+		? (webFetchRaw!.allowlist as unknown[]).filter(
+				(v): v is string => typeof v === "string",
+		  )
+		: undefined;
+
 	const retryOnUnparseableToolCall =
 		typeof agentLoopRaw.retry_on_unparseable_tool_call === "number"
 			? (agentLoopRaw.retry_on_unparseable_tool_call as number)
@@ -159,6 +168,9 @@ export async function loadProfile(profileDir: string): Promise<ProfileSnapshot> 
 				format,
 				grammar,
 				per_tool_sampling: perToolSampling,
+				...(webFetchAllowlist !== undefined
+					? { web_fetch: { allowlist: webFetchAllowlist } }
+					: {}),
 			},
 			agent_loop: {
 				retry_on_unparseable_tool_call: retryOnUnparseableToolCall,

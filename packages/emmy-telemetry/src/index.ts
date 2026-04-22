@@ -123,6 +123,15 @@ export { appendJsonlAtomic, writeJsonAtomic } from "./atomic-append";
 export { initOtel, shutdownOtel, resolveTelemetryEnabled } from "./otel-sdk";
 export { EmmyProfileStampProcessor } from "./profile-stamp-processor";
 
+// Plan 03-06 — UX-03 offline audit pure functions + D-26 LOOPBACK_HOSTS.
+export {
+	auditToolRegistry,
+	auditWebFetchUrl,
+	LOOPBACK_HOSTS,
+	type EmmyToolRegistration,
+	type OfflineAuditResult,
+} from "./offline-audit";
+
 // Plan 03-05 — lived-experience rating corpus (TELEM-02 + TELEM-03).
 export {
 	FeedbackSchemaError,

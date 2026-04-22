@@ -62,6 +62,17 @@ export interface ProfileSnapshot {
 					max_tokens: number;
 				}>
 			>;
+			/**
+			 * Plan 03-06 (UX-03 / D-26 + D-27): per-profile web_fetch hostname
+			 * allowlist. When absent (Phase 2 v2 baseline) or empty, web_fetch
+			 * default-denies non-loopback URLs and flips the offline badge red
+			 * on first call. Populated from
+			 * profile.harness.yaml:tools.web_fetch.allowlist by profile-loader.
+			 * Plan 03-07 adds a non-empty default allowlist in v3.
+			 */
+			web_fetch?: {
+				allowlist?: readonly string[];
+			};
 		};
 		agent_loop: {
 			// D-11 retry budget consumed by Plan 04's agent loop; provider hard-codes 1 for

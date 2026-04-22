@@ -32,7 +32,7 @@ import type { PiToolSpec, NativeToolOpts } from "./types";
 import { ToolsError } from "./errors";
 import { readWithHashes, renderHashedLines } from "./read-with-hashes";
 import { editHashline } from "./edit-hashline";
-import { webFetch, NETWORK_REQUIRED_TAG } from "./web-fetch";
+import { webFetch, webFetchWithAllowlist, NETWORK_REQUIRED_TAG } from "./web-fetch";
 import { toolSpecToDefinition, type ToolDefinitionLike } from "./tool-definition-adapter";
 
 export const NATIVE_TOOL_NAMES = Object.freeze([
@@ -341,9 +341,16 @@ export function registerNativeTools(
   });
 
   // ---- web_fetch -----------------------------------------------------------
+  // Plan 03-06 (D-27 + D-28): every web_fetch call goes through
+  // webFetchWithAllowlist which enforces the profile's per-call hostname
+  // allowlist. On allowlist miss, the wrapper returns a ToolError-shaped
+  // result + fires the violation event + flips the offline badge red via
+  // webFetchOnViolation. Session continues (warn-and-continue per D-28).
+  const webFetchAllowlist = opts.webFetchAllowlist ?? [];
+  const webFetchOnViolation = opts.webFetchOnViolation;
   pi.registerTool({
     name: "web_fetch",
-    description: `HTTP GET → markdown. Reads documentation only (no inference). Tagged ${NETWORK_REQUIRED_TAG}.`,
+    description: `HTTP GET → markdown. Reads documentation only (no inference). Tagged ${NETWORK_REQUIRED_TAG}. Allowlist-gated (UX-03): only hosts in profile.harness.tools.web_fetch.allowlist (plus loopback) permitted; non-allowlisted hosts return an error and flip the offline badge red.`,
     parameters: {
       type: "object",
       properties: {
@@ -355,9 +362,16 @@ export function registerNativeTools(
     },
     invoke: async (args) =>
       invoke("web_fetch", async () => {
-        return webFetch(String(args.url), {
-          timeoutMs: Number(args.timeout_ms ?? 30_000),
-        });
+        const enforcement = {
+          allowlist: webFetchAllowlist,
+          profileRef,
+          ...(webFetchOnViolation ? { onViolation: webFetchOnViolation } : {}),
+        };
+        return webFetchWithAllowlist(
+          String(args.url),
+          enforcement,
+          { timeoutMs: Number(args.timeout_ms ?? 30_000) },
+        );
       }),
   });
 }

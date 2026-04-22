@@ -21,5 +21,18 @@ export {
 	type AgentToolResultLike,
 } from "./native-tools";
 export { toolSpecToDefinition } from "./tool-definition-adapter";
-export { webFetch, NETWORK_REQUIRED_TAG } from "./web-fetch";
+export {
+	webFetch,
+	webFetchWithAllowlist,
+	NETWORK_REQUIRED_TAG,
+	type WebFetchToolResult,
+	type WebFetchToolOkResult,
+	type WebFetchToolErrorResult,
+} from "./web-fetch";
+// Plan 03-06: web_fetch runtime allowlist enforcement (D-27 + D-28).
+export {
+	enforceWebFetchAllowlist,
+	WebFetchAllowlistError,
+	type EnforcementContext,
+} from "./web-fetch-allowlist";
 export const PACKAGE_VERSION = "0.1.0";

@@ -66,6 +66,7 @@ import {
 	startFooterPoller,
 	type FooterPollerHandle,
 } from "./metrics-poller";
+import { bindBadge } from "./offline-badge";
 
 export interface EmmyExtensionOptions {
 	profile: ProfileSnapshot;
@@ -150,6 +151,22 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 		// EMMY_TELEMETRY=off is honored by startFooterPoller itself (returns a
 		// no-op handle if set — matches Plan 03-02's kill-switch discipline).
 		pi.on("session_start", (_event, ctx) => {
+			// Plan 03-06 (UX-03): bind pi's ctx.ui to the module-level badge
+			// state machine. session.ts already ran the boot-time audit and
+			// called setInitialAudit(result); bindBadge replays that state
+			// into ctx.ui.setStatus("emmy.offline_badge", ...) now that we
+			// have the pi context. If a web_fetch violation happens mid-
+			// session, enforceWebFetchAllowlist's onViolation callback
+			// (session.ts) flips the module-level state and re-renders
+			// through the same ctx. EMMY_TELEMETRY=off does NOT suppress
+			// this — the badge is UX, not telemetry (plan success_criterion).
+			if (ctx.ui) {
+				const setStatusFn = ctx.ui.setStatus.bind(ctx.ui);
+				bindBadge({
+					ui: { setStatus: (k, t) => setStatusFn(k, t) },
+				});
+			}
+
 			if (!opts.baseUrl) return;
 			// Safety: never start two concurrent pollers (defensive — pi emits
 			// session_start exactly once per AgentSession, but this guards

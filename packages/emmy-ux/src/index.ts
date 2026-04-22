@@ -53,4 +53,17 @@ export {
 	type NvidiaSample,
 } from "./nvidia-smi";
 
+// Plan 03-06 (UX-03): OFFLINE OK / NETWORK USED badge surface.
+export {
+	renderBadge,
+	renderBadgePlain,
+	updateOfflineBadge,
+	bindBadge,
+	setInitialAudit,
+	flipToViolation,
+	runBootOfflineAudit,
+	type BadgeCtx,
+	type RunBootAuditOpts,
+} from "./offline-badge";
+
 export const PACKAGE_VERSION = "0.1.0";

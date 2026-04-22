@@ -55,4 +55,20 @@ export interface NativeToolOpts {
 	cwd: string;
 	profileRef: { id: string; version: string; hash: string };
 	bashDenylist?: string[];
+	/**
+	 * Plan 03-06 (UX-03 / D-27): per-profile web_fetch allowlist. Hostname-exact
+	 * (no DNS resolution, no wildcards). Loopback is always permitted. When
+	 * absent or empty, web_fetch runtime enforcement flips the offline badge
+	 * red on first call (default-deny). Populated from
+	 * profile.harness.tools.web_fetch.allowlist by session.ts at registration
+	 * time.
+	 */
+	webFetchAllowlist?: readonly string[];
+	/**
+	 * Plan 03-06: callback invoked when a web_fetch call hits a non-allowlisted
+	 * host. Session-level callers wire this to updateOfflineBadge so the TUI
+	 * badge flips red and a violation event is logged (D-27). Optional — absent
+	 * in eval drivers and unit tests that don't care about the badge.
+	 */
+	webFetchOnViolation?: (details: { url: string; hostname: string }) => void;
 }
