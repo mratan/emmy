@@ -1,13 +1,13 @@
 ---
 phase: 03-observability-agent-loop-hardening-lived-experience
 verified: 2026-04-22T00:00:00Z
-status: human_needed
-score: 5/5 must-haves verified (roadmap SCs)
+status: gaps_found
+score: 4/5 must-haves verified (SC-3 blocked on pi 0.68 TUI wire-through gap discovered post-verification during operator protocol)
 overrides_applied: 0
 sc_verdicts:
   SC-1: operator-gated
   SC-2: partial
-  SC-3: operator-gated
+  SC-3: gap (library pass; interactive TUI wiring missing)
   SC-4: pass
   SC-5: operator-gated
 req_ids_closed:
@@ -32,7 +32,13 @@ human_verification:
   - test: "SC-2 live-mode: run `bash scripts/sc2_200turn_compaction.sh --mode=live --variant=default` with emmy-serve active on DGX Spark"
     expected: "200-turn fixture exceeds max_input_tokens threshold; emmyCompactionTrigger fires via engine.summarize() postChat round-trip; report.json shows verdict=pass, all 5 invariants green (goalPreserved, lastNVerbatim, errorResultsVerbatim, filePinsVerbatim, compactionEvent); per-tool truncation rate visible in events.jsonl"
     why_human: "Live-mode requires the engine.summarize() → live emmy-serve wire (postChat round-trip), approximately 2 hours of GPU time for the 200-turn fixture, and the DGX Spark physically running. Stub-mode matrix (3/3 variants) is already green. Resume signal: p3-07 sc2 live green."
-gaps: []
+gaps:
+  - id: SC-3-TUI-WIRE
+    sc: SC-3
+    severity: blocking
+    summary: "pi 0.68 interactive TUI wire-through (runtime.runTui) not implemented — Plan 02-04 SDK-path deferral inherited by Plan 03-01 Wave 1. Blocks daily-driver use of pi-emmy (interactive), blocks end-to-end Alt+Up/Down keypress evidence, blocks --export-hf accumulating a real daily-driver corpus."
+    evidence: "runs/p3-w3-walkthrough/03-05-library-probe.md (SC-3 library-proven end-to-end via direct handleFeedbackKey call; feedback.jsonl 2 rows, 13 fields each, idempotent upsert + kill-switch honored). Interactive invocation `pi-emmy --profile .../v3` on the Spark bailed with 'TUI unavailable in this pi 0.68.0 adapter — use --print or --json for now, or run pi directly' at packages/emmy-ux/bin/pi-emmy.ts:337."
+    remediation: "New Phase-3 gap plan to wire pi 0.68 interactive TUI: either implement runtime.runTui on the current adapter, or graduate to createAgentSessionRuntime and bind pi's input event to handleFeedbackKey via pi.on('input', ...). Must preserve the Phase 2/3 seams: SP_OK canary ordering, before_provider_request hook, setStatus('emmy.footer'/'emmy.badge', ...) keys, feedback.jsonl path conventions."
 deferred: []
 ---
 
