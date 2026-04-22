@@ -35,7 +35,11 @@
 //   (e) [Plan 03-05] input event hook registration — no-op stub here; future
 //       plan fills the body.
 
-import type { ExtensionAPI, ExtensionFactory } from "@mariozechner/pi-coding-agent";
+import type {
+	ExtensionAPI,
+	ExtensionFactory,
+	TurnEndEvent,
+} from "@mariozechner/pi-coding-agent";
 
 import {
 	emmyCompactionTrigger,
@@ -51,8 +55,13 @@ import {
 	type ProfileSnapshot,
 	type RetryState,
 } from "@emmy/provider";
-import { emitEvent } from "@emmy/telemetry";
+import {
+	emitEvent,
+	TurnTracker,
+	type TurnMeta,
+} from "@emmy/telemetry";
 
+import { handleFeedbackKey } from "./feedback-ui";
 import {
 	startFooterPoller,
 	type FooterPollerHandle,
@@ -88,6 +97,26 @@ export interface EmmyExtensionOptions {
 	 * stopped on agent_end, without driving real network / subprocess code.
 	 */
 	startFooterPollerImpl?: typeof startFooterPoller;
+	/**
+	 * Plan 03-05 (TELEM-02): session identifier propagated into the emmy-owned
+	 * turn_id scheme `${sessionId}:${turnIndex}`. pi 0.68 TurnEndEvent only
+	 * exposes `turnIndex: number`, so we synthesize turn_id at the turn_end
+	 * callback site using this value + the pi-emitted turnIndex. When absent,
+	 * feedback capture is disabled (no turn_end handler registered).
+	 */
+	sessionId?: string;
+	/**
+	 * Plan 03-05: honors the Plan 03-02 resolveTelemetryEnabled kill-switch.
+	 * When false, Alt+Up/Down input intercept is skipped entirely and the
+	 * turn_end tracker is not populated — feedback capture silently disabled.
+	 */
+	telemetryEnabled?: boolean;
+	/**
+	 * Plan 03-05 test hook: inject a custom TurnTracker. Tests override this
+	 * to assert recordTurnComplete was called with synthesized turn_id;
+	 * production callers omit it and get a fresh in-memory TurnTracker.
+	 */
+	turnTrackerImpl?: TurnTracker;
 }
 
 /**
@@ -105,6 +134,14 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 	// Plan 03-04: footer poller handle lives at factory-closure scope so both
 	// session_start (start) and agent_end (stop) handlers can see it.
 	let footerHandle: FooterPollerHandle | null = null;
+
+	// Plan 03-05 (TELEM-02): TurnTracker follows the factory-closure lifetime
+	// because pi's turn_end → pi's input-event ordering is within the same
+	// AgentSession process. The tracker only keeps the LATEST completed turn
+	// (D-19 most-recent-turn attribution).
+	const turnTracker = opts.turnTrackerImpl ?? new TurnTracker();
+	const telemetryEnabled = opts.telemetryEnabled !== false; // default ON
+	const sessionId = opts.sessionId ?? null;
 
 	return (pi: ExtensionAPI): void => {
 		// Plan 03-04 UX-02: start the 1 Hz footer poller on session_start and
@@ -179,11 +216,49 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 			});
 		});
 
-		// Plan 03-05 stub — input event placeholder. Registered now so the
-		// factory's event topology is stable across waves. Body is "continue"
-		// (pi proceeds with unmodified input) until Plan 03-05 wires Alt+Up/Down.
-		pi.on("input", (_event, _ctx) => {
-			return { action: "continue" };
+		// Plan 03-05 (TELEM-02): turn_end handler populates the TurnTracker
+		// with per-turn metadata so Alt+Up/Down can attribute a rating to the
+		// MOST-RECENT completed turn (D-19). pi 0.68 TurnEndEvent shape:
+		//   { type: "turn_end", turnIndex: number, message: AgentMessage, toolResults: ToolResultMessage[] }
+		// Emmy synthesizes turn_id from `${sessionId}:${turnIndex}` (sessionId
+		// plumbed in from pi-emmy.ts boot; see EmmyExtensionOptions.sessionId).
+		if (telemetryEnabled && sessionId) {
+			pi.on("turn_end", (event) => {
+				try {
+					const meta = buildTurnMeta(
+						event as TurnEndEvent,
+						sessionId,
+						profile,
+					);
+					turnTracker.recordTurnComplete(meta);
+				} catch {
+					// Malformed AgentMessage shouldn't crash the session. The
+					// tracker keeps its previous state; user's next Alt+Up will
+					// rate the last well-formed turn or return "continue" if
+					// none exists.
+				}
+			});
+		}
+
+		// Plan 03-05 (TELEM-02): intercept Alt+Up/Down BEFORE pi's keybind
+		// resolution (D-18 — pi 0.68 binds alt+up to app.message.dequeue).
+		// handleFeedbackKey returns {action: "handled"} when a rating was
+		// recorded (suppressing pi's default) and {action: "continue"} for
+		// any non-matching keypress. Telemetry-disabled path short-circuits
+		// to "continue" so the kill-switch (EMMY_TELEMETRY=off) preserves
+		// pi's built-in keybind behavior.
+		pi.on("input", async (event, ctx) => {
+			if (!telemetryEnabled) return { action: "continue" };
+			const uiInput = ctx.ui?.input?.bind(ctx.ui);
+			if (!uiInput) return { action: "continue" };
+			return handleFeedbackKey(
+				event,
+				{
+					ui: { input: uiInput },
+					enabled: true, // gate at the factory level already passed
+				},
+				turnTracker,
+			);
 		});
 
 		// Plan 03-03 — turn_start handler invokes emmyCompactionTrigger per
@@ -311,4 +386,90 @@ function renderContent(content: unknown): string {
 	} catch {
 		return String(content);
 	}
+}
+
+/**
+ * Plan 03-05: synthesize a TurnMeta record from a pi 0.68 TurnEndEvent.
+ *
+ * Event shape (pi types.d.ts line 468-473):
+ *   { type: "turn_end", turnIndex: number, message: AgentMessage, toolResults: ToolResultMessage[] }
+ *
+ * AgentMessage is a pi-ai Message (UserMessage | AssistantMessage | ToolResultMessage)
+ * or one of the CustomAgentMessages variants. We only populate model_response +
+ * tokens for the AssistantMessage variant — if pi ever dispatches turn_end for
+ * a non-assistant terminal message, the tokens stay 0 and the UI shows a
+ * best-effort rating (acceptable degradation vs. blocking the capture).
+ *
+ * `latency_ms` is not present on pi's event envelope for 0.68 — we reserve 0
+ * for Phase 4+ enrichment (Plan 03-02 already emits an `after_provider_response`
+ * event that carries response headers; a follow-up plan can cache that
+ * latency keyed by turnIndex and wire it here).
+ *
+ * `kv_used` reads from Plan 03-04's footer poller global cache if available.
+ * For MVP we emit 0 and let Phase 7 consent-flow annotate properly.
+ */
+function buildTurnMeta(
+	event: TurnEndEvent,
+	sessionId: string,
+	profile: ProfileSnapshot,
+): TurnMeta {
+	const msg = event.message as unknown as {
+		role?: string;
+		content?: unknown;
+		usage?: { input?: number; output?: number };
+	};
+
+	// Extract concatenated text from AssistantMessage.content (TextContent items).
+	let modelResponse = "";
+	if (msg && Array.isArray(msg.content)) {
+		modelResponse = msg.content
+			.map((c) => {
+				if (c && typeof c === "object" && (c as { type?: string }).type === "text") {
+					const t = (c as { text?: unknown }).text;
+					return typeof t === "string" ? t : "";
+				}
+				return "";
+			})
+			.join("");
+	} else if (typeof (msg as { content?: unknown })?.content === "string") {
+		modelResponse = (msg as { content: string }).content;
+	}
+
+	// Extract tool calls from the AssistantMessage content + toolResults siblings.
+	// We include the toolCall entries from the assistant message (the thing the
+	// model decided to do); toolResults carry the outputs which can contain
+	// file contents — preserving the call (args) without the result keeps the
+	// schema useful while avoiding T-03-05-01 leaking file bodies by default.
+	const toolCalls: unknown[] = [];
+	if (msg && Array.isArray(msg.content)) {
+		for (const c of msg.content) {
+			if (c && typeof c === "object" && (c as { type?: string }).type === "toolCall") {
+				const tc = c as { name?: string; arguments?: unknown; id?: string };
+				toolCalls.push({
+					id: tc.id,
+					name: tc.name,
+					arguments: tc.arguments,
+				});
+			}
+		}
+	}
+
+	const usage = msg?.usage ?? {};
+	const tokensIn = typeof usage.input === "number" ? usage.input : 0;
+	const tokensOut = typeof usage.output === "number" ? usage.output : 0;
+
+	return {
+		turn_id: `${sessionId}:${event.turnIndex}`,
+		session_id: sessionId,
+		profile_id: profile.ref.id,
+		profile_version: profile.ref.version,
+		profile_hash: profile.ref.hash,
+		model_response: modelResponse,
+		tool_calls: toolCalls,
+		latency_ms: 0,
+		kv_used: 0,
+		tokens_in: tokensIn,
+		tokens_out: tokensOut,
+		completed_at: new Date().toISOString(),
+	};
 }

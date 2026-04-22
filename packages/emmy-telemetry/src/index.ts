@@ -123,4 +123,21 @@ export { appendJsonlAtomic, writeJsonAtomic } from "./atomic-append";
 export { initOtel, shutdownOtel, resolveTelemetryEnabled } from "./otel-sdk";
 export { EmmyProfileStampProcessor } from "./profile-stamp-processor";
 
+// Plan 03-05 — lived-experience rating corpus (TELEM-02 + TELEM-03).
+export {
+	FeedbackSchemaError,
+	FeedbackNotFoundError,
+	validateRow,
+	type FeedbackRow,
+} from "./feedback-schema";
+export {
+	appendFeedback,
+	readFeedback,
+	updateFeedback,
+	upsertFeedback,
+	defaultFeedbackPath,
+} from "./feedback";
+export { TurnTracker, type TurnMeta } from "./turn-tracker";
+export { exportHfDataset, type ExportResult, type ExportOpts } from "./hf-export";
+
 export const PACKAGE_VERSION = "0.1.0";

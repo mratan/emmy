@@ -124,6 +124,19 @@ interface CreateEmmySessionOpts {
 	mode: "tui" | "print" | "json";
 	userPrompt?: string;
 	/**
+	 * Plan 03-05: emmy-owned session identifier propagated into the turn_id
+	 * scheme `${sessionId}:${turnIndex}`. pi-emmy.ts computes this as
+	 * `<ISO8601-with-dashes>-<profile-hash-8hex>` and passes it through.
+	 * Omitted in tests that don't exercise rating capture.
+	 */
+	sessionId?: string;
+	/**
+	 * Plan 03-05: mirrors @emmy/telemetry's resolveTelemetryEnabled. When
+	 * false, the pi.on("input") Alt+Up/Down intercept is skipped and no
+	 * turn_end tracker is populated.
+	 */
+	telemetryEnabled?: boolean;
+	/**
 	 * Test-only: override pi runtime construction with a stub. Receives the
 	 * already-built customTools array so stubs can mirror the real adapter's
 	 * `introspect()` surface without having to replicate native-tool + MCP
@@ -158,6 +171,8 @@ async function buildRealPiRuntime(
 	profile: ProfileSnapshot,
 	customTools: ToolDefinitionLike[],
 	assembledPromptProvider: () => { text: string; sha256: string },
+	sessionId: string | undefined,
+	telemetryEnabled: boolean,
 ): Promise<PiRuntime> {
 	// 1. Auth: emmy-serve doesn't require a key. Seed a dummy via a named env var
 	// so pi-ai's auth lookup is satisfied. The apiKey field in ProviderConfigInput
@@ -201,11 +216,14 @@ async function buildRealPiRuntime(
 	// before_provider_request hook is authoritative on every wire request.
 	// Plan 03-04 (UX-02): pass baseUrl so the extension can start a 1 Hz
 	// footer poller on session_start (scrapes vLLM /metrics + nvidia-smi).
-	const emmyExtension = createEmmyExtension({
+	const emmyExtensionOpts: Parameters<typeof createEmmyExtension>[0] = {
 		profile,
 		assembledPromptProvider,
 		baseUrl,
-	});
+		telemetryEnabled,
+	};
+	if (sessionId !== undefined) emmyExtensionOpts.sessionId = sessionId;
+	const emmyExtension = createEmmyExtension(emmyExtensionOpts);
 	const services = await createAgentSessionServices({
 		cwd,
 		authStorage,
@@ -451,6 +469,8 @@ export async function createEmmySession(
 				opts.profile,
 				customTools,
 				() => ({ text: assembledPrompt.text, sha256: assembledPrompt.sha256 }),
+				opts.sessionId,
+				opts.telemetryEnabled !== false,
 		  );
 
 	// 9. Pi-layer provider + legacy tool registrations. For the real adapter

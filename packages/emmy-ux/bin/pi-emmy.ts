@@ -59,6 +59,10 @@ interface ParsedArgs {
 	baseUrl: string;
 	printEnvironment?: boolean;
 	help?: boolean;
+	/** Plan 03-05: `--export-hf <out_dir>` emits a HF datasets-loadable
+	 *  artifact from ~/.emmy/telemetry/feedback.jsonl. When present, pi-emmy
+	 *  runs the exporter and exits without starting a session. */
+	exportHf?: string;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -68,6 +72,7 @@ function parseArgs(argv: string[]): ParsedArgs {
 	let prompt: string | undefined;
 	let printEnvironment = false;
 	let help = false;
+	let exportHf: string | undefined;
 	for (let i = 0; i < argv.length; i++) {
 		const a = argv[i]!;
 		if (a === "--profile") {
@@ -82,6 +87,8 @@ function parseArgs(argv: string[]): ParsedArgs {
 			prompt = argv[++i];
 		} else if (a === "--print-environment") {
 			printEnvironment = true;
+		} else if (a === "--export-hf") {
+			exportHf = argv[++i];
 		} else if (a === "-h" || a === "--help") {
 			help = true;
 		}
@@ -90,14 +97,16 @@ function parseArgs(argv: string[]): ParsedArgs {
 	if (prompt !== undefined) args.prompt = prompt;
 	if (printEnvironment) args.printEnvironment = true;
 	if (help) args.help = true;
+	if (exportHf !== undefined) args.exportHf = exportHf;
 	return args;
 }
 
 function usage(): string {
 	return `pi-emmy — Emmy harness (daily-driver)
-  Usage: pi-emmy [--profile <dir>] [--base-url <url>] [--print <prompt>|--json <prompt>|--print-environment]
+  Usage: pi-emmy [--profile <dir>] [--base-url <url>] [--print <prompt>|--json <prompt>|--print-environment|--export-hf <out_dir>]
   Defaults: --profile <emmy-install>/profiles/qwen3.6-35b-a3b/v2 (override via $EMMY_PROFILE_ROOT or --profile), --base-url http://127.0.0.1:8002
-  Exit codes: 0=ready, 1=runtime failure (SP_OK/MCP), 4=prerequisite missing (profile dir, vLLM, or emmy profile validate failed)`;
+  --export-hf <out_dir>: export ~/.emmy/telemetry/feedback.jsonl as a HuggingFace datasets-loadable artifact (TELEM-02) and exit.
+  Exit codes: 0=ready, 1=runtime failure (SP_OK/MCP), 2=usage error (e.g. --export-hf without <out_dir>), 4=prerequisite missing (profile dir, vLLM, or emmy profile validate failed)`;
 }
 
 async function probeVllm(baseUrl: string): Promise<void> {
@@ -140,6 +149,46 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
 			),
 		);
 		return 0;
+	}
+
+	// Plan 03-05: --export-hf <out_dir> emits the HF datasets-loadable
+	// artifact from ~/.emmy/telemetry/feedback.jsonl and exits. No session
+	// is started; no prereq checks (emmy-serve / profile validate) run
+	// because export is a pure file-to-file transform.
+	if (args.exportHf !== undefined) {
+		if (!args.exportHf || args.exportHf.length === 0) {
+			console.error("pi-emmy: --export-hf requires an <out_dir> argument");
+			return 2;
+		}
+		const outDir = resolve(args.exportHf);
+		const { defaultFeedbackPath, exportHfDataset } = await import("@emmy/telemetry");
+		const src = defaultFeedbackPath();
+		let gitSha = process.env.EMMY_GIT_SHA ?? "";
+		if (!gitSha) {
+			try {
+				gitSha = execFileSync("git", ["rev-parse", "HEAD"], {
+					encoding: "utf8",
+					cwd: emmyInstallRoot(),
+				}).trim();
+			} catch {
+				gitSha = "unknown";
+			}
+		}
+		try {
+			const result = exportHfDataset(src, outDir, {
+				emmyVersion: "0.1.0",
+				gitSha,
+			});
+			console.log(
+				`[emmy/export-hf] exported ${result.rowCount} rows to ${result.outDir} (${result.warningCount} file-content warnings)`,
+			);
+			return 0;
+		} catch (e) {
+			console.error(
+				`pi-emmy: --export-hf failed: ${e instanceof Error ? e.message : String(e)}`,
+			);
+			return 1;
+		}
 	}
 
 	// Pre-flight 1: profile dir exists.
@@ -260,6 +309,11 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
 			baseUrl: args.baseUrl,
 			cwd: process.cwd(),
 			mode: args.mode,
+			// Plan 03-05: propagate the emmy-owned session id + telemetry
+			// flag so the Emmy ExtensionFactory can synthesize turn_id +
+			// honor the kill-switch for Alt+Up/Down rating capture.
+			sessionId,
+			telemetryEnabled,
 		};
 		if (args.prompt !== undefined) sessionOpts.userPrompt = args.prompt;
 		const { runtime, assembledPrompt, transcriptPath } = await createEmmySession(sessionOpts);
