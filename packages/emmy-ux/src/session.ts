@@ -36,14 +36,15 @@ import {
 	registerNativeTools,
 } from "@emmy/tools";
 
-// W2 FIX: real import of pi 0.68.0's createAgentSession. The SDK path
-// (`createAgentSession` + `SessionManager.inMemory()`) gives us a runnable
-// AgentSession without the full AgentSessionRuntime machinery — sufficient
-// for Phase 2's wiring contract. Plan 08 SC-1 walkthrough exercises the
-// interactive-TUI path which requires further glue (extension runner binding)
-// that pi layers in its own cli.js; Phase 2 surfaces the base session.
+// W2 FIX: real import of pi 0.68.0's createAgentSession. Phase 2 now wires
+// the provider + session fully (SC-1 walkthrough demands it) via
+// createAgentSessionServices + createAgentSessionFromServices. ModelRegistry
+// is seeded in-memory with a single emmy-vllm provider pointed at emmy-serve.
 import {
-	createAgentSession,
+	AuthStorage,
+	createAgentSessionFromServices,
+	createAgentSessionServices,
+	ModelRegistry,
 	SessionManager,
 } from "@mariozechner/pi-coding-agent";
 
@@ -67,10 +68,15 @@ export interface PiRuntime {
 	registerProvider: (name: string, impl: unknown) => void;
 	registerTool: (spec: unknown) => void;
 	on: (event: string, handler: (...args: unknown[]) => void) => void;
-	run?: (
-		prompt: string,
-		opts?: { mode: "print" | "json" },
-	) => Promise<{ text: string; tool_calls?: unknown[] }>;
+	/**
+	 * One-shot drive: send a user prompt, run the agent loop, return the final
+	 * assistant text. Powers `pi-emmy --print` and `--json`. Resolves when
+	 * pi emits `agent_end`.
+	 */
+	runPrint?: (prompt: string, opts?: { mode: "text" | "json" }) => Promise<{
+		text: string;
+		messages: unknown[];
+	}>;
 	runTui?: () => Promise<void>;
 	/** Optional: underlying pi AgentSession (for Plan 08's SC-1 walkthrough). */
 	session?: unknown;
@@ -93,20 +99,65 @@ interface CreateEmmySessionOpts {
  * inspect the wiring; on-event subscriptions are routed into a local dispatch
  * table AND forwarded to pi's session.subscribe (so tool-call turns surface).
  */
-async function buildRealPiRuntime(cwd: string): Promise<PiRuntime> {
+async function buildRealPiRuntime(
+	cwd: string,
+	baseUrl: string,
+	profile: ProfileSnapshot,
+): Promise<PiRuntime> {
+	// 1. Auth: emmy-serve doesn't require a key. Seed a dummy via a named env var
+	// so pi-ai's auth lookup is satisfied. The apiKey field in ProviderConfigInput
+	// is an env-var name that pi dereferences at request time.
+	const EMMY_KEY_ENV = "EMMY_VLLM_API_KEY";
+	if (!process.env[EMMY_KEY_ENV]) process.env[EMMY_KEY_ENV] = "unused";
+	const authStorage = AuthStorage.inMemory({});
+
+	// 2. In-memory ModelRegistry with a single emmy-vllm provider. This is
+	// the SC-1 enablement: the previous Phase 2 build never registered a
+	// model, so session.prompt() had nowhere to route.
+	const modelRegistry = ModelRegistry.inMemory(authStorage);
+	const modelId = profile.serving.engine.served_model_name;
+	const contextWindow = profile.serving.engine.max_model_len;
+	modelRegistry.registerProvider("emmy-vllm", {
+		baseUrl: `${baseUrl}/v1`,
+		apiKey: EMMY_KEY_ENV,
+		api: "openai-completions",
+		models: [
+			{
+				id: modelId,
+				name: `Emmy ${modelId}`,
+				reasoning: false,
+				input: ["text"],
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow,
+				maxTokens: Math.min(16384, Math.floor(contextWindow / 2)),
+			},
+		],
+	});
+
+	// 3. Pick up the registered model via ModelRegistry.find.
+	const emmyModel = modelRegistry.find("emmy-vllm", modelId);
+	if (!emmyModel) {
+		throw new Error(
+			`emmy-vllm provider not registered in ModelRegistry (model=${modelId})`,
+		);
+	}
+
+	// 4. Services + session.
+	const services = await createAgentSessionServices({
+		cwd,
+		authStorage,
+		modelRegistry,
+	});
 	const sessionManager = SessionManager.inMemory(cwd);
-	// createAgentSession may attempt to read ~/.pi/agent for defaults; the
-	// in-memory session manager short-circuits session-file writes. Model
-	// selection is deferred (defaults to first available or settings-bound),
-	// which is fine for Phase 2's wiring test — SC-1 walkthrough in Plan 08
-	// drives the actual model prompt.
-	const { session } = await createAgentSession({ cwd, sessionManager });
+	const { session } = await createAgentSessionFromServices({
+		services,
+		sessionManager,
+		model: emmyModel,
+		customTools: [],
+	});
 
-	// --- Dispatch table for emmy's narrow on(event, handler) shape ---
+	// 5. Event dispatch table (emmy's on() → pi's subscribe()).
 	const handlers: Record<string, Array<(...args: unknown[]) => void>> = {};
-
-	// Forward every pi AgentSession event to any emmy handler registered for
-	// the matching event name. This is the B2 transcript subscription hook.
 	session.subscribe((event: unknown) => {
 		const type = (event as { type?: string })?.type;
 		if (!type) return;
@@ -114,20 +165,69 @@ async function buildRealPiRuntime(cwd: string): Promise<PiRuntime> {
 		if (ours) for (const h of ours) h(event);
 	});
 
+	// 6. runPrint: subscribe-to-agent_end + session.prompt(). Resolves with the
+	// final assistant text (or a JSON event-dump for mode="json").
+	const runPrint = async (
+		prompt: string,
+		opts?: { mode: "text" | "json" },
+	): Promise<{ text: string; messages: unknown[] }> => {
+		const mode = opts?.mode ?? "text";
+		const collectedEvents: unknown[] = [];
+		return new Promise<{ text: string; messages: unknown[] }>((resolve, reject) => {
+			let done = false;
+			const onEvent = (event: unknown): void => {
+				const e = event as { type?: string };
+				if (!e?.type) return;
+				if (mode === "json") collectedEvents.push(event);
+				if (e.type === "agent_end" && !done) {
+					done = true;
+					const messages =
+						(event as { messages?: unknown[] }).messages ?? [];
+					// Find the last assistant message's concatenated text content.
+					let text = "";
+					for (let i = messages.length - 1; i >= 0; i--) {
+						const m = messages[i] as {
+							role?: string;
+							content?: Array<{ type?: string; text?: string }>;
+						};
+						if (m?.role === "assistant" && Array.isArray(m.content)) {
+							text = m.content
+								.filter((c) => c.type === "text" && typeof c.text === "string")
+								.map((c) => c.text as string)
+								.join("");
+							break;
+						}
+					}
+					resolve({ text, messages: mode === "json" ? collectedEvents : messages });
+				}
+			};
+			session.subscribe(onEvent);
+			// session.prompt() returns Promise<void>; errors rejected below.
+			session.prompt(prompt).catch((err: unknown) => {
+				if (!done) {
+					done = true;
+					reject(err instanceof Error ? err : new Error(String(err)));
+				}
+			});
+		});
+	};
+
 	const adapter: PiRuntime = {
 		registerProvider: (_name: string, _impl: unknown) => {
-			// Phase 2 wiring contract: registration is recorded via emitEvent
-			// in session.ts. Full plumbing to pi's ProviderConfig shape is
-			// deferred to Phase 3 alongside the telemetry bus.
+			// Phase 2 surface: emmy-provider's reactive grammar retry library is
+			// available; pi's built-in openai-completions stream is the wire path
+			// for SC-1. Binding the reactive retry through pi's BeforeProviderRequestEvent
+			// is Phase 3 extension-runner work.
 		},
 		registerTool: (_spec: unknown) => {
-			// Same contract: Phase 2 proves the call happens in the right
-			// order. Custom-tool execution through pi's tool pipeline is
-			// a Phase 3 extension-runner binding step.
+			// Phase 2 surface: emmy-tools native + hash-anchored-edit + MCP libraries
+			// are available; pi's built-in tools drive SC-1. Swapping in emmy's
+			// hash-anchored edit via customTools is a Phase 3 extension-runner binding.
 		},
 		on: (event: string, handler: (...args: unknown[]) => void) => {
 			(handlers[event] ||= []).push(handler);
 		},
+		runPrint,
 		session,
 	};
 	return adapter;
@@ -205,7 +305,7 @@ export async function createEmmySession(
 	// 7. Build the pi runtime (W2 FIX — real pi factory unless overridden).
 	const pi: PiRuntime = opts.piFactory
 		? opts.piFactory()
-		: await buildRealPiRuntime(opts.cwd);
+		: await buildRealPiRuntime(opts.cwd, opts.baseUrl, opts.profile);
 
 	// 8. Registration order (provider → native tools → MCP bridge).
 	registerEmmyProvider(

@@ -228,27 +228,26 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
 			return 1;
 		}
 
-		const run = (
-			runtime as {
-				run?: (
-					prompt: string,
-					opts?: { mode: "print" | "json" },
-				) => Promise<{ text: string; tool_calls?: unknown[] } | string>;
-			}
-		).run;
-		if (typeof run === "function" && args.prompt !== undefined) {
-			const out = await run(args.prompt, { mode: args.mode });
-			if (args.mode === "json") {
-				console.log(JSON.stringify(out, null, 2));
-			} else {
-				console.log(typeof out === "string" ? out : (out as { text?: string })?.text ?? JSON.stringify(out));
-			}
-			return 0;
+		// --print / --json: drive one agent turn via the runtime's runPrint.
+		if (args.prompt === undefined) {
+			console.error(`pi-emmy: --${args.mode} requires a prompt argument`);
+			return 1;
 		}
-		console.error(
-			`pi-emmy: runtime does not expose a one-shot run() method in this pi version (session wired; manual pi drive required for this mode)`,
-		);
-		return 1;
+		const runPrint = runtime.runPrint;
+		if (typeof runPrint !== "function") {
+			console.error(
+				`pi-emmy: runtime missing runPrint() — this is a session-bootstrap defect, not a pi API gap`,
+			);
+			return 1;
+		}
+		const pm = args.mode === "json" ? "json" : "text";
+		const result = await runPrint(args.prompt, { mode: pm });
+		if (args.mode === "json") {
+			console.log(JSON.stringify(result.messages, null, 2));
+		} else {
+			console.log(result.text);
+		}
+		return 0;
 	} catch (e) {
 		if (e instanceof SpOkCanaryError) {
 			console.error(`pi-emmy SP_OK canary: FAILED — ${e.message}`);
