@@ -24,6 +24,8 @@ desktop.ini
 # whole.
 runs/**
 !runs/.gitkeep
+!runs/phase2-sc1/
+!runs/phase2-sc1/**
 !runs/phase2-sc2/
 !runs/phase2-sc2/**
 !runs/phase2-sc3/
