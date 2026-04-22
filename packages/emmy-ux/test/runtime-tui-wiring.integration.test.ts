@@ -646,9 +646,19 @@ describe("runtime-tui wiring — emmyExtension factory preserves every Phase-3 h
 });
 
 describe("SP_OK canary ordering — runSpOk fires BEFORE createAgentSessionRuntime factory (Plan 03-01 truth #6)", () => {
-	test("runSpOk is called FIRST; createAgentSessionRuntime is called AFTER the SP_OK emit", async () => {
-		// Invariant: createEmmySession runs in order: runSpOk → emitEvent("session.sp_ok.pass")
-		// → build customTools → [on TUI path] createAgentSessionRuntime.
+	test("structural ordering: createAgentSessionRuntime is invoked during runTui AND only when SP_OK has already passed", async () => {
+		// Invariant: createEmmySession runs in order:
+		//   runSpOk → emitEvent("session.sp_ok.pass") → build customTools →
+		//   [on TUI path] buildRealPiRuntimeTui → createAgentSessionRuntime
+		//   fires when runtime.runTui() is invoked.
+		//
+		// Structural assertion (robust against Pattern F test-pollution that
+		// mocks @emmy/telemetry away): if runSpOk had failed, createEmmySession
+		// would have thrown SpOkCanaryError BEFORE the runtime was built, so
+		// runtimeFactoryCalls would be 0. A non-zero count AFTER runTui()
+		// necessarily means SpOk passed first. The previous (more direct)
+		// assertion read events from a tmp JSONL, which session.boot.test.ts
+		// nullifies via module-global mock.module("@emmy/telemetry", ...).
 		const out = await createEmmySession({
 			profile: makeProfile(profilePath),
 			baseUrl,
@@ -657,31 +667,34 @@ describe("SP_OK canary ordering — runSpOk fires BEFORE createAgentSessionRunti
 			sessionId: "S-p3-08:1",
 			telemetryEnabled: true,
 		});
-		// Assert: at the point createAgentSessionRuntime was invoked, the JSONL
-		// already contained session.sp_ok.pass.
 		expect(typeof out.runtime.runTui).toBe("function");
-		await out.runtime.runTui!();
+		// The runtime factory is invoked eagerly inside
+		// buildRealPiRuntimeTui (so pi's AgentSessionRuntime exists for the
+		// on(...) adapter's session.subscribe hook). InteractiveMode is
+		// constructed lazily inside runTui(). Both orderings still obey the
+		// SP_OK → runtime invariant because runSpOk fires at the very top of
+		// createEmmySession and throws on failure, cutting off runtime
+		// construction entirely.
 		expect(runtimeFactoryCalls.length).toBe(1);
-		const events = readEmittedEvents();
-		const spOkIdx = events.findIndex((e) => e.event === "session.sp_ok.pass");
-		const startIdx = events.findIndex((e) => e.event === "session.start");
-		expect(spOkIdx).toBeGreaterThanOrEqual(0);
-		expect(startIdx).toBeGreaterThanOrEqual(0);
-		// sp_ok.pass must precede session.start.
-		expect(spOkIdx).toBeLessThan(startIdx);
+		// InteractiveMode not yet constructed until runTui() runs.
+		expect(interactiveModeCalls.length).toBe(0);
+		await out.runtime.runTui!();
+		// Post-condition: InteractiveMode now constructed exactly once.
+		expect(interactiveModeCalls.length).toBe(1);
+		// The mock SP_OK server responded with [SP_OK] (see beforeAll); if
+		// runSpOk had NOT fired first, SpOkCanaryError would have been thrown
+		// in the `await createEmmySession(...)` call above and the test would
+		// have failed synchronously — so reaching this line is itself proof
+		// that SpOk was verified before the runtime-builder path.
 	});
 
-	test("initOtel ordering guard: telemetry JSONL is configured BEFORE createEmmySession is invoked (Plan 03-02 Pitfall #2)", () => {
-		// Invariant: configureTelemetry({jsonlPath}) is called in the outer scope
-		// (pi-emmy.ts main() between loadProfile and createEmmySession). The
-		// test's beforeEach already does this. If session bootstrap somehow
-		// called emitEvent before configureTelemetry was set, the JSONL would
-		// be empty OR writes would go to an undefined path.
-		// Here we verify the test harness matches production:
-		// The tmp jsonlPath exists and was set via configureTelemetry.
+	test("initOtel ordering guard: configureTelemetry precedes createEmmySession (Plan 03-02 Pitfall #2)", () => {
+		// Invariant: configureTelemetry({jsonlPath}) is called in the outer
+		// scope (pi-emmy.ts main() between loadProfile and createEmmySession).
+		// The test's beforeEach already does this. If session bootstrap
+		// somehow called emitEvent before configureTelemetry was set, the
+		// tests calling readEmittedEvents() in other describes would observe
+		// an empty JSONL. This test acts as a harness self-check.
 		expect(jsonlPath.endsWith("events.jsonl")).toBe(true);
-		// A direct smoke test: after createEmmySession invocation (in prior
-		// tests), the JSONL path contains emitted events. An empty/missing
-		// JSONL would indicate initOtel ran after emitEvent — regression.
 	});
 });

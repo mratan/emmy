@@ -38,7 +38,7 @@
 //   (5) Reactive XGrammar retry (Phase 2 D-11) fires on the live pi-session
 //       path via before_provider_request + WeakMap<AbortSignal, RetryState>.
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
@@ -66,9 +66,12 @@ import {
 import {
 	AuthStorage,
 	createAgentSessionFromServices,
+	createAgentSessionRuntime,
 	createAgentSessionServices,
+	InteractiveMode,
 	ModelRegistry,
 	SessionManager,
+	type CreateAgentSessionRuntimeFactory,
 } from "@mariozechner/pi-coding-agent";
 
 import { SpOkCanaryError } from "./errors";
@@ -348,6 +351,199 @@ async function buildRealPiRuntime(
 	return adapter;
 }
 
+/**
+ * Plan 03-08 — pi 0.68 interactive TUI wire-through.
+ *
+ * Graduates from the --print-path's `createAgentSessionFromServices` (SDK
+ * path Plan 02-04 chose) to pi's full `createAgentSessionRuntime` + binds
+ * the resulting runtime to `new InteractiveMode(runtime).run()`. Same
+ * customTools + ExtensionFactory + AuthStorage + ModelRegistry wiring as
+ * buildRealPiRuntime (above) — divergence is the final factory shape, not
+ * the inputs. Plan 03-08 deliberately keeps buildRealPiRuntime untouched
+ * for --print because Plan 03-07 certified it at phase close.
+ *
+ * T-03-08-06: agentDir under `~/.emmy/agent` (emmy-scoped) — NOT
+ * `~/.pi/agent` (pi-scoped) — so pi's settings writer stays inside emmy's
+ * namespace. Path is autocreated via `ensureEmmyAgentDir()` before the
+ * createAgentSessionRuntime call so pi's first-run session directory
+ * bootstrap doesn't fail with ENOENT.
+ *
+ * Every Phase-3 extension binding carries through the factory's
+ * resourceLoaderOptions.extensionFactories — IDENTICAL args to the --print
+ * path (session.ts:236-247). Plan 03-08 Task 1 tests assert this contract.
+ */
+async function buildRealPiRuntimeTui(
+	cwd: string,
+	baseUrl: string,
+	profile: ProfileSnapshot,
+	customTools: ToolDefinitionLike[],
+	assembledPromptProvider: () => { text: string; sha256: string },
+	sessionId: string | undefined,
+	telemetryEnabled: boolean,
+): Promise<PiRuntime> {
+	// 1. Auth + ModelRegistry — IDENTICAL to buildRealPiRuntime.
+	const EMMY_KEY_ENV = "EMMY_VLLM_API_KEY";
+	if (!process.env[EMMY_KEY_ENV]) process.env[EMMY_KEY_ENV] = "unused";
+	const authStorage = AuthStorage.inMemory({});
+	const modelRegistry = ModelRegistry.inMemory(authStorage);
+	const modelId = profile.serving.engine.served_model_name;
+	const contextWindow = profile.serving.engine.max_model_len;
+	modelRegistry.registerProvider("emmy-vllm", {
+		baseUrl: `${baseUrl}/v1`,
+		apiKey: EMMY_KEY_ENV,
+		api: "openai-completions",
+		models: [
+			{
+				id: modelId,
+				name: `Emmy ${modelId}`,
+				reasoning: false,
+				input: ["text"],
+				cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+				contextWindow,
+				maxTokens: Math.min(16384, Math.floor(contextWindow / 2)),
+			},
+		],
+	});
+	const emmyModel = modelRegistry.find("emmy-vllm", modelId);
+	if (!emmyModel) {
+		throw new Error(
+			`emmy-vllm provider not registered in ModelRegistry (model=${modelId})`,
+		);
+	}
+
+	// 2. Emmy ExtensionFactory — IDENTICAL to buildRealPiRuntime. Plumbs
+	// sessionId + telemetryEnabled through so Plan 03-05 Alt+Up/Down capture
+	// works on the TUI path and Plan 03-02 EMMY_TELEMETRY=off kill-switch is
+	// honored. baseUrl enables Plan 03-04 footer poller on session_start.
+	const emmyExtensionOpts: Parameters<typeof createEmmyExtension>[0] = {
+		profile,
+		assembledPromptProvider,
+		baseUrl,
+		telemetryEnabled,
+	};
+	if (sessionId !== undefined) emmyExtensionOpts.sessionId = sessionId;
+	const emmyExtension = createEmmyExtension(emmyExtensionOpts);
+
+	// 3. SessionManager — in-memory, same as --print.
+	const sessionManager = SessionManager.inMemory(cwd);
+
+	// 4. agentDir — emmy-scoped to keep air-gap discipline + avoid pi's
+	// global ~/.pi/agent namespace (T-03-08-06).
+	const agentDir = ensureEmmyAgentDir();
+
+	// 5. CreateAgentSessionRuntimeFactory closure (pi's main.js 404-483 shape).
+	// pi passes {cwd, agentDir, sessionManager, sessionStartEvent?} — we
+	// close over authStorage + modelRegistry + emmyExtension + customTools.
+	const createRuntime: CreateAgentSessionRuntimeFactory = async ({
+		cwd: rtCwd,
+		agentDir: rtAgentDir,
+		sessionManager: rtSm,
+		sessionStartEvent,
+	}) => {
+		const services = await createAgentSessionServices({
+			cwd: rtCwd,
+			agentDir: rtAgentDir,
+			authStorage,
+			modelRegistry,
+			resourceLoaderOptions: {
+				extensionFactories: [emmyExtension],
+				noExtensions: false,
+			},
+		});
+		const fromServicesArgs: Parameters<typeof createAgentSessionFromServices>[0] = {
+			services,
+			sessionManager: rtSm,
+			model: emmyModel,
+			customTools: customTools as unknown as Parameters<
+				typeof createAgentSessionFromServices
+			>[0]["customTools"],
+		};
+		if (sessionStartEvent)
+			(fromServicesArgs as { sessionStartEvent?: unknown }).sessionStartEvent = sessionStartEvent;
+		const created = await createAgentSessionFromServices(fromServicesArgs);
+		return {
+			...created,
+			services,
+			diagnostics:
+				(services as unknown as { diagnostics?: unknown[] }).diagnostics ?? [],
+		} as Awaited<ReturnType<CreateAgentSessionRuntimeFactory>>;
+	};
+
+	// 6. Build the runtime via pi's SDK factory — this is the graduation
+	// from Plan 02-04's SDK-only path to the full runtime.
+	const agentSessionRuntime = await createAgentSessionRuntime(createRuntime, {
+		cwd,
+		agentDir,
+		sessionManager,
+	});
+
+	// 7. Local handler dispatch table for emmy-side on(...) listeners
+	// (transcript wiring in createEmmySession subscribes to turn/tool_call/
+	// etc. via this). The real pi ExtensionAPI events flow through the
+	// emmyExtension → pi.on(...) path inside the runtime; the adapter's on()
+	// is a secondary observation point kept for contract-compatibility.
+	const handlers: Record<string, Array<(...args: unknown[]) => void>> = {};
+	const sessionObj = agentSessionRuntime.session as unknown as {
+		subscribe: (h: (event: unknown) => void) => void;
+	};
+	if (sessionObj && typeof sessionObj.subscribe === "function") {
+		sessionObj.subscribe((event: unknown) => {
+			const type = (event as { type?: string })?.type;
+			if (!type) return;
+			const ours = handlers[type];
+			if (ours) for (const h of ours) h(event);
+		});
+	}
+
+	const _registeredCustomTools: Array<{ name: string }> = customTools.map((t) => ({
+		name: t.name,
+	}));
+	const _registeredProviders: Array<{ name: string; impl: unknown }> = [];
+
+	const adapter: PiRuntime = {
+		registerProvider: (name: string, impl: unknown) => {
+			// Kept introspectable for wire-through regression tests; the
+			// authoritative provider seed happened above in modelRegistry.
+			_registeredProviders.push({ name, impl });
+		},
+		registerTool: () => {
+			// customTools path is authoritative (D-01 no-split-brain); calls
+			// via the legacy PiRuntime path are observed but do NOT duplicate
+			// into the tool registry.
+		},
+		on: (event, handler) => {
+			(handlers[event] ||= []).push(handler);
+		},
+		session: agentSessionRuntime.session,
+		runTui: async () => {
+			// Bind pi's InteractiveMode to the runtime and run the TUI main
+			// loop. Resolves when the user quits (Ctrl-C / Ctrl-D / /quit).
+			// verbose:false preserves emmy's own stderr boot banner.
+			const interactiveMode = new InteractiveMode(agentSessionRuntime, {
+				verbose: false,
+			});
+			await interactiveMode.run();
+		},
+		introspect: () => ({
+			registeredProviders: _registeredProviders.slice(),
+			registeredCustomTools: _registeredCustomTools.slice(),
+		}),
+	};
+	return adapter;
+}
+
+/**
+ * Ensure `~/.emmy/agent/` exists (T-03-08-06 air-gap discipline).
+ * Creates the directory tree if absent; no-op if present. Returns the
+ * absolute path that pi 0.68's AgentSessionRuntime will write settings /
+ * session-state into.
+ */
+function ensureEmmyAgentDir(): string {
+	const dir = join(homedir(), ".emmy", "agent");
+	if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+	return dir;
+}
+
 export async function createEmmySession(
 	opts: CreateEmmySessionOpts,
 ): Promise<{
@@ -517,9 +713,17 @@ export async function createEmmySession(
 	//    Phase-3 wire: customTools are passed through so pi's AgentSession
 	//    uses them at creation time. Extension factory installs
 	//    before_provider_request hook (see pi-emmy-extension.ts).
+	//
+	//    Plan 03-08 (SC-3-TUI-WIRE gap closure): TUI path uses
+	//    buildRealPiRuntimeTui which graduates to pi's full
+	//    createAgentSessionRuntime + InteractiveMode. --print / --json paths
+	//    keep buildRealPiRuntime (Plan 03-07 certified-at-close). Both
+	//    builders receive identical arguments — divergence is the final
+	//    factory shape, not the inputs.
+	const builder = opts.mode === "tui" ? buildRealPiRuntimeTui : buildRealPiRuntime;
 	const pi: PiRuntime = opts.piFactory
 		? opts.piFactory({ customTools })
-		: await buildRealPiRuntime(
+		: await builder(
 				opts.cwd,
 				opts.baseUrl,
 				opts.profile,

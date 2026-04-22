@@ -328,15 +328,28 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
 		console.error(`pi-emmy transcript=${transcriptPath}`);
 
 		if (args.mode === "tui") {
+			// Plan 03-08 (SC-3-TUI-WIRE gap closure): the prior
+			// TUI-not-available bail is gone; createEmmySession({mode:"tui"}) returns a runtime
+			// whose runTui() launches pi 0.68's InteractiveMode bound to the
+			// AgentSessionRuntime (via createAgentSessionRuntime). The only
+			// failure mode at this point is a self-inflicted bootstrap defect
+			// (our own runtime.runTui is undefined) — NOT a pi API gap. Wrap
+			// in try/finally so OTel spans are flushed via shutdownOtel when
+			// the user quits (Ctrl-C / Ctrl-D / /quit).
 			const runTui = (runtime as { runTui?: () => Promise<void> }).runTui;
-			if (typeof runTui === "function") {
+			if (typeof runTui !== "function") {
+				console.error(
+					`pi-emmy: runtime missing runTui() — this is a session-bootstrap defect, not a pi API gap`,
+				);
+				await shutdownOtel(otelSdk);
+				return 1;
+			}
+			try {
 				await runTui();
 				return 0;
+			} finally {
+				await shutdownOtel(otelSdk);
 			}
-			console.error(
-				`pi-emmy: TUI unavailable in this pi 0.68.0 adapter — use --print or --json for now, or run pi directly`,
-			);
-			return 1;
 		}
 
 		// --print / --json: drive one agent turn via the runtime's runPrint.
