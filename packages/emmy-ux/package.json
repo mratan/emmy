@@ -14,6 +14,7 @@
   },
   "bin": { "pi-emmy": "./bin/pi-emmy.ts" },
   "dependencies": {
+    "@emmy/context": "workspace:*",
     "@emmy/provider": "workspace:*",
     "@emmy/telemetry": "workspace:*",
     "@emmy/tools": "workspace:*",

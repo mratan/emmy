@@ -38,6 +38,12 @@
 import type { ExtensionAPI, ExtensionFactory } from "@mariozechner/pi-coding-agent";
 
 import {
+	emmyCompactionTrigger,
+	SessionTooFullError,
+	type EmmyCompactionContext,
+	type SessionEntry as EmmySessionEntry,
+} from "@emmy/context";
+import {
 	getRetryStateForSignal,
 	handleBeforeProviderRequest,
 	type AssembledPromptSnapshot,
@@ -129,5 +135,130 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 		pi.on("input", (_event, _ctx) => {
 			return { action: "continue" };
 		});
+
+		// Plan 03-03 — turn_start handler invokes emmyCompactionTrigger per
+		// D-11 turn-boundary atomicity (Pitfall #3). The trigger wraps pi's
+		// compaction engine with D-14 preservation + D-16 fallback + D-12
+		// hard-ceiling fail-loud. Read pi's context usage + session entries
+		// via ExtensionContext; convert pi-native entries to emmy-local
+		// SessionEntry shape before handing to the classifier.
+		//
+		// Live wiring notes (Plan 03-07 finalizes):
+		//   - ctx.sessionManager.getEntries() returns pi's discriminated union;
+		//     we adapt the SessionMessageEntry subset to emmy's simplified shape
+		//     (role + content). CompactionEntry / ThinkingLevelChange / etc.
+		//     are filtered out because pi already treats them as non-LLM data.
+		//   - ctx.getContextUsage() is optional; when null we skip the trigger
+		//     because there's no authoritative token count to compare vs
+		//     max_input_tokens. D-15 soft threshold is a RATIO, so missing
+		//     tokens => ratio unknown => safe to skip.
+		//   - SessionTooFullError propagates to the TUI via ctx.ui.setStatus
+		//     (D-17 visible status) + re-throw so pi halts the turn.
+		pi.on("turn_start", async (_event, ctx) => {
+			const usage = ctx.getContextUsage?.();
+			if (!usage || usage.tokens == null) return;
+			const contextWindow = usage.contextWindow;
+			const maxInputTokens = readMaxInputTokens(profile) ?? contextWindow;
+
+			const piEntries = ctx.sessionManager?.getEntries?.() ?? [];
+			const emmyEntries = adaptPiEntries(piEntries);
+
+			const triggerCtx: EmmyCompactionContext = {
+				profile,
+				entries: emmyEntries,
+				contextTokens: usage.tokens,
+				contextWindow: maxInputTokens,
+				eventType: "turn_start",
+				model: ctx.model,
+				apiKey: process.env.EMMY_VLLM_API_KEY ?? "unused",
+				setStatus: (key, text) => ctx.ui?.setStatus?.(key, text),
+			};
+
+			try {
+				const result = await emmyCompactionTrigger(triggerCtx);
+				if (result.ran) {
+					ctx.ui?.setStatus?.(
+						"emmy.last_compaction",
+						`compacted ${result.elided}→kept ${result.preserved}${result.fallback ? " (D-16 fallback)" : ""}`,
+					);
+				}
+			} catch (err) {
+				if (err instanceof SessionTooFullError) {
+					// D-12 fail-loud: surface to TUI and re-throw so pi aborts
+					// the turn. Operator sees the diagnostic bundle via
+					// session logs + events.jsonl.
+					ctx.ui?.setStatus?.("emmy.compaction_failure", err.message);
+					throw err;
+				}
+				// Other errors would have been caught inside the trigger and
+				// converted to D-16 fallback; anything reaching here is a
+				// wiring bug — let it propagate so the test suite catches it.
+				throw err;
+			}
+		});
 	};
+}
+
+/**
+ * Read the compaction context window from the profile bundle. Plan 03-03 ships
+ * the loader without requiring harness.context to be declared on ProfileSnapshot;
+ * this helper does the same defensive read.
+ */
+function readMaxInputTokens(profile: ProfileSnapshot): number | null {
+	const harness = profile.harness as unknown as { context?: { max_input_tokens?: unknown } };
+	const val = harness.context?.max_input_tokens;
+	return typeof val === "number" && Number.isFinite(val) ? val : null;
+}
+
+/**
+ * Adapt pi-native SessionEntry (discriminated union) to the simplified
+ * emmy-local SessionEntry shape. Only SessionMessageEntry variants flow
+ * through the classifier; compaction/thinking/custom entries are filtered
+ * out because they don't participate in LLM context (pi treats them as
+ * metadata).
+ */
+function adaptPiEntries(entries: ReadonlyArray<unknown>): EmmySessionEntry[] {
+	const out: EmmySessionEntry[] = [];
+	for (const e of entries) {
+		if (!e || typeof e !== "object") continue;
+		const entry = e as { type?: string; id?: string; message?: unknown };
+		if (entry.type !== "message") continue;
+		const msg = entry.message as {
+			role?: string;
+			content?: unknown;
+			isError?: boolean;
+			toolName?: string;
+		};
+		if (!msg || typeof msg !== "object") continue;
+		out.push({
+			uuid: String(entry.id ?? ""),
+			role: String(msg.role ?? "unknown"),
+			content: renderContent(msg.content),
+			...(typeof msg.isError === "boolean" ? { isError: msg.isError } : {}),
+			...(typeof msg.toolName === "string" ? { toolName: msg.toolName } : {}),
+		});
+	}
+	return out;
+}
+
+function renderContent(content: unknown): string {
+	if (typeof content === "string") return content;
+	if (content == null) return "";
+	if (Array.isArray(content)) {
+		return content
+			.map((c) => {
+				if (typeof c === "string") return c;
+				if (c && typeof c === "object" && "text" in (c as Record<string, unknown>)) {
+					const t = (c as { text?: unknown }).text;
+					return typeof t === "string" ? t : "";
+				}
+				return "";
+			})
+			.join("\n");
+	}
+	try {
+		return JSON.stringify(content);
+	} catch {
+		return String(content);
+	}
 }
