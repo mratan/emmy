@@ -1,21 +1,21 @@
 ---
 gsd_state_version: 1.0
 milestone: v0.68.0
-milestone_name: milestone
-status: unknown
-last_updated: "2026-04-21T23:46:27.513Z"
+milestone_name: phase-2-daily-driver-baseline
+status: phase-2-closed
+last_updated: "2026-04-22T01:30:00Z"
 progress:
   total_phases: 7
-  completed_phases: 1
+  completed_phases: 2
   total_plans: 17
-  completed_plans: 16
-  percent: 94
+  completed_plans: 17
+  percent: 100
 ---
 
 # State: Emmy
 
-**Last updated:** 2026-04-20
-**Updated by:** roadmapper (initial creation)
+**Last updated:** 2026-04-21
+**Updated by:** executor (Phase 2 close — Plan 02-09)
 
 ---
 
@@ -23,7 +23,7 @@ progress:
 
 **Project:** Emmy — fully-local coding agent on NVIDIA DGX Spark
 **Core Value:** A local coding agent good enough to be the author's daily driver, structured rigorously enough to be a public research artifact others can reproduce — with no cloud dependency anywhere in the loop.
-**Current Focus:** Phase 02 — pi-harness-mvp-daily-driver-baseline
+**Current Focus:** Phase 03 — observability-agent-loop-hardening-lived-experience (planning pending)
 
 **Authoritative documents:**
 
@@ -40,18 +40,21 @@ progress:
 
 ## Current Position
 
-Phase: 02 (pi-harness-mvp-daily-driver-baseline) — EXECUTING
-Plan: 9 of 9 (02-08 landed 2026-04-21; 02-01 + 02-02 + 02-03 + 02-04 + 02-06 + 02-07 + 02-08 complete; next = 02-09 SC-1 walkthrough + CLOSEOUT)
-**Phase:** 1 — Serving Foundation + Profile Schema — closed with 3 documented deferrals; see `.planning/phases/01-serving-foundation-profile-schema/01-CLOSEOUT.md`
-**Next:** `/gsd-plan-phase 2` (pi-mono harness — daily-driver bar)
-**Phase Progress:** 100% (8/8 plans landed; 3 plans carry deferrals owned by Phase 5 or Phase 7)
+Phase: 02 (pi-harness-mvp-daily-driver-baseline) — **CLOSED 2026-04-21**
+Plan: 9 of 9 complete (02-01 + 02-02 + 02-03 + 02-04 + 02-06 + 02-07 + 02-08 + 02-09; 02-05 SUPERSEDED by 2026-04-21 structural revision)
+**Phase 1:** Serving Foundation + Profile Schema — closed 2026-04-21 with 3 documented deferrals; see `.planning/phases/01-serving-foundation-profile-schema/01-CLOSEOUT.md`
+**Phase 2:** Pi-Harness MVP — Daily-Driver Baseline — closed 2026-04-21 with SC-1 green + SC-2/3/4/5 pass; 5 Phase-3 wire-through deferrals; see `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-CLOSEOUT.md`
+**Next:** `/gsd-plan-phase 3` (observability + agent-loop hardening + lived-experience)
+**Phase Progress:** 100% (9/9 plans landed; Phase-2-close certified v2 hash `sha256:24be3eea...85d8b`)
+
+**Daily-driver bar: REACHED (end of Phase 2) — 2026-04-21.** SC-1 walkthrough verdict `sc1 green`; author ran pi-emmy against a clean repo, agent completed multi-file task on Qwen3.6 via local vLLM endpoint, no cloud call.
 
 ```
-Phases: [✓][▢][▢][▢][▢][▢][▢]   1/7 phases complete
-Current: Phase 2 (planning pending — daily-driver bar)
+Phases: [✓][✓][▢][▢][▢][▢][▢]   2/7 phases complete
+Current: Phase 3 (planning pending — observability + agent-loop hardening + lived-experience)
 ```
 
-**Daily-driver bar:** end of Phase 2
+**Daily-driver bar:** end of Phase 2 — **REACHED**
 **Research-artifact bar:** end of Phase 5
 **Public artifact bar:** end of Phase 7
 
@@ -61,11 +64,11 @@ Current: Phase 2 (planning pending — daily-driver bar)
 
 | Metric | Value |
 |--------|-------|
-| Phases complete | 1 / 7 |
-| v1 requirements complete | ongoing (Phase 2 in flight) |
-| Critical pitfalls addressed | 1 / 8 (Pitfall #8 reproducibility via uv.lock + bun.lock discipline) |
-| Daily-driver readiness | Not yet (blocked on Phase 2 plans 02-09) |
-| Research-artifact readiness | Not yet (blocked on Phase 5) |
+| Phases complete | 2 / 7 |
+| v1 requirements complete | 23 / 66 Phase-2 REQ-IDs closed (HARNESS/TOOLS/CONTEXT/SERVE/UX) + Phase-1-deferred tracking ongoing |
+| Critical pitfalls addressed | 5 / 8 (#1 KV theory, #3 grammar fights, #5 more-prompting via SC-3 three-run discipline, #6 SP-delivery via SP_OK canary, #8 hidden cloud deps via bun.lock + uv.lock + air-gap) |
+| Daily-driver readiness | **REACHED 2026-04-21** (SC-1 green on Qwen3.6-35B-A3B-FP8 via pi-emmy --print) |
+| Research-artifact readiness | Not yet (blocked on Phase 5 eval harness) |
 
 ### Per-plan execution log
 
@@ -75,6 +78,7 @@ Current: Phase 2 (planning pending — daily-driver bar)
 | Phase 02 P04 | 19min | 2 tasks | 20 files |
 | Phase 02 P07 | 8min  | 1 task + 1 Phase-1-schema patch | 21 files (12 created, 7 modified, 2 deleted) |
 | Phase 02 P08 | 135min | 2 tasks | 30 files (25 created, 5 modified) |
+| Phase 02 P09 | ~25min | 2 tasks (1 SC-1 walkthrough checkpoint + 1 CLOSEOUT) | 7 files (3 created, 4 modified) + 4 live bug-fix commits (2c22018, 4049d95, 85fa910, a17f4a9) |
 
 ---
 
@@ -140,22 +144,54 @@ Phases with standard patterns (skip research-phase per SUMMARY.md):
 
 ## Session Continuity
 
-**Current position:** Phase 1 — two gap-closure plans in flight (both blocked on DGX Spark operator):
+**Current position:** Phase 2 CLOSED 2026-04-21 with SC-1 verdict `sc1 green`. Phase 1 and Phase 2 both have full closeouts on disk; Phase 3 planning pending.
 
-- **Plan 01-06 (SC-1 throughput):** Task 1 COMPLETE on-machine; Task 2 PENDING (DGX Spark sweep, ~60-90 min GPU)
-- **Plan 01-07 (SC-5 sampler + reproducibility):** Task 1 COMPLETE on-machine (GpuSampler `[N/A]` per-field fix, 7 tests GREEN, commits `4214b71` + `b510d1b`); Tasks 2 + 3 PENDING (two 2-hour thermal replays on DGX Spark)
+### Phase 2 close summary
 
-**Plan 01-06 Task 2 resume signal (from 01-06-PLAN.md):** Type `"sc1 resolved"` once the operator has (a) executed the sweep producing `runs/*-phase1-sc1-throughput-sweep/results.json` with 5 candidate entries + decision field, (b) rewritten PROFILE_NOTES.md §"SC-1 throughput gap" per Template A (winner) or Template B (accept-architectural), (c) if winner, applied the knob to serving.yaml, (d) recomputed profile.yaml.hash + confirmed `emmy profile validate` exits 0, (e) committed, and (f) `uv run pytest tests/unit -q` is all-green. See `.planning/phases/01-serving-foundation-profile-schema/01-06-SUMMARY.md` for the full runbook.
+- **9 plans landed** (02-01..02-04, 02-06..02-09; 02-05 SUPERSEDED by 2026-04-21 structural revision). See `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-CLOSEOUT.md`.
+- **All 5 Success Criteria pass:**
+  - SC-1 daily-driver walkthrough: `sc1 green` — author ran `pi-emmy --print` against `/tmp/emmy-sc1-walkthrough/` (clean repo), agent created `src/{foo,bar,baz}.ts` + tests + ran `bun test` green, no cloud call. Evidence: `runs/phase2-sc1/walkthrough.md` + `runs/phase2-sc1/transcript.json`.
+  - SC-2 hash-anchored edit regression: pass (0 hash-anchored failures vs 1 baseline failure; Hashline win on sc2_05 near-duplicate line). Evidence: `runs/phase2-sc2/report.json`.
+  - SC-3 XGrammar parse rate: pass at 1.0 aggregate across 100 calls + 2 informational baselines (D-14 no-grammar baseline at 1.0; W3/Pitfall-#5 no_per_tool_sampling counterfactual at 1.0). Reactive retry path fired zero times. Evidence: `runs/phase2-sc3/{report,baseline,no_per_tool_sampling}.json`.
+  - SC-4 MCP dispatch + Unicode poison rejection: pass (4/4 Cf/Co/Cs/bidi categories rejected; 2/2 fs-server tools registered flat + dispatched). Evidence: `runs/phase2-sc4/report.json`.
+  - SC-5 prompt-hash + AGENTS.md + honest max_model_len: pass (3 runs → 1 unique sha256; max_input_tokens=114688 = computed). Evidence: `runs/phase2-sc5/report.json`.
+- **23 Phase-2 REQ-IDs closed** in REQUIREMENTS.md traceability (HARNESS-01/02/03/04/06/07/10, TOOLS-01..09, CONTEXT-01/03/04/05, SERVE-05, UX-01/05). Five are flagged "Done †" — library shipped + tested + evidence captured, pi-pipeline wire-through deferred to Phase 3.
+- **Profile hash trajectory:** v1 unchanged at `sha256:b91e747...21913` (Phase 1 close); v2 new at `sha256:24be3eea0067102f1f61bd32806a875d019fe02cb114697cd5f3ca4e39985d8b` (Phase-2-close certified; PROFILE_NOTES validation_runs extended in Plan 08).
+- **Phase-1-schema patch** committed as `88e48a4` (separate dated commit per plan Step 0 instruction).
+- **SC-1 findings — 4 live bug fixes committed inline:** `2c22018` (install-root path), `4049d95` (uv cwd), `85fa910` (real pi AgentSession wire-through for --print), `a17f4a9` (`<think>` strip stopgap). Full narrative in `runs/phase2-sc1/walkthrough.md` + `02-CLOSEOUT.md` § SC-1 findings.
 
-**Plan 01-07 Task 2 resume signal (from 01-07-PLAN.md):** Type `"sc5 floors recorded"` once the operator has (a) confirmed `uv run pytest tests/unit/test_thermal_sampler.py -x -q` is 7/7 GREEN on the DGX Spark, (b) completed the second 2-hour `--record-floors` replay with exit 0, (c) confirmed `PROFILE_NOTES.md measured_values.gpu_clock_p5/p50_hour2_mhz` are both non-zero and within 500-5000 MHz, (d) extended `validation_runs` to ≥2 entries, (e) confirmed `uv run emmy profile validate` exits 0, (f) committed the feat. See `.planning/phases/01-serving-foundation-profile-schema/01-07-SUMMARY.md` for the full runbook.
+### Phase 3 carry-forward (from 02-CLOSEOUT.md § Carry-forward)
 
-**Plan 01-07 Task 3 resume signal (depends on Task 2 being complete first):** Type `"sc5 reproducibility green"` once the third 2-hour `--assert-floors` replay exits 0 with "All floors pass", `validation_runs` has ≥3 entries, `emmy profile validate` exits 0, and the feat commit lands.
+Five documented architectural deferrals — libraries shipped + tested, only pi-pipeline wire-through remains:
 
-**Plan 01-08 Task 3 resume signal:** Type `"sc4 certified"` once the operator has (a) registered the self-hosted DGX Spark runner with label `dgx-spark` per `docs/ci-runner.md` §1-§7, (b) run `./scripts/trigger_airgap_ci.sh` from a feature branch (not main) and observed the PR create, (c) both `profile-hash-integrity` AND `airgap-replay` jobs on the PR completed GREEN, (d) `./scripts/verify_airgap_ci.sh` exited 0 with the "airgap-report OK: passes=True, 4 layers green, failures=[]" summary, (e) the airgap-report.json artifact has been committed under `.planning/phases/01-serving-foundation-profile-schema/evidence/airgap-report-sc4-certification.json`, and (f) `uv run pytest tests/unit -q` is all-green. See `.planning/phases/01-serving-foundation-profile-schema/01-08-SUMMARY.md` and `docs/airgap-green-run.md` for the full runbook.
+1. `@emmy/provider` → pi's `streamSimple` hook via `BeforeProviderRequestEvent`.
+2. Hash-anchored edit as pi's `customTools` override (swap pi's built-in edit for `editHashline`).
+3. MCP bridge (`registerMcpServers`) as pi tool source via `customTools`.
+4. Emmy 3-layer prompt assembly through `BeforeProviderRequestEvent` (currently computed-and-logged; pi builds its own system prompt at request time).
+5. `chat_template_kwargs.enable_thinking:false` at request level (fix `a17f4a9` stopgap — proper fix is same scope as deferral #1).
 
-**Next action (operator):** `/gsd-execute-phase 1` with whichever of the four resume signals arrives first. Three of the DGX Spark tasks can be serialised in any order (01-06 Task 2, 01-07 Task 2, 01-08 Task 3 are independent); 01-07 Task 3 must follow 01-07 Task 2. 01-08 Task 3 is the lowest-GPU-cost of the four (~5-10 min CI time vs. 2-hour thermal replays) and is a reasonable first action after runner registration.
+Alongside ROADMAP-declared Phase-3 scope: Langfuse v3 + OTel GenAI semconv (HARNESS-09 + TELEM-01/02/03), per-profile compaction (HARNESS-05 + CONTEXT-02), GPU/KV/spec-accept TUI footer (UX-02), offline-OK badge (UX-03), lived-experience rating JSONL.
 
-**Resume signal:** STATE.md current focus + ROADMAP.md Phase 1 success criteria together fully specify what "Phase 1 done" means. Plans must satisfy success criteria 1–5 of Phase 1 to advance. SC-1 closure gates Plan 01-06; SC-5 closure (sampler + reproducibility) gates Plan 01-07.
+### Four-way regression green at Phase 2 close
+
+- `bun test` → 192 pass / 0 fail / 499 expect() across 21 files
+- `bun run typecheck` → all 4 packages exit 0
+- `uv run pytest tests/unit -q` → 137 passed / 1 skipped (shellcheck) — unchanged from Phase 1 baseline
+- `uv run emmy profile validate profiles/qwen3.6-35b-a3b/v{1,2}/` → both exit 0
+
+### Phase 1 deferrals (still open, ownership unchanged)
+
+Three Phase 1 items documented as deferred per `01-CLOSEOUT.md`. They are NOT blockers for Phase 2's close nor Phase 3's start:
+
+- **SC-1 throughput (01-06 Task 2):** DGX Spark sweep pending, ~60-90 min GPU. Resume signal: `"sc1 resolved"`.
+- **SC-5 sampler re-validation (01-07 Tasks 2+3):** two 2-hour thermal replays pending. Resume signals: `"sc5 floors recorded"` / `"sc5 reproducibility green"`.
+- **SC-4 air-gap CI wrapper (01-08 Task 3):** self-hosted runner registration + CI trigger, ~5-10 min CI time. Resume signal: `"sc4 certified"`.
+
+All three are operator-gated (DGX Spark GPU time); each has a documented runbook in the corresponding SUMMARY.md.
+
+**Next action:** `/gsd-plan-phase 3` — start Phase 3 planning (observability + agent-loop hardening + lived-experience). Phase 1 deferrals can be closed opportunistically whenever operator time allows.
+
+**Resume signal:** Phase 2 is closed; no pending resume signal for this phase. Phase 3 has not been planned yet.
 
 ---
 
@@ -174,5 +210,7 @@ Phases with standard patterns (skip research-phase per SUMMARY.md):
 **Plan 02-04 completed:** 2026-04-21T22:39Z — commits `44c9267` (Task 1 RED: session primitives + transcript tests) + `9e4ac4d` (Task 1 GREEN: profile-loader + prompt-assembly + sp-ok-canary + max-model-len + session-transcript with B3 + W4 + W1 fixes) + `5f85527` (Task 2 RED: session + cli + integration tests) + `e1ea63a` (Task 2 GREEN: real pi runtime adapter + profile-validate pre-flight + pi-emmy CLI with W2 + W5 + B2 fixes). SUMMARY.md at `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-04-SUMMARY.md`. 53 new @emmy/ux tests across 8 files (37 Task 1 + 16 Task 2), 1 skipped Plan-07 regression with `TODO(plan-07)` marker. `pi-emmy --help` works after `bun link`. Rule 3 deviation: CLI tests refactored to hybrid subprocess/in-process model because the sandbox does not route subprocess→parent localhost traffic to Bun.serve mocks. Full Bun suite: 191 pass / 1 skip / 0 fail across 21 files. Phase 1 regression holds: 137/137 unit tests. **Next (Wave 3):** Plan 02-07 (profile v2 fill + hash lock + un-skip regression) unblocks 02-08 (SC-2/3/4/5 evidence runners) and 02-09 (SC-1 daily-driver walkthrough CLOSEOUT).
 
 **Plan 02-07 completed:** 2026-04-21T22:56Z — commits `88e48a4` (Phase-1-schema patch: `ToolsConfig.grammar: Optional[str]` → `Optional[GrammarConfig]`; v1 still validates) + `979a8d0` (feat: fill v2 harness.yaml with nested grammar shape + ship 8 tool schemas + XGrammar Lark + 2 prompt files + PROFILE_NOTES provenance appendix + recompute v2 hash + un-skip Plan-04 regression). SUMMARY.md at `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-07-SUMMARY.md`. Every `TODO(Phase-2)` in v2/harness.yaml filled with a real value; `context.max_input_tokens = 114688` (honest SC-5 derivation); `tools.grammar.{path: grammars/tool_call.lark, mode: reactive}` (NESTED shape per D-11). v2 hash recomputed: `sha256:b91e747…` → `sha256:0025799f…`; KNOWN-STALE comment auto-stripped. `bun test` → 192 pass / 0 fail (was 191 pass + 1 skip; +1 un-skipped SC-5 regression). `bun run typecheck` all 4 packages exit 0. `uv run pytest tests/unit -q` → 137 pass / 1 skip unchanged from Phase 1 baseline. `uv run emmy profile validate` → v1 AND v2 both exit 0. Rule 3 deviation (auto-fixed): js-yaml + @types/js-yaml + @emmy/ux added to root `package.json` devDeps so `scripts/compute_max_input_tokens.ts` resolves from repo root; Rule 1 deviation (auto-fixed): PROFILE_NOTES.md false-positive TODO narrative reworded from "TODO(Phase-2)" to "Phase-2-deferred". **Next (Wave 3):** Plan 02-08 (SC-2/3/4/5 evidence runners) targeting the now-validated v2 bundle; Plan 02-09 (SC-1 walkthrough + CLOSEOUT) referencing schema patch SHA `88e48a4` in the addendum.
+
+**Phase 2 CLOSED:** 2026-04-21 — Plan 02-09 completed; SC-1 walkthrough verdict `sc1 green` (author ran pi-emmy --print against /tmp/emmy-sc1-walkthrough; agent created src/{foo,bar,baz}.ts + tests; bun test 3/3 green; no cloud call). Four live bug fixes landed during the walkthrough cycle (`2c22018` + `4049d95` + `85fa910` + `a17f4a9`) + CLOSEOUT + REQUIREMENTS flip (23 REQ-IDs) + ROADMAP + STATE. Daily-driver bar REACHED. Phase-2-close certified v2 hash: `sha256:24be3eea0067102f1f61bd32806a875d019fe02cb114697cd5f3ca4e39985d8b`. Five architectural deferrals carry to Phase 3 (library-available, pi-pipeline wire-through pending). See `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-CLOSEOUT.md`. **Next:** `/gsd-plan-phase 3` — observability + agent-loop hardening + lived-experience.
 
 **Plan 02-08 completed:** 2026-04-21 — commits `dfb8627` (test: SC-2 fixtures + runner + report (verdict=pass) + SC-3 corpora + corpus_fill) + `507623f` (feat: SC-3/4/5 evidence captured + PROFILE_NOTES validation_runs + v2 hash re-locked). SUMMARY.md at `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-08-SUMMARY.md`. Four automated SC drivers shipped and executed against live emmy-serve (127.0.0.1:8002, Qwen3.6-35B-A3B-FP8). All four pass verdicts locked: SC-2 (hash-anchored 0-failures vs baseline 1-failure; Hashline disambiguation win on sc2_05); SC-3 reactive (syn/real/agg = 1.0/1.0/1.0 over 100 calls, verdict=pass per D-12 graduated SLA) + SC-3 disabled baseline (D-14; informational, same 1.0) + SC-3 no_per_tool_sampling (W3/Pitfall-#5; informational, same 1.0); SC-4 (4/4 poison categories rejected, 2/2 in-process MCP fs-server tools dispatched flat); SC-5 (3/3 sha256 stable, AGENTS.md verbatim, max_input_tokens committed=computed=114688). Harness.yaml mutation-restore discipline (tmp backup + try/finally + post-run `uv run emmy profile validate` gate) held across all three SC-3 variants. v2 profile hash re-recomputed at Phase 2 close: `sha256:0025799f...53fa41` → `sha256:24be3eea...85d8b` (PROFILE_NOTES.md content changed; validation_runs extended with 6 Phase-2 SC entries). `bun test` → 192 pass / 0 fail; `uv run pytest tests/unit -q` → 137 pass / 1 skip (unchanged). `packages/*/src/` untouched per plan invariant (plan 08 is pure evidence-capture). 6 Rule-based auto-fix deviations all folded into the two task commits. **Next (Wave 5):** Plan 02-09 (SC-1 daily-driver walkthrough + Phase 2 CLOSEOUT) references the Phase-1-schema-patch SHA `88e48a4` + Phase-2-close v2 hash `sha256:24be3eea...85d8b`.
