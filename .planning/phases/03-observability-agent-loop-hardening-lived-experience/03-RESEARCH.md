@@ -1072,28 +1072,33 @@ SC-1 says: "Opening a self-hosted Langfuse instance after a session shows one tr
 
 ---
 
-## Open Questions
+## Open Questions (RESOLVED)
+
+> All four questions closed 2026-04-21 during plan-checker revision cycle. Resolution paths reflected in Plans 03-01..03-07.
 
 1. **Literal Alt+Up vs Shift+Alt+Up for TELEM-02.**
    - What we know: pi 0.68 binds `alt+up` to `app.message.dequeue` + `app.models.reorderUp`. Collision guaranteed.
    - What's unclear: Is the D-18 "Alt+Up" spec verbatim, or can emmy use `shift+alt+up` with a PROFILE_NOTES ADR entry?
    - Recommendation: **Planner asks the user at plan-phase entry**, OR uses `on("input", ...)` interception path (Pattern 4) which shadows pi's dequeue for emmy users — acceptable because emmy doesn't expose the follow-up queue.
+   - **RESOLVED:** Literal Alt+Up/Down via pi `on('input', ...)` interceptor. Rationale: TELEM-02 spec says "Alt+Up/Down" verbatim; intercepting via `on('input', ...)` BEFORE pi's keybind resolution shadows pi's `app.message.dequeue`/`app.models.reorderUp` (acceptable — emmy doesn't expose queue semantics). Landed in Plan 03-05 Task 2 (packages/emmy-ux/src/feedback-ui.ts).
 
 2. **Profile version bump: v2→v3 (schema change) or additive v2-with-null-defaults?**
    - What we know: D-15 introduces `harness.yaml.context.compaction.*` (5 new keys) + `tools.web_fetch.allowlist` (1 new key). Any field change bumps profile hash per Phase 1 D-02.
    - What's unclear: whether the planner should bump v2→v3 as a coordinated commit (clean break) or keep v2 and ship a PATCH that adds optional fields with null defaults (allows future v3 to be an intentional policy bump separately).
    - Recommendation: **v2→v3 coordinated bump** — matches Phase 2 v1→v2 precedent + keeps the hash trajectory clear + future Phase 4's Gemma 4 profile lands on v1 of its own directory tree alongside qwen v3.
+   - **RESOLVED:** Coordinated v2→v3 bump in Plan 03-07. Rationale: Phase 1 D-02 content-hash contract demands any schema change bumps profile hash; batching compaction + web_fetch.allowlist + telemetry toggles into one v3 commit is cleaner than three successive hash bumps. Landed in Plan 03-07 Task 1.
 
 3. **Whether `--export-hf` ships parquet or JSONL MVP.**
    - What we know: `datasets.load_dataset("json", data_files=...)` loads JSONL directly. Parquet is optional polish.
    - What's unclear: whether the eventual (Phase 7) public HF dataset MUST be parquet for performance, or JSONL is acceptable.
    - Recommendation: **MVP = JSONL-only** (simpler, zero new deps). Phase 7 publication converts to parquet if performance matters at that point.
+   - **RESOLVED (2026-04-21, user decision):** JSONL-only MVP. Rationale: `datasets.load_dataset('json', data_files=...)` loads JSONL natively with zero deps; parquet + dataset_card.md deferred to Phase 7 publication. CONTEXT.md D-21 amended to reflect JSONL-only deliverable. Plan 03-05 delivers the MVP; dataset_card.md + provenance.json are emmy-authored sidecars (not HF-parquet).
 
 4. **SC-3-class 3-run discipline for compaction prompt variants.**
    - What we know: Pitfall #5 + Phase 2 SC-3 discipline requires full-corpus measurement for any prompt/sampling change.
    - What's unclear: does compaction-prompt count as a "prompt change" triggering the 3-run rule? Compaction prompt lives in `profiles/**/prompts/compact.md` per D-13.
    - Recommendation: **Yes.** Plan the 200-turn SC-2 fixture to run in 3 variants (default compact.md + alternate + `--no-compaction`). Record in PROFILE_NOTES validation_runs.
-
+   - **RESOLVED:** 3-run variant matrix required in Plans 03-03 + 03-07 per CONTEXT Specifics § Pitfall #5 guardrail. `scripts/sc2_200turn_compaction.sh` accepts `--variant={default,alternate,disabled}`; Plan 03-07 Task 1a runs all three and records verdicts in v3/PROFILE_NOTES.md `## Validation Runs — Phase 3 SC-2 3-Run Matrix`. Alternate prompt lives at `profiles/qwen3.6-35b-a3b/v3/prompts/compact.alternate.md`.
 ---
 
 ## Sources
@@ -1177,7 +1182,7 @@ SC-1 says: "Opening a self-hosted Langfuse instance after a session shows one tr
 | Alt+Up collision analysis | HIGH | Pi keybindings source confirms conflict; planner must decide resolution |
 | Pitfall coverage | HIGH | Mapped to PITFALLS.md entries + Phase 2 CLOSEOUT SP_OK discipline |
 
-### Open Questions
+### Open Questions (RESOLVED — see § Open Questions (RESOLVED) above)
 
 - Literal Alt+Up vs Shift+Alt+Up (planner or discuss-phase to resolve) — documented in Open Questions #1
 - Profile v2→v3 coordinated bump vs additive patch — recommendation given, planner confirms
