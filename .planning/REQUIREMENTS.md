@@ -38,8 +38,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **HARNESS-01
 **: System is built on `@mariozechner/pi-coding-agent` v0.68.0 (pi-mono); harness extends pi via its public extension API rather than forking
-- [ ] **HARNESS-02**: Custom pi `registerProvider` for the local vLLM endpoint, including the prior repo's compat-proxy lessons (e.g. strip `reasoning_content` if needed)
-- [ ] **HARNESS-03**: Tool-call format is owned by the profile (not hardcoded); each model uses what it parses best (Hermes-style XML for Qwen, function calling for Gemma 4)
+- [x] **HARNESS-02**: Custom pi `registerProvider` for the local vLLM endpoint, including the prior repo's compat-proxy lessons (e.g. strip `reasoning_content` if needed)
+- [x] **HARNESS-03**: Tool-call format is owned by the profile (not hardcoded); each model uses what it parses best (Hermes-style XML for Qwen, function calling for Gemma 4)
 - [x] **HARNESS-04
 **: Agent loop is customizable: configurable retry-with-corrective-feedback, layered ReAct stopping conditions, infinite-loop guard, structured (not length-based) tool-result truncation
 - [ ] **HARNESS-05**: Context management is owned by the harness: smart pruning, injection control, file pinning (via pi's `@file`), per-profile compaction policy
@@ -49,28 +49,28 @@ Requirements for initial release. Each maps to roadmap phases.
 **: Sampling control is per-tool / per-task via the profile (planner, editor, critic can use different sampling)
 - [ ] **HARNESS-08**: Multi-model routing is supported within a single model first (profile-routing for planner/editor/critic roles); cross-model routing deferred to v2 unless dual-load proves feasible
 - [ ] **HARNESS-09**: Observability hooks emit OTel GenAI semconv spans across the vLLM ↔ harness boundary; profile fields embedded in every event
-- [ ] **HARNESS-10**: Tool registry is extensible: adding/removing/composing tools is a simple pi extension, no fork required
+- [x] **HARNESS-10**: Tool registry is extensible: adding/removing/composing tools is a simple pi extension, no fork required
 
 ### Tools (TOOLS) — table-stakes coding-agent toolset
 
-- [ ] **TOOLS-01**: `read` (file with line ranges) — pi built-in
-- [ ] **TOOLS-02**: `write` (overwrite file) — pi built-in
+- [x] **TOOLS-01**: `read` (file with line ranges) — pi built-in
+- [x] **TOOLS-02**: `write` (overwrite file) — pi built-in
 - [x] **TOOLS-03
 **: `edit` with hash-anchored format as default (Hashline pattern; documented 6.7→68.3% on 180 tasks for weak models); falls back to plain string-replace only when hashes can't be computed (e.g. binary)
-- [ ] **TOOLS-04**: `bash` (cwd-persistent, timeout, abort, stderr capture) — pi built-in
-- [ ] **TOOLS-05**: `grep` / `find` / `ls` enabled by default in emmy's profile
-- [ ] **TOOLS-06**: `web_fetch` (HTTP GET → markdown) — pi extension; documentation reading allowed (not inference)
+- [x] **TOOLS-04**: `bash` (cwd-persistent, timeout, abort, stderr capture) — pi built-in
+- [x] **TOOLS-05**: `grep` / `find` / `ls` enabled by default in emmy's profile
+- [x] **TOOLS-06**: `web_fetch` (HTTP GET → markdown) — pi extension; documentation reading allowed (not inference)
 - [x] **TOOLS-07
 **: MCP client extension — overrides pi's "no MCP" stance; bridges MCP servers via `@modelcontextprotocol/sdk` so emmy can consume the LF-governed 10k+ MCP server ecosystem
-- [ ] **TOOLS-08**: Diff display of edits inline (post-hoc unified diff, even in YOLO mode)
-- [ ] **TOOLS-09**: TODO/PLAN file pattern (file-based, model reads/writes via edit tool — pi's existing pattern)
+- [x] **TOOLS-08**: Diff display of edits inline (post-hoc unified diff, even in YOLO mode)
+- [x] **TOOLS-09**: TODO/PLAN file pattern (file-based, model reads/writes via edit tool — pi's existing pattern)
 
 ### Context (CONTEXT) — codebase comprehension
 
 - [x] **CONTEXT-01
 **: AGENTS.md / `.pi/SYSTEM.md` discipline; layered global → project → user; example AGENTS.md template shipped for emmy projects
 - [ ] **CONTEXT-02**: Auto-compaction with per-profile policy (Gemma 4 may want different aggressiveness than Qwen 3.6)
-- [ ] **CONTEXT-03**: File pinning via pi's `@file` reference + read-at-session-start
+- [x] **CONTEXT-03**: File pinning via pi's `@file` reference + read-at-session-start
 - [x] **CONTEXT-04
 **: Per-profile prompt-prefix discipline documented (system → AGENTS.md → tool defs → user; never reorder) so prefix caching is maximized
 - [x] **CONTEXT-05
@@ -96,11 +96,11 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### UX (UX) — daily-driver feel
 
-- [ ] **UX-01**: TUI is the primary surface (pi-tui-based)
+- [x] **UX-01**: TUI is the primary surface (pi-tui-based)
 - [ ] **UX-02**: GPU/KV/spec-accept TUI footer (`[GPU 87% • KV 34% • spec accept 71% • tok/s 38]`) — reads `nvidia-smi` + vLLM `/metrics`
 - [ ] **UX-03**: Offline-OK badge — startup audits tool registry; green "OFFLINE OK" if every path is local, red "NETWORK USED" if any tool went external
 - [ ] **UX-04**: Model-swap UX — visible progress during `/profile` swap (`stopping vLLM`, `loading weights X%`, `warmup`, `ready`); no crash UX
-- [ ] **UX-05**: CLI / scripted mode (one-shot prompts, JSON I/O) — pi `print` and `json` modes; needed for eval automation
+- [x] **UX-05**: CLI / scripted mode (one-shot prompts, JSON I/O) — pi `print` and `json` modes; needed for eval automation
 - [ ] **UX-06**: SDK / RPC mode (programmatic embedding) — eval harness uses pi SDK directly
 
 ### Reproducibility (REPRO) — research-artifact infrastructure
@@ -167,7 +167,7 @@ Which phases cover which requirements. Updated by roadmapper 2026-04-20.
 | SERVE-02 | Phase 1 | Pending |
 | SERVE-03 | Phase 4 | Pending |
 | SERVE-04 | Phase 1 | Pending |
-| SERVE-05 | Phase 2 | Pending |
+| SERVE-05 | Phase 2 | Done |
 | SERVE-06 | Phase 6 | Pending |
 | SERVE-07 | Phase 1 | Pending |
 | SERVE-08 | Phase 1 | Pending |
@@ -183,30 +183,30 @@ Which phases cover which requirements. Updated by roadmapper 2026-04-20.
 | PROFILE-07 | Phase 4 | Pending |
 | PROFILE-08 | Phase 4 | Pending |
 | PROFILE-09 | Phase 1 | Pending |
-| HARNESS-01 | Phase 2 | Pending |
-| HARNESS-02 | Phase 2 | Pending |
-| HARNESS-03 | Phase 2 | Pending |
-| HARNESS-04 | Phase 2 | Pending |
+| HARNESS-01 | Phase 2 | Done |
+| HARNESS-02 | Phase 2 | Done † |
+| HARNESS-03 | Phase 2 | Done |
+| HARNESS-04 | Phase 2 | Done |
 | HARNESS-05 | Phase 3 | Pending |
-| HARNESS-06 | Phase 2 | Pending |
-| HARNESS-07 | Phase 2 | Pending |
+| HARNESS-06 | Phase 2 | Done † |
+| HARNESS-07 | Phase 2 | Done † |
 | HARNESS-08 | Phase 4 | Pending |
 | HARNESS-09 | Phase 3 | Pending |
-| HARNESS-10 | Phase 2 | Pending |
-| TOOLS-01 | Phase 2 | Pending |
-| TOOLS-02 | Phase 2 | Pending |
-| TOOLS-03 | Phase 2 | Pending |
-| TOOLS-04 | Phase 2 | Pending |
-| TOOLS-05 | Phase 2 | Pending |
-| TOOLS-06 | Phase 2 | Pending |
-| TOOLS-07 | Phase 2 | Pending |
-| TOOLS-08 | Phase 2 | Pending |
-| TOOLS-09 | Phase 2 | Pending |
-| CONTEXT-01 | Phase 2 | Pending |
+| HARNESS-10 | Phase 2 | Done |
+| TOOLS-01 | Phase 2 | Done |
+| TOOLS-02 | Phase 2 | Done |
+| TOOLS-03 | Phase 2 | Done † |
+| TOOLS-04 | Phase 2 | Done |
+| TOOLS-05 | Phase 2 | Done |
+| TOOLS-06 | Phase 2 | Done |
+| TOOLS-07 | Phase 2 | Done † |
+| TOOLS-08 | Phase 2 | Done |
+| TOOLS-09 | Phase 2 | Done |
+| CONTEXT-01 | Phase 2 | Done |
 | CONTEXT-02 | Phase 3 | Pending |
-| CONTEXT-03 | Phase 2 | Pending |
-| CONTEXT-04 | Phase 2 | Pending |
-| CONTEXT-05 | Phase 2 | Pending |
+| CONTEXT-03 | Phase 2 | Done |
+| CONTEXT-04 | Phase 2 | Done |
+| CONTEXT-05 | Phase 2 | Done |
 | EVAL-01 | Phase 5 | Pending |
 | EVAL-02 | Phase 5 | Pending |
 | EVAL-03 | Phase 5 | Pending |
@@ -219,16 +219,22 @@ Which phases cover which requirements. Updated by roadmapper 2026-04-20.
 | TELEM-01 | Phase 3 | Pending |
 | TELEM-02 | Phase 3 | Pending |
 | TELEM-03 | Phase 3 | Pending |
-| UX-01 | Phase 2 | Pending |
+| UX-01 | Phase 2 | Done |
 | UX-02 | Phase 3 | Pending |
 | UX-03 | Phase 3 | Pending |
 | UX-04 | Phase 4 | Pending |
-| UX-05 | Phase 2 | Pending |
+| UX-05 | Phase 2 | Done |
 | UX-06 | Phase 5 | Pending |
 | REPRO-01 | Phase 1 | Pending |
 | REPRO-02 | Phase 7 | Pending |
 | REPRO-03 | Phase 1 | Pending |
 | REPRO-04 | Phase 1 | Pending |
+
+**Status legend:**
+
+- **Done** — shipped + tested + evidence captured in phase close-out.
+- **Done †** — library shipped, unit-tested, and evidence captured via eval driver or SC runner; the pi-pipeline wire-through (pi `customTools` / `BeforeProviderRequestEvent` / `streamSimple`) is a documented Phase-3 deferral per `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-CLOSEOUT.md` § Carry-forward. Counts as complete against the REQ-ID (the library is the authoritative deliverable; the pi-side hookup is integration).
+- **Pending** — not yet started.
 
 **Coverage:**
 
