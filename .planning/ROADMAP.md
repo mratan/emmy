@@ -14,7 +14,7 @@
 ## Phases
 
 - [x] **Phase 1: Serving Foundation + Profile Schema** — emmy-serve with NGC vLLM container, Qwen3.6 end-to-end, profile registry on disk, KV/thermal/air-gap/SP_OK validation. **Closed 2026-04-21** with 3 documented deferrals (SC-1 architectural, SC-4→Phase 7, SC-5 re-validation→Phase 5); see 01-CLOSEOUT.md.
-- [ ] **Phase 2: Pi-Harness MVP — Daily-Driver Baseline** — pi-coding-agent with custom vLLM provider, full P1 toolset (hash-anchored edits default + MCP + web_fetch), grammar-constrained tool calls, AGENTS.md discipline; author can daily-drive
+- [x] **Phase 2: Pi-Harness MVP — Daily-Driver Baseline** — pi-coding-agent with custom vLLM provider, full P1 toolset (hash-anchored edits default + MCP + web_fetch), grammar-constrained tool calls, AGENTS.md discipline; author can daily-drive. **Closed 2026-04-21** with SC-1 green + SC-2/3/4/5 pass; v2 profile hash `sha256:24be3eea...85d8b`; 5 architectural wire-through items carry to Phase 3. See `02-CLOSEOUT.md`.
 - [ ] **Phase 3: Observability + Agent-Loop Hardening + Lived-Experience** — Langfuse v3 + OTel GenAI semconv, smart context management with per-profile compaction, lived-experience telemetry (Alt+Up/Down), GPU/KV TUI footer, offline-OK badge
 - [ ] **Phase 4: Gemma 4 Profile + Profile System Maturity** — second first-class model proves the abstraction; `/profile` atomic swap with progress UX; within-model planner/editor/critic routing
 - [ ] **Phase 5: Eval Harness + Reproducible Benchmark Suite** — eval runner imports harness via SDK; terminal-bench 2.0 + prior Phase 1 prompts + SWE-bench Verified + LiveCodeBench; ≥3 samples + std + provenance + executable-paired-with-judge
@@ -123,7 +123,7 @@ Plans:
 - [x] 02-06-PLAN.md — @emmy/tools (part 2): 8 native tools (read/write/edit/bash/grep/find/ls/web_fetch) + MCP bridge + Unicode poison check (completed 2026-04-21; commits 6a23d40 + 42190b6 + 59e4258 + c5c8f4a + 2d5c358)
 - [x] 02-07-PLAN.md — Profile v2 fill: nested tools.grammar shape + verified max_model_len + grammar + schemas + prompts + recompute hash + un-skip regression (completed 2026-04-21; commits 88e48a4 + 979a8d0)
 - [x] 02-08-PLAN.md — SC-2/SC-3 (3 runs: reactive + disabled baseline + no_per_tool_sampling) / SC-4 / SC-5 evidence + PROFILE_NOTES validation_runs (completed 2026-04-21; commits dfb8627 + 507623f; all 4 SC verdicts=pass; v2 hash sha256:0025799f→sha256:24be3eea)
-- [ ] 02-09-PLAN.md — SC-1 daily-driver walkthrough checkpoint (the only non-autonomous plan) + CLOSEOUT + REQUIREMENTS traceability + ROADMAP/STATE advance
+- [x] 02-09-PLAN.md — SC-1 daily-driver walkthrough checkpoint (the only non-autonomous plan) + CLOSEOUT + REQUIREMENTS traceability + ROADMAP/STATE advance (completed 2026-04-21; SC-1 verdict green; 4 live bug fixes 2c22018/4049d95/85fa910/a17f4a9; CLOSEOUT + 23 REQ-IDs closed)
 
 ---
 
@@ -250,8 +250,8 @@ Plans:
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Serving Foundation + Profile Schema | 0/? | Not started | - |
-| 2. Pi-Harness MVP — Daily-Driver Baseline | 0/? | Not started | - |
+| 1. Serving Foundation + Profile Schema | 8/8 | Closed (with 3 documented deferrals) | 2026-04-21 |
+| 2. Pi-Harness MVP — Daily-Driver Baseline | 9/9 | Closed (with 5 Phase-3 wire-through deferrals) | 2026-04-21 |
 | 3. Observability + Agent-Loop Hardening + Lived-Experience | 0/? | Not started | - |
 | 4. Gemma 4 Profile + Profile System Maturity | 0/? | Not started | - |
 | 5. Eval Harness + Reproducible Benchmark Suite | 0/? | Not started | - |
@@ -303,3 +303,4 @@ Hash-anchored edits (P1 differentiator from FEATURES.md) land in P2 as the **def
 *Granularity: Standard (5–8 phases)*
 *Total phases: 7*
 *Updated: 2026-04-21 — Phase 1 extended with 3 gap-closure plans (01-06/07/08) from VERIFICATION.md*
+*Updated: 2026-04-21 — Phase 2 closed; SC-1 green; 23 REQ-IDs flipped to Done in REQUIREMENTS.md; v2 profile hash sha256:24be3eea...85d8b certified-at-close*
