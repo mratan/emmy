@@ -1,0 +1,95 @@
+name: Air-gap Phase 3 — Dual-Stack (emmy-serve + Langfuse compose)
+
+# Phase 3 Plan 03-07 Task 2 — extends Phase 1's airgap.yml to cover the
+# Phase-3 Langfuse OTel observability stack. Asserts zero outbound non-loopback
+# traffic while both emmy-serve AND Langfuse compose (6 digest-pinned services)
+# are running under a 50-turn synthetic replay.
+#
+# Trigger: manual dispatch OR PR touching observability/ or @emmy/telemetry.
+# Runner: self-hosted DGX Spark (same runner as Phase 1 airgap-replay job —
+#         registration per Phase 1 Plan 01-08 Task 3 precedent; deferral
+#         carried forward in 03-CLOSEOUT.md).
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "observability/**"
+      - "packages/emmy-telemetry/**"
+      - "scripts/start_observability.sh"
+      - "scripts/stop_observability.sh"
+      - "scripts/airgap_phase3_replay.sh"
+      - "emmy_serve/airgap/ci_verify_phase3.py"
+      - ".github/workflows/airgap-phase3.yml"
+      - "profiles/**/harness.yaml"
+
+concurrency:
+  group: airgap-phase3-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  airgap_phase3_dry_run:
+    # Runs on ubuntu-latest — no GPU needed. Asserts the Phase-3 validator
+    # script itself compiles + its config sanity passes. Cheap gate that
+    # catches scaffolding regressions before the heavy self-hosted job.
+    name: Dry-run (config + prereq sanity)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: "latest"
+      - name: Sync deps
+        run: uv sync --all-extras
+      - name: Dry-run the Phase-3 validator
+        run: |
+          uv run python -m emmy_serve.airgap.ci_verify_phase3 --dry-run --profile qwen3.6-35b-a3b/v3
+      - name: Validate v3 profile
+        run: |
+          uv run emmy profile validate profiles/qwen3.6-35b-a3b/v3/
+
+  airgap_phase3:
+    # Full dual-stack air-gap replay. Requires self-hosted DGX Spark runner
+    # registered per Phase 1 Plan 01-08 Task 3 (still operator-gated at
+    # Phase-3 close; this job sits green on the workflow dispatch side
+    # pending runner registration).
+    name: Dual-stack replay on DGX Spark
+    needs: airgap_phase3_dry_run
+    runs-on: [self-hosted, dgx-spark]
+    timeout-minutes: 45
+    env:
+      PROFILE: profiles/qwen3.6-35b-a3b/v3
+      PORT: "8002"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Sync deps
+        run: uv sync --all-extras
+
+      - name: Start emmy-serve (Phase 1 --airgap contract)
+        run: |
+          ./scripts/start_emmy.sh --profile "$PROFILE" --port "$PORT" --airgap &
+          # Give the container ~60s to warm up — matches Phase 1 airgap.yml
+          # pattern.
+          sleep 60
+
+      - name: Start Langfuse compose stack (Phase 3 D-09 digest-pinned)
+        run: |
+          bash scripts/start_observability.sh
+
+      - name: Full-run Phase-3 validator (config + dual-stack ss capture)
+        run: |
+          uv run python -m emmy_serve.airgap.ci_verify_phase3 --profile qwen3.6-35b-a3b/v3
+
+      - name: Run 50-turn air-gap replay (reuses Phase 1 fixture)
+        run: |
+          bash scripts/airgap_phase3_replay.sh --turns 50
+
+      - name: Teardown
+        if: always()
+        run: |
+          bash scripts/stop_observability.sh || true
+          docker stop emmy-serve 2>/dev/null || true
+          docker rm emmy-serve 2>/dev/null || true
+          pkill -f 'vllm serve' || true
