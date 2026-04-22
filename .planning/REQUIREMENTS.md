@@ -101,7 +101,8 @@ Requirements for initial release. Each maps to roadmap phases.
 ### UX (UX) — daily-driver feel
 
 - [x] **UX-01**: TUI is the primary surface (pi-tui-based)
-- [ ] **UX-02**: GPU/KV/spec-accept TUI footer (`[GPU 87% • KV 34% • spec accept 71% • tok/s 38]`) — reads `nvidia-smi` + vLLM `/metrics`
+- [x] **UX-02
+**: GPU/KV/spec-accept TUI footer (`[GPU 87% • KV 34% • spec accept 71% • tok/s 38]`) — reads `nvidia-smi` + vLLM `/metrics`
 - [ ] **UX-03**: Offline-OK badge — startup audits tool registry; green "OFFLINE OK" if every path is local, red "NETWORK USED" if any tool went external
 - [ ] **UX-04**: Model-swap UX — visible progress during `/profile` swap (`stopping vLLM`, `loading weights X%`, `warmup`, `ready`); no crash UX
 - [x] **UX-05**: CLI / scripted mode (one-shot prompts, JSON I/O) — pi `print` and `json` modes; needed for eval automation
