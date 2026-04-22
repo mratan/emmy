@@ -19,7 +19,8 @@
 
 import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { ProviderError } from "@emmy/provider";
 import { ToolsError } from "@emmy/tools";
@@ -27,6 +28,19 @@ import { ToolsError } from "@emmy/tools";
 import { SpOkCanaryError, UxError } from "../src/errors";
 import { loadProfile } from "../src/profile-loader";
 import { createEmmySession } from "../src/session";
+
+// Resolve the default profile directory. Precedence:
+//   1. $EMMY_PROFILE_ROOT (explicit override — points at a dir containing `profiles/`)
+//   2. The emmy install root, derived from this script's path (packages/emmy-ux/bin/pi-emmy.ts -> ../../..).
+// Using cwd would break pi-emmy from any repo other than /data/projects/emmy — surfaced by SC-1 walkthrough.
+function defaultProfilePath(): string {
+	const envRoot = process.env.EMMY_PROFILE_ROOT;
+	if (envRoot && envRoot.length > 0) {
+		return resolve(envRoot, "profiles/qwen3.6-35b-a3b/v2");
+	}
+	const scriptDir = dirname(fileURLToPath(import.meta.url));
+	return resolve(scriptDir, "../../..", "profiles/qwen3.6-35b-a3b/v2");
+}
 
 type Mode = "tui" | "print" | "json";
 interface ParsedArgs {
@@ -39,7 +53,7 @@ interface ParsedArgs {
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
-	let profilePath = resolve(process.cwd(), "profiles/qwen3.6-35b-a3b/v2");
+	let profilePath = defaultProfilePath();
 	let baseUrl = "http://127.0.0.1:8002";
 	let mode: Mode = "tui";
 	let prompt: string | undefined;
@@ -73,7 +87,7 @@ function parseArgs(argv: string[]): ParsedArgs {
 function usage(): string {
 	return `pi-emmy — Emmy harness (daily-driver)
   Usage: pi-emmy [--profile <dir>] [--base-url <url>] [--print <prompt>|--json <prompt>|--print-environment]
-  Defaults: --profile profiles/qwen3.6-35b-a3b/v2, --base-url http://127.0.0.1:8002
+  Defaults: --profile <emmy-install>/profiles/qwen3.6-35b-a3b/v2 (override via $EMMY_PROFILE_ROOT or --profile), --base-url http://127.0.0.1:8002
   Exit codes: 0=ready, 1=runtime failure (SP_OK/MCP), 4=prerequisite missing (profile dir, vLLM, or emmy profile validate failed)`;
 }
 
