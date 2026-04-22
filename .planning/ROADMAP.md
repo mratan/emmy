@@ -153,7 +153,7 @@ Plans:
 **Plans**: 7 plans
 
 Plans:
-- [ ] 03-01-PLAN.md — Track B wire-through atomic wave: @emmy/provider streamSimple + tools customTools + 3-layer prompt authoritative + enable_thinking:false + reactive grammar live-path + a17f4a9 <think>-strip removal + SC-1 walkthrough
+- [x] 03-01-PLAN.md — Track B wire-through atomic wave: @emmy/provider streamSimple + tools customTools + 3-layer prompt authoritative + enable_thinking:false + reactive grammar live-path + a17f4a9 <think>-strip removal + SC-1 walkthrough **(complete 2026-04-22; verdict `sc1 green`; commits ab4648f RED + d4cd189 GREEN + 5e0ba97 walkthrough evidence + b18b257 SUMMARY)**
 - [ ] 03-02-PLAN.md — Langfuse v3 compose stack + @emmy/telemetry dual-sink (JSONL + OTLP) + OTel SDK init + EmmyProfileStampProcessor + EMMY_TELEMETRY=off kill-switch (HARNESS-09 + TELEM-01)
 - [ ] 03-03-PLAN.md — @emmy/context package: emmyCompactionTrigger (reuses pi prepareCompaction+compact) + D-14 preservation pre-filter + D-16 fallback + D-12 fail-loud + SC-2 200-turn fixture (HARNESS-05 + CONTEXT-02)
 - [ ] 03-04-PLAN.md — 1 Hz TUI footer: vllm:gpu_cache_usage_perc parser + nvidia-smi TS port (N/A tolerant) + 5-sample sliding-window tok/s rate + graceful degrade + spec-accept placeholder (UX-02)
@@ -262,7 +262,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Serving Foundation + Profile Schema | 8/8 | Closed (with 3 documented deferrals) | 2026-04-21 |
 | 2. Pi-Harness MVP — Daily-Driver Baseline | 9/9 | Closed (with 5 Phase-3 wire-through deferrals) | 2026-04-21 |
-| 3. Observability + Agent-Loop Hardening + Lived-Experience | 0/7 | Planning complete | - |
+| 3. Observability + Agent-Loop Hardening + Lived-Experience | 1/7 | Executing (plan 03-01 complete) | - |
 | 4. Gemma 4 Profile + Profile System Maturity | 0/? | Not started | - |
 | 5. Eval Harness + Reproducible Benchmark Suite | 0/? | Not started | - |
 | 6. Speculative Decoding + Latency Polish | 0/? | Not started | - |

@@ -3,19 +3,19 @@ gsd_state_version: 1.0
 milestone: v0.68.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-04-22T02:30:48.525Z"
+last_updated: "2026-04-22T05:55:00.000Z"
 progress:
   total_phases: 7
   completed_phases: 2
-  total_plans: 17
-  completed_plans: 17
-  percent: 100
+  total_plans: 24
+  completed_plans: 18
+  percent: 75
 ---
 
 # State: Emmy
 
-**Last updated:** 2026-04-21
-**Updated by:** executor (Phase 2 close — Plan 02-09)
+**Last updated:** 2026-04-22
+**Updated by:** executor (Phase 3 — Plan 03-01 complete; sc1 green)
 
 ---
 
@@ -23,7 +23,7 @@ progress:
 
 **Project:** Emmy — fully-local coding agent on NVIDIA DGX Spark
 **Core Value:** A local coding agent good enough to be the author's daily driver, structured rigorously enough to be a public research artifact others can reproduce — with no cloud dependency anywhere in the loop.
-**Current Focus:** Phase 03 — observability-agent-loop-hardening-lived-experience (planning pending)
+**Current Focus:** Phase 03 — observability-agent-loop-hardening-lived-experience
 
 **Authoritative documents:**
 
@@ -40,18 +40,19 @@ progress:
 
 ## Current Position
 
-Phase: 02 (pi-harness-mvp-daily-driver-baseline) — **CLOSED 2026-04-21**
-Plan: 9 of 9 complete (02-01 + 02-02 + 02-03 + 02-04 + 02-06 + 02-07 + 02-08 + 02-09; 02-05 SUPERSEDED by 2026-04-21 structural revision)
+Phase: 03 (observability-agent-loop-hardening-lived-experience) — EXECUTING
+Plan: 2 of 7 (plan 03-01 complete 2026-04-22; plan 03-02 next)
 **Phase 1:** Serving Foundation + Profile Schema — closed 2026-04-21 with 3 documented deferrals; see `.planning/phases/01-serving-foundation-profile-schema/01-CLOSEOUT.md`
 **Phase 2:** Pi-Harness MVP — Daily-Driver Baseline — closed 2026-04-21 with SC-1 green + SC-2/3/4/5 pass; 5 Phase-3 wire-through deferrals; see `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-CLOSEOUT.md`
-**Next:** `/gsd-plan-phase 3` (observability + agent-loop hardening + lived-experience)
-**Phase Progress:** 100% (9/9 plans landed; Phase-2-close certified v2 hash `sha256:24be3eea...85d8b`)
+**Next:** `/gsd-execute-phase 3` — Wave 2 (plan 03-02 Langfuse OTel; Wave 2 must execute sequentially because 03-02+03-03 co-modify session.ts + pi-emmy-extension.ts at before_provider_request seam)
+**Phase 2 Progress:** 100% (9/9 plans landed; Phase-2-close certified v2 hash `sha256:24be3eea...85d8b`)
+**Phase 3 Progress:** 14% (1/7 plans landed; plan 03-01 verdict `sc1 green` 2026-04-22)
 
 **Daily-driver bar: REACHED (end of Phase 2) — 2026-04-21.** SC-1 walkthrough verdict `sc1 green`; author ran pi-emmy against a clean repo, agent completed multi-file task on Qwen3.6 via local vLLM endpoint, no cloud call.
 
 ```
 Phases: [✓][✓][▢][▢][▢][▢][▢]   2/7 phases complete
-Current: Phase 3 (planning pending — observability + agent-loop hardening + lived-experience)
+Current: Phase 3 (executing — 1/7 plans landed; 03-01 complete sc1 green; 03-02 next in Wave 2)
 ```
 
 **Daily-driver bar:** end of Phase 2 — **REACHED**
@@ -79,6 +80,7 @@ Current: Phase 3 (planning pending — observability + agent-loop hardening + li
 | Phase 02 P07 | 8min  | 1 task + 1 Phase-1-schema patch | 21 files (12 created, 7 modified, 2 deleted) |
 | Phase 02 P08 | 135min | 2 tasks | 30 files (25 created, 5 modified) |
 | Phase 02 P09 | ~25min | 2 tasks (1 SC-1 walkthrough checkpoint + 1 CLOSEOUT) | 7 files (3 created, 4 modified) + 4 live bug-fix commits (2c22018, 4049d95, 85fa910, a17f4a9) |
+| Phase 03 P01 | ~3h | 3 tasks (RED + GREEN + SC-1-class walkthrough checkpoint) | 19 files (12 created, 7 modified) |
 
 ---
 
@@ -197,7 +199,7 @@ All three are operator-gated (DGX Spark GPU time); each has a documented runbook
 
 *State initialized: 2026-04-20 by roadmapper*
 
-**Planned Phase:** 2 (Pi-Harness MVP — Daily-Driver Baseline) — 8 plans — 2026-04-21T20:45:37.014Z
+**Planned Phase:** 03 (observability-agent-loop-hardening-lived-experience) — 7 plans — 2026-04-22T04:41:10.629Z
 
 **Plan 01-06 Task 1 completed:** 2026-04-21 — commits `feea40c` (RED) + `742fd9b` (GREEN); SUMMARY.md written; awaiting DGX Spark operator for Task 2.
 
@@ -214,3 +216,5 @@ All three are operator-gated (DGX Spark GPU time); each has a documented runbook
 **Phase 2 CLOSED:** 2026-04-21 — Plan 02-09 completed; SC-1 walkthrough verdict `sc1 green` (author ran pi-emmy --print against /tmp/emmy-sc1-walkthrough; agent created src/{foo,bar,baz}.ts + tests; bun test 3/3 green; no cloud call). Four live bug fixes landed during the walkthrough cycle (`2c22018` + `4049d95` + `85fa910` + `a17f4a9`) + CLOSEOUT + REQUIREMENTS flip (23 REQ-IDs) + ROADMAP + STATE. Daily-driver bar REACHED. Phase-2-close certified v2 hash: `sha256:24be3eea0067102f1f61bd32806a875d019fe02cb114697cd5f3ca4e39985d8b`. Five architectural deferrals carry to Phase 3 (library-available, pi-pipeline wire-through pending). See `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-CLOSEOUT.md`. **Next:** `/gsd-plan-phase 3` — observability + agent-loop hardening + lived-experience.
 
 **Plan 02-08 completed:** 2026-04-21 — commits `dfb8627` (test: SC-2 fixtures + runner + report (verdict=pass) + SC-3 corpora + corpus_fill) + `507623f` (feat: SC-3/4/5 evidence captured + PROFILE_NOTES validation_runs + v2 hash re-locked). SUMMARY.md at `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-08-SUMMARY.md`. Four automated SC drivers shipped and executed against live emmy-serve (127.0.0.1:8002, Qwen3.6-35B-A3B-FP8). All four pass verdicts locked: SC-2 (hash-anchored 0-failures vs baseline 1-failure; Hashline disambiguation win on sc2_05); SC-3 reactive (syn/real/agg = 1.0/1.0/1.0 over 100 calls, verdict=pass per D-12 graduated SLA) + SC-3 disabled baseline (D-14; informational, same 1.0) + SC-3 no_per_tool_sampling (W3/Pitfall-#5; informational, same 1.0); SC-4 (4/4 poison categories rejected, 2/2 in-process MCP fs-server tools dispatched flat); SC-5 (3/3 sha256 stable, AGENTS.md verbatim, max_input_tokens committed=computed=114688). Harness.yaml mutation-restore discipline (tmp backup + try/finally + post-run `uv run emmy profile validate` gate) held across all three SC-3 variants. v2 profile hash re-recomputed at Phase 2 close: `sha256:0025799f...53fa41` → `sha256:24be3eea...85d8b` (PROFILE_NOTES.md content changed; validation_runs extended with 6 Phase-2 SC entries). `bun test` → 192 pass / 0 fail; `uv run pytest tests/unit -q` → 137 pass / 1 skip (unchanged). `packages/*/src/` untouched per plan invariant (plan 08 is pure evidence-capture). 6 Rule-based auto-fix deviations all folded into the two task commits. **Next (Wave 5):** Plan 02-09 (SC-1 daily-driver walkthrough + Phase 2 CLOSEOUT) references the Phase-1-schema-patch SHA `88e48a4` + Phase-2-close v2 hash `sha256:24be3eea...85d8b`.
+
+**Plan 03-01 completed:** 2026-04-22T05:55Z — commits `ab4648f` (Task 1 test RED: 6 test files, 10 tests, all fail for the right reasons) + `d4cd189` (Task 2 feat GREEN: five wire-throughs landed in ONE atomic commit per D-01 atomic-wave lock — @emmy/provider through pi ModelRegistry.streamSimple + 8 native tools + MCP via createAgentSessionFromServices({customTools}) + Emmy 3-layer assembled prompt authoritative via before_provider_request + chat_template_kwargs.enable_thinking:false at hook with a17f4a9 render-time <think>-strip DELETED + reactive XGrammar retry on live pi path via WeakMap<AbortSignal, RetryState>) + `5e0ba97` (Task 3 test: SC-1-class Track B walkthrough evidence — verdict `sc1 green`) + `b18b257` (docs SUMMARY). SUMMARY.md at `.planning/phases/03-observability-agent-loop-hardening-lived-experience/03-01-SUMMARY.md`. Walkthrough ran a deliberately-richer-than-Phase-2-SC-1 prompt (forces read + grep/ls/find + in-place edit + write + bash in one session) against live emmy-serve (Qwen3.6-35B-A3B-FP8 at 127.0.0.1:8002, profile v2 hash `sha256:24be3eea...85d8b`). All 7 acceptance criteria green: (a) 6/6 files present, (b) bun test final 3 pass / 0 fail in 11 ms, (c) 0 `<think>` leaks in stdout, (d) SP_OK canary fired at session boot BEFORE pi runtime built, (e) 6 distinct tools invoked (read×12, bash×8, edit×6, ls×4, write×4, find×2), (f) 0 "string not found" edit failures (hash-anchored path held on real in-place greet.ts fix), (g) 0 non-loopback connections. Phase-3 regressions added: MCP D-18 poison gate re-asserted on NEW `buildMcpToolDefs` path (assertNoPoison on BOTH `tool.name` AND `tool.description` BEFORE ToolDefinition emit; regression test constructs U+202E via `String.fromCodePoint(0x202E)`); WeakMap-only retry-state storage (no LRU / no size-bound; `grep -c 'LRU' packages/emmy-provider/src/grammar-retry.ts` = 0). Four-way regression at `5e0ba97`: `bun test` → 212 pass / 0 fail / 537 expect() across 27 files (+20 vs Phase-2-close 192); `bun run typecheck` all 4 packages exit 0; `uv run pytest tests/unit -q` → 137 pass / 1 skip (unchanged); `uv run emmy profile validate profiles/qwen3.6-35b-a3b/v{1,2}/` both exit 0. Two Observations (non-blocking): agent initially used `/home/user/...` paths for read/ls/find on 3 early turns and self-recovered to `./` on next turn (pretraining prior; tracked for Phase 5 eval harness as candidate prompt-level nudge); initial walkthrough prompt was Phase-2-SC-1-style simple write+bash-only and failed criterion (e) ≥ 4 distinct tools, re-ran with deliberately richer prompt (6 distinct tools invoked, green). **Wave 2 unblocked but must execute SEQUENTIALLY:** plans 03-02 (Langfuse OTel span attach) + 03-03 (per-profile auto-compaction) co-modify `packages/emmy-ux/src/session.ts` + `packages/emmy-ux/src/pi-emmy-extension.ts` at the `before_provider_request` seam; parallel execution would conflict. Plan 03-05 (input extension via `pi.on('input', ...)`) is file-disjoint and can parallelize with either 03-02 or 03-03 (but not both). **Next:** Plan 03-02 (Langfuse v3 compose stack + @emmy/telemetry dual-sink + OTel SDK init + EmmyProfileStampProcessor + EMMY_TELEMETRY=off kill-switch).
