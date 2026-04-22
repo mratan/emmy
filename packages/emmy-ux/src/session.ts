@@ -195,6 +195,16 @@ async function buildRealPiRuntime(
 								.filter((c) => c.type === "text" && typeof c.text === "string")
 								.map((c) => c.text as string)
 								.join("");
+							// Strip Qwen3.6 <think>...</think> blocks. pi-ai's built-in
+							// openai-completions stream only sends enable_thinking:false
+							// when model.reasoning is true AND thinkingLevel maps to a
+							// falsy reasoningEffort, which pi's default thinkingLevel
+							// ("medium") does not produce. Wiring @emmy/provider (which
+							// correctly sets chat_template_kwargs.enable_thinking:false
+							// at the request level) through pi's streamSimple hook is
+							// a Phase 3 extension-runner binding. Strip-at-render is
+							// the Phase-2 stopgap for clean --print output.
+							text = text.replace(/<think>[\s\S]*?<\/think>\s*/g, "").trim();
 							break;
 						}
 					}
