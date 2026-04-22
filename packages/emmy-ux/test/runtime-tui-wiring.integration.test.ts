@@ -197,14 +197,22 @@ interface HandlerRecord {
 	handler: (event: unknown, ctx: unknown) => Promise<unknown> | unknown;
 }
 
+interface ShortcutRecord {
+	shortcut: string;
+	description?: string;
+	handler: (ctx: unknown) => Promise<unknown> | unknown;
+}
+
 function makeMockPiApi(statusCapture: Array<{ key: string; text: string }>): {
 	api: unknown;
 	handlers: HandlerRecord[];
+	shortcuts: ShortcutRecord[];
 	setStatusFn: (key: string, text: string) => void;
 	inputFn: (prompt: string, placeholder?: string) => Promise<string | undefined>;
 	inputMock: { calls: Array<[string, string?]>; response: string | undefined };
 } {
 	const handlers: HandlerRecord[] = [];
+	const shortcuts: ShortcutRecord[] = [];
 	const setStatusFn = (key: string, text: string): void => {
 		statusCapture.push({ key, text });
 	};
@@ -222,7 +230,19 @@ function makeMockPiApi(statusCapture: Array<{ key: string; text: string }>): {
 		},
 		registerTool: () => undefined,
 		registerCommand: () => undefined,
-		registerShortcut: () => undefined,
+		registerShortcut: (
+			shortcut: string,
+			options: {
+				description?: string;
+				handler: (ctx: unknown) => Promise<unknown> | unknown;
+			},
+		) => {
+			shortcuts.push({
+				shortcut,
+				description: options.description,
+				handler: options.handler,
+			});
+		},
 		registerFlag: () => undefined,
 		getFlag: () => undefined,
 		registerMessageRenderer: () => undefined,
@@ -237,7 +257,7 @@ function makeMockPiApi(statusCapture: Array<{ key: string; text: string }>): {
 		getAllTools: () => [],
 		resources: { discover: async () => [] },
 	};
-	return { api, handlers, setStatusFn, inputFn, inputMock };
+	return { api, handlers, shortcuts, setStatusFn, inputFn, inputMock };
 }
 
 function makeMockCtx(
@@ -523,17 +543,7 @@ describe("runtime-tui wiring — emmyExtension factory preserves every Phase-3 h
 		expect(latest!.tool_calls.length).toBe(1);
 	});
 
-	test("input + Alt+Up: returns {action: 'handled'} when routed through pi input-event bus (Plan 03-05 delivery path)", async () => {
-		// NOTE: we deliberately do NOT assert on feedback.jsonl contents here
-		// because `handleFeedbackKey` writes to `defaultFeedbackPath()` which
-		// resolves `homedir()` at CALL time — and Bun caches `os.homedir()` at
-		// module load, so the HOME env override trick doesn't work. The full
-		// file-write path is exhaustively exercised in the Plan 03-05 test
-		// suite (feedback-flow.integration.test.ts + feedback-append.test.ts
-		// + feedback-idempotent.test.ts — 31 tests green). This plan's job is
-		// to verify the DELIVERY path: that pi's `input` event reaches emmy's
-		// handler and the handler returns {action: "handled"} so pi's
-		// app.message.dequeue does NOT hijack the keypress (D-18).
+	test("pi.registerShortcut: emmy registers shift+ctrl+up + shift+ctrl+down (Plan 03-08 fix-forward — pi.on(input) was NOT a keybind intercept)", async () => {
 		const tracker = new TurnTracker();
 		const extension = createEmmyExtension({
 			profile: makeProfile(profilePath),
@@ -543,11 +553,11 @@ describe("runtime-tui wiring — emmyExtension factory preserves every Phase-3 h
 			turnTrackerImpl: tracker,
 		});
 		const statusCapture: Array<{ key: string; text: string }> = [];
-		const { api, handlers, inputFn } = makeMockPiApi(statusCapture);
+		const { api, handlers, shortcuts, inputFn } = makeMockPiApi(statusCapture);
 		await extension(api as Parameters<typeof extension>[0]);
 		const ctx = makeMockCtx(statusCapture, inputFn);
 
-		// Populate tracker via turn_end so Alt+Up has a turn to rate.
+		// Populate tracker via turn_end so the shortcut has a turn to rate.
 		const turnEnd = findHandler(handlers, "turn_end");
 		await turnEnd.handler(
 			{
@@ -563,22 +573,28 @@ describe("runtime-tui wiring — emmyExtension factory preserves every Phase-3 h
 			ctx,
 		);
 
-		// Fire Alt+Up via the input handler Task 2 must preserve.
-		const inputH = findHandler(handlers, "input");
-		// Route through real HOME so upsertFeedback doesn't crash on a
-		// nonexistent directory — the real path under ~/.emmy/telemetry/
-		// already exists on this dev box (Plan 03-05 operator probe left
-		// 2 rows there). If it doesn't exist, feedback.ts autocreates via
-		// mkdirSync(..., recursive: true). We don't assert on rows; we
-		// only assert the delivery contract: handler returned handled.
-		const res = await inputH.handler(
-			{ type: "input", text: "\x1b[1;3A", source: "user" },
-			ctx,
-		);
-		expect(res).toEqual({ action: "handled" });
+		// Assert emmy registered both chords with pi (NOT via pi.on("input")).
+		const up = shortcuts.find((s) => s.shortcut === "shift+ctrl+up");
+		const down = shortcuts.find((s) => s.shortcut === "shift+ctrl+down");
+		expect(up).toBeDefined();
+		expect(down).toBeDefined();
+		expect(up!.description).toMatch(/thumbs-up/i);
+		expect(down!.description).toMatch(/thumbs-down/i);
+
+		// Invoke the up-handler — this is the exact call pi makes when the
+		// user presses shift+ctrl+up. Returns void; side-effect is a row in
+		// the feedback.jsonl at defaultFeedbackPath(). We don't assert on
+		// rows here (see Plan 03-05's feedback-flow.integration.test.ts
+		// for the row-write assertions); we assert the delivery contract:
+		// the handler exists and resolves without throwing.
+		await expect(up!.handler(ctx)).resolves.toBeUndefined();
 	});
 
-	test("input + non-ANSI keypress: returns {action: 'continue'} (pass-through; Plan 03-05)", async () => {
+	test("pi.on(input) is NOT registered for feedback capture (Plan 03-08 fix-forward)", async () => {
+		// Regression guard: Plan 03-05's D-18 strategy tried to intercept
+		// Alt+Up via pi.on("input", handler). Plan 03-08 removed that path
+		// because pi's input event is a message-SUBMISSION event, not a
+		// keybind intercept. Assert zero emmy-registered "input" handlers.
 		const tracker = new TurnTracker();
 		const extension = createEmmyExtension({
 			profile: makeProfile(profilePath),
@@ -588,19 +604,14 @@ describe("runtime-tui wiring — emmyExtension factory preserves every Phase-3 h
 			turnTrackerImpl: tracker,
 		});
 		const statusCapture: Array<{ key: string; text: string }> = [];
-		const { api, handlers, inputFn } = makeMockPiApi(statusCapture);
+		const { api, handlers } = makeMockPiApi(statusCapture);
 		await extension(api as Parameters<typeof extension>[0]);
-		const ctx = makeMockCtx(statusCapture, inputFn);
 
-		const inputH = findHandler(handlers, "input");
-		const res = await inputH.handler(
-			{ type: "input", text: "a", source: "user" },
-			ctx,
-		);
-		expect(res).toEqual({ action: "continue" });
+		const inputHandlers = findAllHandlers(handlers, "input");
+		expect(inputHandlers.length).toBe(0);
 	});
 
-	test("input kill-switch: telemetryEnabled=false returns {action: 'continue'} for Alt+Up (Plan 03-05 truth #9)", async () => {
+	test("shortcut kill-switch: telemetryEnabled=false → NO shortcut registered (Plan 03-08 fix-forward)", async () => {
 		const tracker = new TurnTracker();
 		const extension = createEmmyExtension({
 			profile: makeProfile(profilePath),
@@ -610,22 +621,17 @@ describe("runtime-tui wiring — emmyExtension factory preserves every Phase-3 h
 			turnTrackerImpl: tracker,
 		});
 		const statusCapture: Array<{ key: string; text: string }> = [];
-		const { api, handlers, inputFn } = makeMockPiApi(statusCapture);
+		const { api, shortcuts } = makeMockPiApi(statusCapture);
 		await extension(api as Parameters<typeof extension>[0]);
-		const ctx = makeMockCtx(statusCapture, inputFn);
 
-		// With telemetryEnabled=false, pi-emmy-extension.ts does NOT register
-		// turn_end (see the guard `if (telemetryEnabled && sessionId)` at line
-		// 242). BUT pi.on("input", ...) is ALWAYS registered — it early-returns
-		// {action: "continue"} when telemetryEnabled is false.
-		const inputHandlers = findAllHandlers(handlers, "input");
-		expect(inputHandlers.length).toBeGreaterThanOrEqual(1);
-
-		const res = await inputHandlers[0]!.handler(
-			{ type: "input", text: "\x1b[1;3A", source: "user" },
-			ctx,
-		);
-		expect(res).toEqual({ action: "continue" });
+		// With telemetry=off, pi-emmy-extension.ts short-circuits and
+		// registers NEITHER chord. Pi treats unregistered keys as no-ops,
+		// so EMMY_TELEMETRY=off cleanly cedes the chord back to the
+		// (currently empty) default handler.
+		const up = shortcuts.find((s) => s.shortcut === "shift+ctrl+up");
+		const down = shortcuts.find((s) => s.shortcut === "shift+ctrl+down");
+		expect(up).toBeUndefined();
+		expect(down).toBeUndefined();
 	});
 
 	test("turn_start compaction: handler wired (Plan 03-03); ctx.getContextUsage null path early-returns", async () => {

@@ -61,7 +61,11 @@ import {
 	type TurnMeta,
 } from "@emmy/telemetry";
 
-import { handleFeedbackKey } from "./feedback-ui";
+import {
+	EMMY_FEEDBACK_DOWN_KEYID,
+	EMMY_FEEDBACK_UP_KEYID,
+	handleFeedbackRating,
+} from "./feedback-ui";
 import {
 	startFooterPoller,
 	type FooterPollerHandle,
@@ -143,6 +147,19 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 	const turnTracker = opts.turnTrackerImpl ?? new TurnTracker();
 	const telemetryEnabled = opts.telemetryEnabled !== false; // default ON
 	const sessionId = opts.sessionId ?? null;
+
+	// Plan 03-08 fix-forward: pi 0.68 resets `_turnIndex = 0` on every
+	// `agent_start` event (dist/core/agent-session.js:376). Because every new
+	// user message kicks off a new agent turn sequence, `event.turnIndex` is 0
+	// for the FIRST turn_end of every user message — which means Plan 03-05's
+	// `turn_id = ${sessionId}:${turnIndex}` collapses all user-submitted turns
+	// onto a single id, and upsertFeedback always replaces the same row.
+	//
+	// Fix: maintain an emmy-side monotonic counter that increments on each
+	// turn_end we record. This preserves the idempotency contract (same turn →
+	// same turn_id → upsert replaces) while ensuring distinct user messages
+	// produce distinct turn_ids (no collapse).
+	let emmyTurnCounter = 0;
 
 	return (pi: ExtensionAPI): void => {
 		// Plan 03-04 UX-02: start the 1 Hz footer poller on session_start and
@@ -246,8 +263,11 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 						event as TurnEndEvent,
 						sessionId,
 						profile,
+						emmyTurnCounter++,
 					);
 					turnTracker.recordTurnComplete(meta);
+					if (process.env.EMMY_DEBUG_SHORTCUT)
+						console.error(`[emmy-debug] turn_end recorded: turn_id=${meta.turn_id}`);
 				} catch {
 					// Malformed AgentMessage shouldn't crash the session. The
 					// tracker keeps its previous state; user's next Alt+Up will
@@ -257,26 +277,67 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 			});
 		}
 
-		// Plan 03-05 (TELEM-02): intercept Alt+Up/Down BEFORE pi's keybind
-		// resolution (D-18 — pi 0.68 binds alt+up to app.message.dequeue).
-		// handleFeedbackKey returns {action: "handled"} when a rating was
-		// recorded (suppressing pi's default) and {action: "continue"} for
-		// any non-matching keypress. Telemetry-disabled path short-circuits
-		// to "continue" so the kill-switch (EMMY_TELEMETRY=off) preserves
-		// pi's built-in keybind behavior.
-		pi.on("input", async (event, ctx) => {
-			if (!telemetryEnabled) return { action: "continue" };
-			const uiInput = ctx.ui?.input?.bind(ctx.ui);
-			if (!uiInput) return { action: "continue" };
-			return handleFeedbackKey(
-				event,
-				{
+		// Plan 03-08 fix-forward (TELEM-02): register keyboard shortcuts via
+		// pi's authoritative extension API `pi.registerShortcut(keyId, {handler})`.
+		// Plan 03-05's original D-18 strategy used `pi.on("input", handler)` to
+		// intercept Alt+Up/Down, but `pi.on("input")` is a message-SUBMISSION
+		// event (text + images payload), NOT a keybind intercept — verified in
+		// dist/core/agent-session.js:689-700 (_extensionRunner.emitInput is
+		// called only when the user submits a prompt, and pi does NOT put raw
+		// ANSI into event.text). Keybindings flow through pi-tui's CustomEditor
+		// onAction table; extensions reach it via registerShortcut.
+		//
+		// Chord selection (per dist/core/keybindings.js default scan): alt+up /
+		// alt+down are claimed by app.message.dequeue and app.message.requeue,
+		// and pi's runner silently skips extension shortcuts that collide with
+		// built-ins (runner.js:267). shift+ctrl+up and shift+ctrl+down are
+		// unclaimed. Emmy owns them for thumbs-up/down.
+		//
+		// Telemetry kill-switch: if telemetryEnabled=false we DON'T register
+		// the shortcuts at all. Pi's runner treats unregistered extension keys
+		// as a no-op, so EMMY_TELEMETRY=off cleanly cedes the chord to nothing.
+		if (telemetryEnabled) {
+			const makeCtx = (ctx: {
+				ui?: { input?: (p: string, pl?: string) => Promise<string | undefined> };
+			}) => {
+				const uiInput = ctx.ui?.input?.bind(ctx.ui);
+				if (!uiInput) return null;
+				return {
 					ui: { input: uiInput },
-					enabled: true, // gate at the factory level already passed
+					enabled: true, // telemetryEnabled already gated at factory level
+				};
+			};
+			if (process.env.EMMY_DEBUG_SHORTCUT)
+				console.error(`[emmy-debug] registering shortcuts: ${EMMY_FEEDBACK_UP_KEYID} + ${EMMY_FEEDBACK_DOWN_KEYID}`);
+			pi.registerShortcut(EMMY_FEEDBACK_UP_KEYID, {
+				description: "Emmy: thumbs-up on most-recent turn (TELEM-02)",
+				handler: async (ctx) => {
+					if (process.env.EMMY_DEBUG_SHORTCUT)
+						console.error(`[emmy-debug] shift+ctrl+up handler fired`);
+					const feedbackCtx = makeCtx(ctx);
+					if (!feedbackCtx) {
+						if (process.env.EMMY_DEBUG_SHORTCUT)
+							console.error(`[emmy-debug] no ctx.ui.input — bailing`);
+						return;
+					}
+					const result = await handleFeedbackRating(1, feedbackCtx, turnTracker);
+					if (process.env.EMMY_DEBUG_SHORTCUT)
+						console.error(`[emmy-debug] handleFeedbackRating +1 → ${JSON.stringify(result)}`);
 				},
-				turnTracker,
-			);
-		});
+			});
+			pi.registerShortcut(EMMY_FEEDBACK_DOWN_KEYID, {
+				description: "Emmy: thumbs-down on most-recent turn (TELEM-02)",
+				handler: async (ctx) => {
+					if (process.env.EMMY_DEBUG_SHORTCUT)
+						console.error(`[emmy-debug] shift+ctrl+down handler fired`);
+					const feedbackCtx = makeCtx(ctx);
+					if (!feedbackCtx) return;
+					const result = await handleFeedbackRating(-1, feedbackCtx, turnTracker);
+					if (process.env.EMMY_DEBUG_SHORTCUT)
+						console.error(`[emmy-debug] handleFeedbackRating -1 → ${JSON.stringify(result)}`);
+				},
+			});
+		}
 
 		// Plan 03-03 — turn_start handler invokes emmyCompactionTrigger per
 		// D-11 turn-boundary atomicity (Pitfall #3). The trigger wraps pi's
@@ -429,6 +490,7 @@ function buildTurnMeta(
 	event: TurnEndEvent,
 	sessionId: string,
 	profile: ProfileSnapshot,
+	emmyTurnIndex: number,
 ): TurnMeta {
 	const msg = event.message as unknown as {
 		role?: string;
@@ -476,7 +538,7 @@ function buildTurnMeta(
 	const tokensOut = typeof usage.output === "number" ? usage.output : 0;
 
 	return {
-		turn_id: `${sessionId}:${event.turnIndex}`,
+		turn_id: `${sessionId}:${emmyTurnIndex}`,
 		session_id: sessionId,
 		profile_id: profile.ref.id,
 		profile_version: profile.ref.version,

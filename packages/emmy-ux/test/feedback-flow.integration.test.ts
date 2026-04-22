@@ -13,11 +13,7 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-import {
-	ANSI_ALT_DOWN,
-	ANSI_ALT_UP,
-	handleFeedbackKey,
-} from "../src/feedback-ui";
+import { handleFeedbackRating } from "../src/feedback-ui";
 import { readFeedback, TurnTracker, type TurnMeta } from "@emmy/telemetry";
 
 function makeTmpDir(): string {
@@ -59,12 +55,7 @@ describe("feedback flow — 3 turns, rate the last one (Alt+Up)", () => {
 				ui: { input: mock(async () => undefined as string | undefined) },
 				enabled: true,
 			};
-			const res = await handleFeedbackKey(
-				{ text: ANSI_ALT_UP },
-				ctx,
-				tracker,
-				path,
-			);
+			const res = await handleFeedbackRating(1, ctx, tracker, path);
 			expect(res).toEqual({ action: "handled" });
 
 			const rows = readFeedback(path);
@@ -103,12 +94,7 @@ describe("feedback flow — 3 turns, rate the last one (Alt+Up)", () => {
 				ui: { input: mock(async () => "the assistant got the filename wrong") },
 				enabled: true,
 			};
-			await handleFeedbackKey(
-				{ text: ANSI_ALT_DOWN },
-				ctx,
-				tracker,
-				path,
-			);
+			await handleFeedbackRating(-1, ctx, tracker, path);
 			const rows = readFeedback(path);
 			expect(rows.length).toBe(1);
 			expect(rows[0]!.turn_id).toBe("S-BB:1");
