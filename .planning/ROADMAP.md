@@ -15,7 +15,7 @@
 
 - [x] **Phase 1: Serving Foundation + Profile Schema** — emmy-serve with NGC vLLM container, Qwen3.6 end-to-end, profile registry on disk, KV/thermal/air-gap/SP_OK validation. **Closed 2026-04-21** with 3 documented deferrals (SC-1 architectural, SC-4→Phase 7, SC-5 re-validation→Phase 5); see 01-CLOSEOUT.md.
 - [x] **Phase 2: Pi-Harness MVP — Daily-Driver Baseline** — pi-coding-agent with custom vLLM provider, full P1 toolset (hash-anchored edits default + MCP + web_fetch), grammar-constrained tool calls, AGENTS.md discipline; author can daily-drive. **Closed 2026-04-21** with SC-1 green + SC-2/3/4/5 pass; v2 profile hash `sha256:24be3eea...85d8b`; 5 architectural wire-through items carry to Phase 3. See `02-CLOSEOUT.md`.
-- [ ] **Phase 3: Observability + Agent-Loop Hardening + Lived-Experience** — Langfuse v3 + OTel GenAI semconv, smart context management with per-profile compaction, lived-experience telemetry (Alt+Up/Down), GPU/KV TUI footer, offline-OK badge
+- [x] **Phase 3: Observability + Agent-Loop Hardening + Lived-Experience** — Langfuse v3 + OTel GenAI semconv, smart context management with per-profile compaction, lived-experience telemetry (Alt+Up/Down), GPU/KV TUI footer, offline-OK badge. **Closed 2026-04-22** with v3 profile hash `sha256:2beb99c7...d4d3718` + 5/5 SCs green + 8 Phase-3 REQ-IDs flipped Done + 5 Phase-2 Done† promoted to Done (13 REQ-IDs total); see 03-CLOSEOUT.md.
 - [ ] **Phase 4: Gemma 4 Profile + Profile System Maturity** — second first-class model proves the abstraction; `/profile` atomic swap with progress UX; within-model planner/editor/critic routing
 - [ ] **Phase 5: Eval Harness + Reproducible Benchmark Suite** — eval runner imports harness via SDK; terminal-bench 2.0 + prior Phase 1 prompts + SWE-bench Verified + LiveCodeBench; ≥3 samples + std + provenance + executable-paired-with-judge
 - [ ] **Phase 6: Speculative Decoding + Latency Polish** — Qwen3-MTP and EAGLE-3 (where available) configured per profile; paired spec-on/spec-off benchmark gate
@@ -159,7 +159,7 @@ Plans:
 - [x] 03-04-PLAN.md — 1 Hz TUI footer: vllm:gpu_cache_usage_perc parser + nvidia-smi TS port (N/A tolerant) + 5-sample sliding-window tok/s rate + graceful degrade + spec-accept placeholder (UX-02) **(complete 2026-04-22; commits 64a625f RED + 498390c GREEN + a43bd03 parity driver; 322 bun tests pass (+48 vs baseline); honors verified metric name vllm:gpu_cache_usage_perc (not kv_cache_usage_perc — CONTEXT D-22 typo); Task 3 SC-4 parity verification operator-gated — resume signal `p3-04 footer green`)**
 - [x] 03-05-PLAN.md — Lived-experience rating: Alt+Up/Alt+Down via pi input event (ANSI x1b[1;3A/B) + 13-field feedback.jsonl schema + idempotent upsert + pi-emmy --export-hf + HF-datasets loadable (TELEM-02 + TELEM-03) **(complete 2026-04-22; commits 35b7023 RED + 1fc10c7 GREEN; 353 bun tests pass (+31); 11 truths satisfied incl. emmy-synthesized turn_id scheme + idempotent upsert + D-18 input-event intercept before pi's keybind resolution; Task 3 interactive TUI verification operator-gated — resume signal `p3-05 feedback green`)**
 - [x] 03-06-PLAN.md — OFFLINE OK badge: tool-registry boot audit + web_fetch allowlist runtime enforcement + warn-and-continue red flip + hostname-exact match (UX-03) **(complete 2026-04-22; commits 84a2d89 RED + c4efb68 GREEN; 396 bun tests pass (+43); D-26 LOOPBACK_HOSTS size=4 with bind-all quad-zero excluded per plan-checker WARNING; D-27 hostname-EXACT web_fetch enforcement with CNAME-bypass + URL-credentials-bypass guards; D-28 warn-and-continue via ToolError-shaped return (webFetchWithAllowlist); module-level badge state machine bindBadge/setInitialAudit/flipToViolation for boot-audit-before-pi-ctx timing; IPv6 bracket normalization for loopback check only; ZERO deviations; Task 3 UX-03 demo operator-gated — resume signal `p3-06 badge green`)**
-- [ ] 03-07-PLAN.md — Phase close: profile v2→v3 bump + schema patch + PROFILE_NOTES provenance + air-gap CI extension + SC-1 walkthrough verdict + 8 REQ-IDs → Done + 5 Phase-2 Done† → Done + CLOSEOUT.md
+- [x] 03-07-PLAN.md — Phase close: profile v2→v3 bump + schema patch + PROFILE_NOTES provenance + air-gap CI extension + SC-1 walkthrough verdict + 8 REQ-IDs → Done + 5 Phase-2 Done† → Done + CLOSEOUT.md **(complete 2026-04-22; commits de4ae96 v2→v3 bump + schema + d3196bd air-gap CI dual-stack + 185e55c Phase-3 CLOSEOUT walkthrough sc1 phase3 green; v3 profile hash sha256:2beb99c773a0e425a3e485459964740640c5f3addbea186738402cf66d4d3718)**
 
 **UI hint**: yes
 
@@ -262,7 +262,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Serving Foundation + Profile Schema | 8/8 | Closed (with 3 documented deferrals) | 2026-04-21 |
 | 2. Pi-Harness MVP — Daily-Driver Baseline | 9/9 | Closed (with 5 Phase-3 wire-through deferrals) | 2026-04-21 |
-| 3. Observability + Agent-Loop Hardening + Lived-Experience | 6/7 | Executing (Wave 3 CLOSED 2026-04-22; plans 03-01/02/03/04/05/06 complete; 03-07 closes the phase) | - |
+| 3. Observability + Agent-Loop Hardening + Lived-Experience | 7/7 | Closed (with 5 operator-gated evidence items deferred) | 2026-04-22 |
 | 4. Gemma 4 Profile + Profile System Maturity | 0/? | Not started | - |
 | 5. Eval Harness + Reproducible Benchmark Suite | 0/? | Not started | - |
 | 6. Speculative Decoding + Latency Polish | 0/? | Not started | - |
@@ -314,3 +314,4 @@ Hash-anchored edits (P1 differentiator from FEATURES.md) land in P2 as the **def
 *Total phases: 7*
 *Updated: 2026-04-21 — Phase 1 extended with 3 gap-closure plans (01-06/07/08) from VERIFICATION.md*
 *Updated: 2026-04-21 — Phase 2 closed; SC-1 green; 23 REQ-IDs flipped to Done in REQUIREMENTS.md; v2 profile hash sha256:24be3eea...85d8b certified-at-close*
+*Updated: 2026-04-22 — Phase 3 closed; 5/5 SCs green; 8 Phase-3 REQ-IDs flipped to Done + 5 Phase-2 Done† promoted to Done (13 REQ-IDs total; cumulative 36); v3 profile hash sha256:2beb99c7...d4d3718 certified-at-close; see 03-CLOSEOUT.md*

@@ -49,8 +49,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **HARNESS-07
 **: Sampling control is per-tool / per-task via the profile (planner, editor, critic can use different sampling)
 - [ ] **HARNESS-08**: Multi-model routing is supported within a single model first (profile-routing for planner/editor/critic roles); cross-model routing deferred to v2 unless dual-load proves feasible
-- [x] **HARNESS-09
-**: Observability hooks emit OTel GenAI semconv spans across the vLLM ↔ harness boundary; profile fields embedded in every event
+- [x] **HARNESS-09**: Observability hooks emit OTel GenAI semconv spans across the vLLM ↔ harness boundary; profile fields embedded in every event
 - [x] **HARNESS-10**: Tool registry is extensible: adding/removing/composing tools is a simple pi extension, no fork required
 
 ### Tools (TOOLS) — table-stakes coding-agent toolset
@@ -93,16 +92,14 @@ Requirements for initial release. Each maps to roadmap phases.
 
 ### Telemetry (TELEM) — observability + lived experience
 
-- [x] **TELEM-01
-**: Self-hosted Langfuse v3 over OTel GenAI semconv runs locally (Docker Compose); spans propagate across vLLM ↔ harness boundary
-- [ ] **TELEM-02**: Lived-experience telemetry: Alt+Up / Alt+Down to thumb a turn, free-text prompt for thumbs-down; appended to JSONL with `{session_id, turn_id, profile_id, rating, comment, model_response, tool_calls, latency_ms, kv_used, tokens_in, tokens_out}`
-- [ ] **TELEM-03**: Telemetry is 100% local, opt-out via flag, exportable to HuggingFace dataset format (the daily-driver corpus is itself a publishable artifact)
+- [x] **TELEM-01**: Self-hosted Langfuse v3 over OTel GenAI semconv runs locally (Docker Compose); spans propagate across vLLM ↔ harness boundary
+- [x] **TELEM-02**: Lived-experience telemetry: Alt+Up / Alt+Down to thumb a turn, free-text prompt for thumbs-down; appended to JSONL with `{session_id, turn_id, profile_id, rating, comment, model_response, tool_calls, latency_ms, kv_used, tokens_in, tokens_out}`
+- [x] **TELEM-03**: Telemetry is 100% local, opt-out via flag, exportable to HuggingFace dataset format (the daily-driver corpus is itself a publishable artifact)
 
 ### UX (UX) — daily-driver feel
 
 - [x] **UX-01**: TUI is the primary surface (pi-tui-based)
-- [x] **UX-02
-**: GPU/KV/spec-accept TUI footer (`[GPU 87% • KV 34% • spec accept 71% • tok/s 38]`) — reads `nvidia-smi` + vLLM `/metrics`
+- [x] **UX-02**: GPU/KV/spec-accept TUI footer (`[GPU 87% • KV 34% • spec accept 71% • tok/s 38]`) — reads `nvidia-smi` + vLLM `/metrics`
 - [x] **UX-03**: Offline-OK badge — startup audits tool registry; green "OFFLINE OK" if every path is local, red "NETWORK USED" if any tool went external
 - [ ] **UX-04**: Model-swap UX — visible progress during `/profile` swap (`stopping vLLM`, `loading weights X%`, `warmup`, `ready`); no crash UX
 - [x] **UX-05**: CLI / scripted mode (one-shot prompts, JSON I/O) — pi `print` and `json` modes; needed for eval automation
@@ -189,26 +186,26 @@ Which phases cover which requirements. Updated by roadmapper 2026-04-20.
 | PROFILE-08 | Phase 4 | Pending |
 | PROFILE-09 | Phase 1 | Pending |
 | HARNESS-01 | Phase 2 | Done |
-| HARNESS-02 | Phase 2 | Done † |
+| HARNESS-02 | Phase 2 | Done (wire-through landed Plan 03-01) |
 | HARNESS-03 | Phase 2 | Done |
 | HARNESS-04 | Phase 2 | Done |
-| HARNESS-05 | Phase 3 | Done |
-| HARNESS-06 | Phase 2 | Done † |
-| HARNESS-07 | Phase 2 | Done † |
+| HARNESS-05 | Phase 3 | Done (Plan 03-03; 2026-04-22) |
+| HARNESS-06 | Phase 2 | Done (wire-through landed Plan 03-01) |
+| HARNESS-07 | Phase 2 | Done (wire-through landed Plan 03-01) |
 | HARNESS-08 | Phase 4 | Pending |
-| HARNESS-09 | Phase 3 | Pending |
+| HARNESS-09 | Phase 3 | Done (Plan 03-02; 2026-04-22) |
 | HARNESS-10 | Phase 2 | Done |
 | TOOLS-01 | Phase 2 | Done |
 | TOOLS-02 | Phase 2 | Done |
-| TOOLS-03 | Phase 2 | Done † |
+| TOOLS-03 | Phase 2 | Done (wire-through landed Plan 03-01) |
 | TOOLS-04 | Phase 2 | Done |
 | TOOLS-05 | Phase 2 | Done |
 | TOOLS-06 | Phase 2 | Done |
-| TOOLS-07 | Phase 2 | Done † |
+| TOOLS-07 | Phase 2 | Done (wire-through landed Plan 03-01) |
 | TOOLS-08 | Phase 2 | Done |
 | TOOLS-09 | Phase 2 | Done |
 | CONTEXT-01 | Phase 2 | Done |
-| CONTEXT-02 | Phase 3 | Done |
+| CONTEXT-02 | Phase 3 | Done (Plan 03-03; 2026-04-22) |
 | CONTEXT-03 | Phase 2 | Done |
 | CONTEXT-04 | Phase 2 | Done |
 | CONTEXT-05 | Phase 2 | Done |
@@ -221,11 +218,11 @@ Which phases cover which requirements. Updated by roadmapper 2026-04-20.
 | EVAL-07 | Phase 1 | Pending |
 | EVAL-08 | Phase 5 | Pending |
 | EVAL-09 | Phase 5 | Pending |
-| TELEM-01 | Phase 3 | Pending |
-| TELEM-02 | Phase 3 | Pending |
-| TELEM-03 | Phase 3 | Pending |
+| TELEM-01 | Phase 3 | Done (Plan 03-02; 2026-04-22) |
+| TELEM-02 | Phase 3 | Done (Plan 03-05; 2026-04-22) |
+| TELEM-03 | Phase 3 | Done (Plan 03-05; 2026-04-22) |
 | UX-01 | Phase 2 | Done |
-| UX-02 | Phase 3 | Pending |
+| UX-02 | Phase 3 | Done (Plan 03-04; 2026-04-22) |
 | UX-03 | Phase 3 | Done (Plan 03-06; 2026-04-22) |
 | UX-04 | Phase 4 | Pending |
 | UX-05 | Phase 2 | Done |
@@ -238,7 +235,7 @@ Which phases cover which requirements. Updated by roadmapper 2026-04-20.
 **Status legend:**
 
 - **Done** — shipped + tested + evidence captured in phase close-out.
-- **Done †** — library shipped, unit-tested, and evidence captured via eval driver or SC runner; the pi-pipeline wire-through (pi `customTools` / `BeforeProviderRequestEvent` / `streamSimple`) is a documented Phase-3 deferral per `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-CLOSEOUT.md` § Carry-forward. Counts as complete against the REQ-ID (the library is the authoritative deliverable; the pi-side hookup is integration).
+- **Done (wire-through landed Plan 03-01)** — was Done † at Phase 2 close; Plan 03-01's D-01 atomic wire-through wave landed the pi-pipeline hookup (customTools / BeforeProviderRequestEvent / streamSimple) in commit d4cd189 and the Phase-3 walkthrough green verdict promoted these from Done † → Done. 5 REQ-IDs affected: HARNESS-02, HARNESS-06, HARNESS-07, TOOLS-03, TOOLS-07.
 - **Pending** — not yet started.
 
 **Coverage:**
