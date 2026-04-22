@@ -6,6 +6,7 @@
       "name": "emmy",
       "devDependencies": {
         "@biomejs/biome": "1.9.4",
+        "@emmy/context": "workspace:*",
         "@emmy/provider": "workspace:*",
         "@emmy/telemetry": "workspace:*",
         "@emmy/tools": "workspace:*",
@@ -15,6 +16,19 @@
         "bun-types": "1.1.42",
         "js-yaml": "4.1.0",
         "typescript": "5.7.3",
+      },
+    },
+    "packages/emmy-context": {
+      "name": "@emmy/context",
+      "version": "0.1.0",
+      "dependencies": {
+        "@emmy/provider": "workspace:*",
+        "@emmy/telemetry": "workspace:*",
+        "@mariozechner/pi-coding-agent": "0.68.0",
+        "js-yaml": "4.1.0",
+      },
+      "devDependencies": {
+        "@types/js-yaml": "4.0.9",
       },
     },
     "packages/emmy-provider": {
@@ -169,6 +183,8 @@
     "@biomejs/cli-win32-x64": ["@biomejs/cli-win32-x64@1.9.4", "", { "os": "win32", "cpu": "x64" }, "sha512-8Y5wMhVIPaWe6jw2H+KlEm4wP/f7EW3810ZLmDlrEEy5KvBsb9ECEfu/kMWD484ijfQ8+nIi0giMgu9g1UAuuA=="],
 
     "@borewit/text-codec": ["@borewit/text-codec@0.2.2", "", {}, "sha512-DDaRehssg1aNrH4+2hnj1B7vnUGEjU6OIlyRdkMd0aUdIUvKXrJfXsy8LVtXAy7DRvYVluWbMspsRhz2lcW0mQ=="],
+
+    "@emmy/context": ["@emmy/context@workspace:packages/emmy-context"],
 
     "@emmy/provider": ["@emmy/provider@workspace:packages/emmy-provider"],
 

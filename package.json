@@ -11,6 +11,7 @@
   },
   "devDependencies": {
     "@biomejs/biome": "1.9.4",
+    "@emmy/context": "workspace:*",
     "@emmy/provider": "workspace:*",
     "@emmy/telemetry": "workspace:*",
     "@emmy/tools": "workspace:*",
