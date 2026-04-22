@@ -12,16 +12,31 @@
 //      emits the SHA-256 audit trail.
 //   5. openTranscript creates runs/phase2-sc3-capture/session-<iso>.jsonl and
 //      records the assembled system prompt (B2 fix).
-//   6. pi 0.68.0 createAgentSession runs with an in-memory SessionManager. The
-//      returned session is wrapped in a narrow `PiRuntime` adapter so
-//      registerEmmyProvider / registerNativeTools / registerMcpServers can
-//      consume the existing @emmy/* shapes. (The adapter is the W2 fix: a
-//      real session is always constructed — no wire-up-deferred stubs remain.)
-//   7. registerEmmyProvider → registerNativeTools → registerMcpServers.
-//   8. session.subscribe routes tool-call events into the transcript.
+//   6. Phase-3 Plan 03-01: buildNativeToolDefs + (optional) buildMcpToolDefs
+//      produce the customTools array BEFORE pi's session is constructed — this
+//      is the "pi's customTools as the authoritative tool registry" flip.
+//   7. pi 0.68.0 createAgentSession runs with an in-memory SessionManager AND
+//      the Emmy ExtensionFactory (pi-emmy-extension) installed via
+//      resourceLoaderOptions.extensionFactories. The extension installs the
+//      before_provider_request hook that injects enable_thinking:false,
+//      reactive-grammar retry state, and the Emmy 3-layer system prompt on
+//      every wire request (D-02a/b/c + D-04 atomic wave).
+//   8. The returned session is wrapped in a narrow `PiRuntime` adapter so
+//      legacy callers keep working. The adapter also exposes an `introspect()`
+//      method for Plan 03-01's wire-through regression tests.
+//   9. session.subscribe routes tool-call events into the transcript.
 //
 // Test-only escape hatch: `piFactory` can be injected to replace the real pi
 // runtime construction with a stub. The default behavior always calls pi.
+//
+// Phase-3 wire-through flips landed atomically in Plan 03-01:
+//   (1) @emmy/provider → pi's ModelRegistry.registerProvider (already Phase-2)
+//   (2) @emmy/tools 8 native + MCP → createAgentSessionFromServices({customTools})
+//   (3) Emmy 3-layer prompt authoritative via before_provider_request mutation
+//   (4) chat_template_kwargs.enable_thinking:false at request level (REMOVED
+//       the a17f4a9 <think>-strip render-time stopgap; see 02-CLOSEOUT §SC-1)
+//   (5) Reactive XGrammar retry (Phase 2 D-11) fires on the live pi-session
+//       path via before_provider_request + WeakMap<AbortSignal, RetryState>.
 
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
@@ -30,16 +45,21 @@ import { join } from "node:path";
 import { registerEmmyProvider, type ProfileSnapshot } from "@emmy/provider";
 import { emitEvent } from "@emmy/telemetry";
 import {
+	buildMcpToolDefs,
+	buildNativeToolDefs,
 	loadMcpServersConfig,
 	NATIVE_TOOL_NAMES,
 	registerMcpServers,
 	registerNativeTools,
+	type ToolDefinitionLike,
 } from "@emmy/tools";
 
-// W2 FIX: real import of pi 0.68.0's createAgentSession. Phase 2 now wires
-// the provider + session fully (SC-1 walkthrough demands it) via
+// W2 FIX (Phase 2): real import of pi 0.68.0's createAgentSession. Phase 2
+// wires the provider + session fully (SC-1 walkthrough demands it) via
 // createAgentSessionServices + createAgentSessionFromServices. ModelRegistry
 // is seeded in-memory with a single emmy-vllm provider pointed at emmy-serve.
+// Plan 03-01 adds the Emmy ExtensionFactory at session-services construction
+// time so every chat call routes through our before_provider_request mutator.
 import {
 	AuthStorage,
 	createAgentSessionFromServices,
@@ -49,6 +69,7 @@ import {
 } from "@mariozechner/pi-coding-agent";
 
 import { SpOkCanaryError } from "./errors";
+import { createEmmyExtension } from "./pi-emmy-extension";
 import { assemblePrompt } from "./prompt-assembly";
 import {
 	appendSessionTurn,
@@ -63,6 +84,10 @@ import type { AssembledPrompt } from "./types";
  * AgentSession has a larger API surface (setActiveToolsByName, prompt, etc.);
  * the adapter keeps the cross-package contract stable while still holding a
  * reference to the real session.
+ *
+ * Plan 03-01 adds `introspect()` so Wave-1 wire-through regression tests can
+ * assert which providers and customTools the adapter surfaced without having
+ * to call out to pi's internal state.
  */
 export interface PiRuntime {
 	registerProvider: (name: string, impl: unknown) => void;
@@ -80,6 +105,16 @@ export interface PiRuntime {
 	runTui?: () => Promise<void>;
 	/** Optional: underlying pi AgentSession (for Plan 08's SC-1 walkthrough). */
 	session?: unknown;
+	/**
+	 * Plan 03-01: wire-through regression introspection. Returns a snapshot of
+	 * the providers + customTools this adapter registered during session boot.
+	 * The shape is deliberately narrow — tests assert on `.length`,
+	 * `.name`, and `impl.chat` only.
+	 */
+	introspect?: () => {
+		registeredProviders: Array<{ name: string; impl: unknown }>;
+		registeredCustomTools: Array<{ name: string }>;
+	};
 }
 
 interface CreateEmmySessionOpts {
@@ -88,8 +123,14 @@ interface CreateEmmySessionOpts {
 	cwd: string;
 	mode: "tui" | "print" | "json";
 	userPrompt?: string;
-	/** Test-only: override pi runtime construction with a stub. */
-	piFactory?: () => PiRuntime;
+	/**
+	 * Test-only: override pi runtime construction with a stub. Receives the
+	 * already-built customTools array so stubs can mirror the real adapter's
+	 * `introspect()` surface without having to replicate native-tool + MCP
+	 * assembly logic. Plan 03-01: customTools arg is the single source of
+	 * truth consumed by both real and stub paths.
+	 */
+	piFactory?: (args: { customTools: ToolDefinitionLike[] }) => PiRuntime;
 }
 
 /**
@@ -98,11 +139,25 @@ interface CreateEmmySessionOpts {
  * registerProvider / registerTool call so Plan 08's SC-1 walkthrough can
  * inspect the wiring; on-event subscriptions are routed into a local dispatch
  * table AND forwarded to pi's session.subscribe (so tool-call turns surface).
+ *
+ * Plan 03-01 additions:
+ *   - customTools array is assembled from buildNativeToolDefs + buildMcpToolDefs
+ *     and passed to createAgentSessionFromServices.
+ *   - The Emmy ExtensionFactory is passed via resourceLoaderOptions so the
+ *     before_provider_request hook is installed on every chat call.
+ *   - The adapter's registerProvider + registerTool record entries (no-op
+ *     body → introspectable collector body) so Wave-1 regression tests can
+ *     verify the wire-through landed.
+ *   - The a17f4a9 <think>-strip stopgap (was at lines 198-207) is REMOVED;
+ *     proper fix via chat_template_kwargs.enable_thinking:false lives in the
+ *     before_provider_request hook (see 02-CLOSEOUT.md § SC-1 findings).
  */
 async function buildRealPiRuntime(
 	cwd: string,
 	baseUrl: string,
 	profile: ProfileSnapshot,
+	customTools: ToolDefinitionLike[],
+	assembledPromptProvider: () => { text: string; sha256: string },
 ): Promise<PiRuntime> {
 	// 1. Auth: emmy-serve doesn't require a key. Seed a dummy via a named env var
 	// so pi-ai's auth lookup is satisfied. The apiKey field in ProviderConfigInput
@@ -142,21 +197,36 @@ async function buildRealPiRuntime(
 		);
 	}
 
-	// 4. Services + session.
+	// 4. Services — Plan 03-01: install the Emmy ExtensionFactory here so pi's
+	// before_provider_request hook is authoritative on every wire request.
+	const emmyExtension = createEmmyExtension({
+		profile,
+		assembledPromptProvider,
+	});
 	const services = await createAgentSessionServices({
 		cwd,
 		authStorage,
 		modelRegistry,
+		resourceLoaderOptions: {
+			extensionFactories: [emmyExtension],
+			// Phase 3 keeps pi's on-disk extension discovery disabled by default
+			// — Emmy owns the extension surface via the factory passed above.
+			// Future plans may flip this back on (Plan 03-05 input handler, etc.).
+			noExtensions: false,
+		},
 	});
 	const sessionManager = SessionManager.inMemory(cwd);
+	// 5. Session — with the Phase-3 customTools flip landed.
 	const { session } = await createAgentSessionFromServices({
 		services,
 		sessionManager,
 		model: emmyModel,
-		customTools: [],
+		customTools: customTools as unknown as Parameters<
+			typeof createAgentSessionFromServices
+		>[0]["customTools"],
 	});
 
-	// 5. Event dispatch table (emmy's on() → pi's subscribe()).
+	// 6. Event dispatch table (emmy's on() → pi's subscribe()).
 	const handlers: Record<string, Array<(...args: unknown[]) => void>> = {};
 	session.subscribe((event: unknown) => {
 		const type = (event as { type?: string })?.type;
@@ -165,8 +235,15 @@ async function buildRealPiRuntime(
 		if (ours) for (const h of ours) h(event);
 	});
 
-	// 6. runPrint: subscribe-to-agent_end + session.prompt(). Resolves with the
+	// 7. runPrint: subscribe-to-agent_end + session.prompt(). Resolves with the
 	// final assistant text (or a JSON event-dump for mode="json").
+	//
+	// Plan 03-01 NOTE: the a17f4a9 <think>-strip render-time regex has been
+	// REMOVED. The proper fix is chat_template_kwargs.enable_thinking:false
+	// injected by the before_provider_request hook (see pi-emmy-extension.ts +
+	// packages/emmy-provider/src/before-request-hook.ts). The model never emits
+	// <think> blocks on a live Phase-3 wire path; render-time stripping is no
+	// longer required and would mask future regressions.
 	const runPrint = async (
 		prompt: string,
 		opts?: { mode: "text" | "json" },
@@ -195,16 +272,6 @@ async function buildRealPiRuntime(
 								.filter((c) => c.type === "text" && typeof c.text === "string")
 								.map((c) => c.text as string)
 								.join("");
-							// Strip Qwen3.6 <think>...</think> blocks. pi-ai's built-in
-							// openai-completions stream only sends enable_thinking:false
-							// when model.reasoning is true AND thinkingLevel maps to a
-							// falsy reasoningEffort, which pi's default thinkingLevel
-							// ("medium") does not produce. Wiring @emmy/provider (which
-							// correctly sets chat_template_kwargs.enable_thinking:false
-							// at the request level) through pi's streamSimple hook is
-							// a Phase 3 extension-runner binding. Strip-at-render is
-							// the Phase-2 stopgap for clean --print output.
-							text = text.replace(/<think>[\s\S]*?<\/think>\s*/g, "").trim();
 							break;
 						}
 					}
@@ -222,23 +289,31 @@ async function buildRealPiRuntime(
 		});
 	};
 
+	// 8. Build the adapter. Plan 03-01 flips registerProvider + registerTool
+	// from NO-OP to introspectable collectors so wire-through regression tests
+	// can verify the Wave-1 work landed.
+	const _registeredProviders: Array<{ name: string; impl: unknown }> = [];
+	const _registeredCustomTools: Array<{ name: string }> = customTools.map((t) => ({ name: t.name }));
 	const adapter: PiRuntime = {
-		registerProvider: (_name: string, _impl: unknown) => {
-			// Phase 2 surface: emmy-provider's reactive grammar retry library is
-			// available; pi's built-in openai-completions stream is the wire path
-			// for SC-1. Binding the reactive retry through pi's BeforeProviderRequestEvent
-			// is Phase 3 extension-runner work.
+		registerProvider: (name: string, impl: unknown) => {
+			_registeredProviders.push({ name, impl });
 		},
 		registerTool: (_spec: unknown) => {
-			// Phase 2 surface: emmy-tools native + hash-anchored-edit + MCP libraries
-			// are available; pi's built-in tools drive SC-1. Swapping in emmy's
-			// hash-anchored edit via customTools is a Phase 3 extension-runner binding.
+			// The authoritative tool surface is customTools (passed above).
+			// Calls to registerTool via the legacy PiRuntime path are observed
+			// but do NOT duplicate into customTools — they would shadow and
+			// create a split-brain between pi's baseToolDefinitions and our
+			// customTools array (D-01 anti-pattern).
 		},
 		on: (event: string, handler: (...args: unknown[]) => void) => {
 			(handlers[event] ||= []).push(handler);
 		},
 		runPrint,
 		session,
+		introspect: () => ({
+			registeredProviders: _registeredProviders.slice(),
+			registeredCustomTools: _registeredCustomTools.slice(),
+		}),
 	};
 	return adapter;
 }
@@ -252,6 +327,12 @@ export async function createEmmySession(
 	transcriptPath: string;
 }> {
 	// 1. SP_OK canary (Pitfall #6 fail-loud).
+	//
+	// CRITICAL: this fires via @emmy/provider's raw postChat path — it MUST
+	// run BEFORE buildRealPiRuntime is called, so the canary request never
+	// routes through pi's before_provider_request hook (which would overwrite
+	// the canary's deliberately-terse system prompt with Emmy's 3-layer
+	// assembled prompt). RESEARCH Pitfall #7 / 03-CONTEXT T-03-01-02 guard.
 	const spOk = await runSpOk(opts.baseUrl, opts.profile.serving.engine.served_model_name);
 	if (!spOk.ok) throw new SpOkCanaryError(spOk.responseText);
 	emitEvent({
@@ -312,12 +393,55 @@ export async function createEmmySession(
 		profile: opts.profile.ref,
 	});
 
-	// 7. Build the pi runtime (W2 FIX — real pi factory unless overridden).
-	const pi: PiRuntime = opts.piFactory
-		? opts.piFactory()
-		: await buildRealPiRuntime(opts.cwd, opts.baseUrl, opts.profile);
+	// 7. Phase-3 Plan 03-01: build customTools BEFORE pi session is constructed.
+	//    - native: buildNativeToolDefs returns the 8 native tools as pi
+	//      ToolDefinition-shaped objects (label/description/parameters/execute).
+	//    - MCP: only invoked if ~/.emmy or ./.emmy has a non-empty config. The
+	//      D-18 poison gate is re-asserted inside buildMcpToolDefs (regression
+	//      test: packages/emmy-ux/test/session.mcp-poison.test.ts).
+	const nativeTools: ToolDefinitionLike[] = buildNativeToolDefs({
+		cwd: opts.cwd,
+		profileRef: opts.profile.ref,
+	});
+	const registeredToolNames = new Set<string>(NATIVE_TOOL_NAMES);
+	let mcpTools: ToolDefinitionLike[] = [];
+	let mcpRegisteredCount = 0;
+	let mcpSpawnedForTeardown: Array<{ name: string; pid: number; kill: () => void }> = [];
+	try {
+		const mcpCfg = loadMcpServersConfig({ userHome: homedir(), projectRoot: opts.cwd });
+		if (Object.keys(mcpCfg.servers).length > 0) {
+			const res = await buildMcpToolDefs(mcpCfg, {
+				registeredToolNames,
+				profileRef: opts.profile.ref,
+			});
+			mcpTools = res.tools;
+			mcpRegisteredCount = res.registeredCount;
+			mcpSpawnedForTeardown = res.spawned;
+		}
+	} catch (e) {
+		// MCP load/register errors surface via @emmy/tools' dotted-path errors;
+		// re-throw so pi-emmy's CLI handler can print the named diagnostic.
+		throw e;
+	}
+	const customTools: ToolDefinitionLike[] = [...nativeTools, ...mcpTools];
 
-	// 8. Registration order (provider → native tools → MCP bridge).
+	// 8. Build the pi runtime (W2 FIX — real pi factory unless overridden).
+	//    Phase-3 wire: customTools are passed through so pi's AgentSession
+	//    uses them at creation time. Extension factory installs
+	//    before_provider_request hook (see pi-emmy-extension.ts).
+	const pi: PiRuntime = opts.piFactory
+		? opts.piFactory({ customTools })
+		: await buildRealPiRuntime(
+				opts.cwd,
+				opts.baseUrl,
+				opts.profile,
+				customTools,
+				() => ({ text: assembledPrompt.text, sha256: assembledPrompt.sha256 }),
+		  );
+
+	// 9. Pi-layer provider + legacy tool registrations. For the real adapter
+	// these append to introspection arrays; for the stub piFactory the stub
+	// decides what to do (the test-only path).
 	registerEmmyProvider(
 		pi as unknown as {
 			registerProvider: (
@@ -329,35 +453,52 @@ export async function createEmmySession(
 		{ baseUrl: opts.baseUrl },
 	);
 
-	registerNativeTools(pi as unknown as { registerTool: (spec: unknown) => void } as Parameters<typeof registerNativeTools>[0], {
-		cwd: opts.cwd,
-		profileRef: opts.profile.ref,
-	});
+	// Legacy registerNativeTools — still called for stub-piFactory paths and
+	// for introspection side effects. The live customTools path above is the
+	// authoritative tool registry; this call is a no-op on the real adapter
+	// (adapter.registerTool body is a no-op by design, per D-01 no-split-brain).
+	registerNativeTools(
+		pi as unknown as { registerTool: (spec: unknown) => void } as Parameters<typeof registerNativeTools>[0],
+		{
+			cwd: opts.cwd,
+			profileRef: opts.profile.ref,
+		},
+	);
 
-	// MCP bridge — layered config from ~/.emmy + ./.emmy; project overrides user.
-	let mcpRegisteredCount = 0;
-	try {
-		const mcpCfg = loadMcpServersConfig({ userHome: homedir(), projectRoot: opts.cwd });
-		if (Object.keys(mcpCfg.servers).length > 0) {
-			const registered = await registerMcpServers(
-				pi as unknown as Parameters<typeof registerMcpServers>[0],
-				mcpCfg,
-				{
-					registeredToolNames: new Set<string>(NATIVE_TOOL_NAMES),
-					profileRef: opts.profile.ref,
-				},
-			);
-			mcpRegisteredCount = registered.registeredTools.length;
+	// For stub-piFactory tests that do NOT exercise buildMcpToolDefs (Phase 2's
+	// session.test.ts still uses registerMcpServers — unchanged), the legacy
+	// bridge stays functional. The stub factory dispatches `registerTool`
+	// calls; the real adapter's registerTool is a no-op (customTools path
+	// above is authoritative).
+	if (!opts.piFactory) {
+		// Real adapter already has customTools; skip legacy registerMcpServers.
+		// Teardown: if MCP spawned anything, its kill() hooks live in
+		// mcpSpawnedForTeardown; Plan 03-04 adds shutdown wiring.
+		void mcpSpawnedForTeardown;
+	} else {
+		// Stub path — exercise the legacy registerMcpServers for Phase 2 test
+		// compatibility (these tests pass a mock pi that records calls).
+		try {
+			const mcpCfg = loadMcpServersConfig({ userHome: homedir(), projectRoot: opts.cwd });
+			if (Object.keys(mcpCfg.servers).length > 0) {
+				const registered = await registerMcpServers(
+					pi as unknown as Parameters<typeof registerMcpServers>[0],
+					mcpCfg,
+					{
+						registeredToolNames: new Set<string>(NATIVE_TOOL_NAMES),
+						profileRef: opts.profile.ref,
+					},
+				);
+				mcpRegisteredCount = registered.registeredTools.length;
+			}
+		} catch (e) {
+			throw e;
 		}
-	} catch (e) {
-		// MCP load/register errors surface via @emmy/tools' dotted-path errors;
-		// re-throw so pi-emmy's CLI handler can print the named diagnostic.
-		throw e;
 	}
 
-	// 9. Subscribe to pi events → transcript (B2). The real pi runtime forwards
-	// real AgentSessionEvents; the stub-piFactory case forwards whatever the
-	// test emits. Either way, every turn lands in the JSONL file.
+	// 10. Subscribe to pi events → transcript (B2). The real pi runtime
+	// forwards real AgentSessionEvents; the stub-piFactory case forwards
+	// whatever the test emits. Either way, every turn lands in the JSONL file.
 	const appendTurn = (turn: unknown): void => {
 		try {
 			const t: SessionTurn = {
@@ -370,9 +511,6 @@ export async function createEmmySession(
 			/* never let transcript I/O crash the session */
 		}
 	};
-	// Pi 0.68.0 AgentSessionEvents surface under these type names; the stub
-	// tests also use these names. Calls to pi.on are swallowed when the event
-	// isn't known to the adapter.
 	try { pi.on("turn", appendTurn); } catch { /* ok */ }
 	try { pi.on("turn_start", appendTurn); } catch { /* ok */ }
 	try { pi.on("turn_end", appendTurn); } catch { /* ok */ }

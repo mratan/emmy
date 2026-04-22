@@ -66,11 +66,11 @@ interface IntrospectableRuntime {
 }
 
 function makeIntrospectableStubPiFactory(opts: {
-	customTools: Array<{ name: string }>;
 	sentinelFlag: { value: boolean };
-}): () => IntrospectableRuntime {
-	return () => {
+}): (args: { customTools: Array<{ name: string }> }) => IntrospectableRuntime {
+	return (args) => {
 		const providers: Array<{ name: string; impl: unknown }> = [];
+		const customToolsSnapshot = args.customTools.map((t) => ({ name: t.name }));
 		return {
 			registerProvider: (name: string, impl: unknown) => {
 				providers.push({ name, impl });
@@ -99,7 +99,7 @@ function makeIntrospectableStubPiFactory(opts: {
 			},
 			introspect: () => ({
 				registeredProviders: providers.slice(),
-				registeredCustomTools: opts.customTools.slice(),
+				registeredCustomTools: customToolsSnapshot.slice(),
 			}),
 		};
 	};
@@ -175,16 +175,12 @@ describe("createEmmySession — Wave 1 wire-through boot contract", () => {
 		// code must populate `registeredCustomTools` at boot via either the
 		// real pi runtime path OR via a test-only hook exported from the adapter.
 		const sentinelFlag = { value: false };
-		const customToolsForStub: Array<{ name: string }> = [];
 		const out = await createEmmySession({
 			profile: makeProfile(profilePath),
 			baseUrl,
 			cwd,
 			mode: "tui",
-			piFactory: makeIntrospectableStubPiFactory({
-				customTools: customToolsForStub,
-				sentinelFlag,
-			}),
+			piFactory: makeIntrospectableStubPiFactory({ sentinelFlag }),
 		});
 		const introspect = (out.runtime as unknown as IntrospectableRuntime).introspect;
 		expect(typeof introspect).toBe("function");
@@ -207,10 +203,7 @@ describe("createEmmySession — Wave 1 wire-through boot contract", () => {
 			baseUrl,
 			cwd,
 			mode: "tui",
-			piFactory: makeIntrospectableStubPiFactory({
-				customTools: [],
-				sentinelFlag,
-			}),
+			piFactory: makeIntrospectableStubPiFactory({ sentinelFlag }),
 		});
 		const snap = (out.runtime as unknown as IntrospectableRuntime).introspect();
 		expect(snap.registeredProviders.length).toBe(1);
@@ -228,10 +221,7 @@ describe("createEmmySession — Wave 1 wire-through boot contract", () => {
 			cwd,
 			mode: "print",
 			userPrompt: "list files",
-			piFactory: makeIntrospectableStubPiFactory({
-				customTools: [],
-				sentinelFlag,
-			}),
+			piFactory: makeIntrospectableStubPiFactory({ sentinelFlag }),
 		});
 		// Reset the server-side sentinel (the SP_OK canary already fired at boot
 		// — we want to observe a second HTTP call triggered by runPrint via the

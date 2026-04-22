@@ -30,6 +30,40 @@ import { postChat } from "./http";
 import type { ChatRequest, ChatResponse, ProfileSnapshot, ToolCall } from "./types";
 
 /**
+ * Retry-state shape the before_provider_request hook consumes to decide whether
+ * to inject `extra_body.guided_decoding.grammar_str` for the current request.
+ */
+export interface RetryState {
+	wantsGrammar: boolean;
+}
+
+// Intentional: pure WeakMap semantics — GC handles the entry lifetime correctly.
+// Each request's AbortSignal is the key; when the signal is discarded (typically
+// at response-stream close) the corresponding entry becomes unreachable. There is
+// no size cap, no explicit eviction, no manual bookkeeping — long-running sessions
+// are bounded by request-level AbortSignal lifetime.
+// See grammar-retry.weakmap.test.ts for the guard test.
+const _retryStateMap: WeakMap<AbortSignal, RetryState> = new WeakMap();
+
+/**
+ * Read the retry state associated with a given AbortSignal. Returns undefined
+ * if no state has been stored against this signal. Pure WeakMap semantics —
+ * never does size-bounded eviction.
+ */
+export function getRetryStateForSignal(signal: AbortSignal): RetryState | undefined {
+	return _retryStateMap.get(signal);
+}
+
+/**
+ * Associate retry state with a given AbortSignal. Later reads via
+ * getRetryStateForSignal return this value while `signal` is reachable;
+ * once `signal` is GC'd the entry becomes unreachable automatically.
+ */
+export function setRetryStateForSignal(signal: AbortSignal, state: RetryState): void {
+	_retryStateMap.set(signal, state);
+}
+
+/**
  * Reactive grammar retry path (D-11 / CLAUDE.md Pitfall #6).
  *
  * 1. Parse unconstrained first. Most turns never pay the grammar cost.

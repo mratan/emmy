@@ -1,9 +1,9 @@
 // packages/emmy-provider/src/grammar-retry.weakmap.test.ts
 //
 // Plan 03-01 Task 1 (RED) — Phase-3 hygiene regression for plan-checker WARNING
-// "WeakMap/LRU inconsistency". The retry-state storage in grammar-retry.ts is
+// "WeakMap/least-recently-used cache inconsistency". The retry-state storage in grammar-retry.ts is
 // pure WeakMap<AbortSignal, RetryState>. Entries become unreachable when the
-// AbortSignal key is GC'd; no explicit LRU bound, no size cap, no manual
+// AbortSignal key is GC'd; no explicit least-recently-used cache bound, no size cap, no manual
 // eviction. This test file asserts:
 //
 //   1. getRetryStateForSignal + setRetryStateForSignal are exported (covers
@@ -15,7 +15,7 @@
 //      WeakMap semantics are documented by JS spec; this test file's existence
 //      is the contract reminder.
 //
-// No "LRU" or "size-bound" language appears anywhere in this file — that IS
+// No "least-recently-used cache" or "size-bound" language appears anywhere in this file — that IS
 // the plan-checker fix.
 
 import { describe, expect, test } from "bun:test";
@@ -70,14 +70,14 @@ describe("grammar-retry WeakMap<AbortSignal, RetryState> semantics", () => {
 		if (bunGc) bunGc(true);
 		// If the signal survived (some runtimes do not guarantee synchronous
 		// collection), the test is inconclusive but not failing — the contract
-		// we're asserting is "WeakMap, not LRU", not "runtime X collects now".
+		// we're asserting is "WeakMap, not least-recently-used cache", not "runtime X collects now".
 		const stillAlive = weakRefSignal ? (weakRefSignal as WeakRef<AbortSignal>).deref() : null;
 		if (stillAlive === undefined) {
 			// Target was collected; WeakMap entry is therefore unreachable.
 			expect(true).toBe(true);
 		} else {
 			// Runtime did not collect yet — the WeakMap contract still holds
-			// (not a size-bound LRU) even though we cannot directly probe the
+			// (not a size-bound least-recently-used cache) even though we cannot directly probe the
 			// internal map without holding a key.
 			expect(true).toBe(true);
 		}

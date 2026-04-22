@@ -33,6 +33,7 @@ import { ToolsError } from "./errors";
 import { readWithHashes, renderHashedLines } from "./read-with-hashes";
 import { editHashline } from "./edit-hashline";
 import { webFetch, NETWORK_REQUIRED_TAG } from "./web-fetch";
+import { toolSpecToDefinition, type ToolDefinitionLike } from "./tool-definition-adapter";
 
 export const NATIVE_TOOL_NAMES = Object.freeze([
   "read",
@@ -368,3 +369,33 @@ function truncateHeadTail(text: string, linesPerSide: number): string {
   const tail = lines.slice(-linesPerSide).join("\n");
   return `${head}\n…(truncated ${lines.length - linesPerSide * 2} lines)…\n${tail}`;
 }
+
+/**
+ * Plan 03-01 Task 2 (GREEN) — Phase-3 wire-through helper.
+ *
+ * Return the 8 native tools as pi 0.68 ToolDefinition-shaped objects,
+ * ready to pass into `createAgentSessionFromServices({ customTools: [...] })`.
+ *
+ * Implementation strategy: we RE-USE registerNativeTools as the single source
+ * of truth for tool behavior + schema. A collector shim captures the
+ * PiToolSpec emissions, then each spec is adapted to a ToolDefinitionLike via
+ * toolSpecToDefinition. This means any change to a tool's schema/behavior
+ * stays at one call-site (registerNativeTools) instead of being duplicated.
+ */
+export function buildNativeToolDefs(opts: NativeToolOpts): ToolDefinitionLike[] {
+  const collected: PiToolSpec[] = [];
+  registerNativeTools(
+    {
+      registerTool: (spec: PiToolSpec) => {
+        collected.push(spec);
+      },
+    },
+    opts,
+  );
+  return collected.map((s) => toolSpecToDefinition(s));
+}
+
+// Re-export adapter types so downstream callers (session.ts, eval runners)
+// don't need to import from packages/emmy-tools/src/tool-definition-adapter
+// directly.
+export type { ToolDefinitionLike, AgentToolResultLike } from "./tool-definition-adapter";

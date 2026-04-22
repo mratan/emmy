@@ -22,6 +22,7 @@ import { emitEvent } from "@emmy/telemetry";
 import type { McpServersConfig, PiToolSpec } from "./types";
 import { McpServerSpawnError, ToolNameCollisionError } from "./errors";
 import { assertNoPoison } from "./mcp-poison-check";
+import { toolSpecToDefinition, type ToolDefinitionLike } from "./tool-definition-adapter";
 
 interface SpawnedEntry {
   name: string;
@@ -129,6 +130,123 @@ export async function registerMcpServers(
     // Fail-loud discipline (Shared Pattern 3): kill every spawned subprocess
     // BEFORE re-throwing, so a collision/poison at server N doesn't leak
     // servers 0..N-1 as orphan processes.
+    for (const s of spawned) s.kill();
+    throw e;
+  }
+}
+
+/**
+ * Plan 03-01 Task 2 (GREEN) — Phase-3 wire-through helper.
+ *
+ * Emit MCP-discovered tools as pi 0.68 ToolDefinition-shaped objects, ready
+ * to pass into createAgentSessionFromServices({ customTools: [...] }).
+ *
+ * D-18 CONTRACT (re-asserted on the NEW ToolDefinition-emitting path):
+ *   - `assertNoPoison` is invoked on both tool.name and tool.description
+ *     BEFORE the ToolDefinition is emitted.
+ *   - Rejected tools are skipped — a poisoned tool from server N does NOT
+ *     block sibling tools from the same server (same semantics as
+ *     registerMcpServers).
+ *   - Collisions with `registeredToolNames` (the 8 native tools plus earlier
+ *     MCP registrations) throw ToolNameCollisionError and trigger teardown.
+ *
+ * See packages/emmy-ux/test/session.mcp-poison.test.ts for the regression
+ * guard.
+ */
+export async function buildMcpToolDefs(
+  cfg: McpServersConfig,
+  opts: {
+    registeredToolNames: Set<string>;
+    profileRef: { id: string; version: string; hash: string };
+  },
+): Promise<{
+  tools: ToolDefinitionLike[];
+  spawned: Array<{ name: string; pid: number; kill: () => void }>;
+  registeredCount: number;
+}> {
+  const spawned: SpawnedEntry[] = [];
+  const tools: ToolDefinitionLike[] = [];
+
+  try {
+    for (const [serverName, spec] of Object.entries(cfg.servers)) {
+      let client: Client;
+      let transport: StdioClientTransport;
+      try {
+        transport = new StdioClientTransport({
+          command: spec.command,
+          args: spec.args,
+          env: spec.env,
+        });
+        client = new Client(
+          { name: `emmy-bridge/${serverName}`, version: "0.1.0" },
+          { capabilities: {} },
+        );
+        await client.connect(transport);
+      } catch (e) {
+        throw new McpServerSpawnError(
+          serverName,
+          e instanceof Error ? e.message : String(e),
+        );
+      }
+      const pid =
+        (transport as unknown as { _process?: { pid?: number } })._process?.pid ?? -1;
+      const kill = (): void => {
+        try {
+          void client.close();
+        } catch {
+          /* best-effort */
+        }
+      };
+      spawned.push({ name: serverName, pid, kill, client });
+
+      const toolsResp = await client.listTools();
+      for (const t of toolsResp.tools) {
+        // D-18 poison gate — MUST fire BEFORE emitting a ToolDefinition.
+        // This is the Plan 03-01 re-assertion on the new customTools path
+        // (regression guard: packages/emmy-ux/test/session.mcp-poison.test.ts).
+        try {
+          assertNoPoison(t.name, "name");
+          if (t.description) assertNoPoison(t.description, "description");
+        } catch (e) {
+          emitEvent({
+            event: "mcp.tool.rejected",
+            ts: new Date().toISOString(),
+            profile: opts.profileRef,
+            server: serverName,
+            tool: t.name,
+            reason: e instanceof Error ? e.message : String(e),
+          });
+          continue;
+        }
+        // D-15: flat-name collision guard.
+        if (opts.registeredToolNames.has(t.name)) {
+          throw new ToolNameCollisionError(t.name, [...opts.registeredToolNames]);
+        }
+        const pispec: PiToolSpec = {
+          name: t.name,
+          description: t.description ?? "",
+          parameters:
+            (t.inputSchema as Record<string, unknown> | undefined) ??
+            ({ type: "object", properties: {}, additionalProperties: false } as Record<string, unknown>),
+          invoke: async (args) => client.callTool({ name: t.name, arguments: args }),
+        };
+        tools.push(toolSpecToDefinition(pispec));
+        opts.registeredToolNames.add(t.name);
+        emitEvent({
+          event: "mcp.tool.registered",
+          ts: new Date().toISOString(),
+          profile: opts.profileRef,
+          server: serverName,
+          tool: t.name,
+        });
+      }
+    }
+    return {
+      tools,
+      spawned: spawned.map((s) => ({ name: s.name, pid: s.pid, kill: s.kill })),
+      registeredCount: tools.length,
+    };
+  } catch (e) {
     for (const s of spawned) s.kill();
     throw e;
   }

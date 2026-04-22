@@ -17,9 +17,22 @@ import type { ChatRequest, ChatResponse, ProfileSnapshot } from "./types";
 // W1 FIX: package-root re-exports. Plan 04 sp-ok-canary imports `postChat`
 // from here; Plan 08 eval corpus imports `callWithReactiveGrammar`. Do NOT
 // remove — the exports map routes everything through "./src/index.ts".
-export { callWithReactiveGrammar } from "./grammar-retry";
+export {
+	callWithReactiveGrammar,
+	getRetryStateForSignal,
+	setRetryStateForSignal,
+} from "./grammar-retry";
 export { postChat } from "./http";
 export { stripNonStandardFields } from "./openai-compat";
+// Phase 3 Plan 03-01: before_provider_request hook — consumed by
+// packages/emmy-ux/src/pi-emmy-extension.ts to install the authoritative
+// wire path for D-02a/b/c and D-04 on every live chat request.
+export {
+	handleBeforeProviderRequest,
+	type BeforeProviderRequestPayload,
+	type AssembledPromptSnapshot,
+	type RetryState,
+} from "./before-request-hook";
 export * from "./types";
 export * from "./errors";
 

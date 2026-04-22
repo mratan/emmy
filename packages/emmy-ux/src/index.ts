@@ -23,5 +23,9 @@ export {
 	type SessionTurn,
 } from "./session-transcript";
 export { createEmmySession, type PiRuntime } from "./session";
+// Plan 03-01: Phase-3 pi 0.68 extension factory — installs the
+// before_provider_request hook (enable_thinking:false + Emmy 3-layer prompt
+// overwrite + reactive-grammar injection) on every live wire request.
+export { createEmmyExtension, type EmmyExtensionOptions } from "./pi-emmy-extension";
 
 export const PACKAGE_VERSION = "0.1.0";
