@@ -10,7 +10,9 @@
 
 ## Verdict
 
-**sc1 green** — daily-driver bar met.
+sc1 green
+
+**Daily-driver bar met.**
 
 The author ran `pi-emmy --print` against a clean repo, asked it to create three files + tests + run the suite, and the agent completed the task using only pi's built-in `write` + `bash` tools against the local Qwen3.6 vLLM endpoint. No cloud call, no leaving the TUI/--print path, tests green.
 
