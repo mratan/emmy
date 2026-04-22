@@ -42,7 +42,8 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **HARNESS-03**: Tool-call format is owned by the profile (not hardcoded); each model uses what it parses best (Hermes-style XML for Qwen, function calling for Gemma 4)
 - [x] **HARNESS-04
 **: Agent loop is customizable: configurable retry-with-corrective-feedback, layered ReAct stopping conditions, infinite-loop guard, structured (not length-based) tool-result truncation
-- [ ] **HARNESS-05**: Context management is owned by the harness: smart pruning, injection control, file pinning (via pi's `@file`), per-profile compaction policy
+- [x] **HARNESS-05
+**: Context management is owned by the harness: smart pruning, injection control, file pinning (via pi's `@file`), per-profile compaction policy
 - [x] **HARNESS-06
 **: System prompt assembly is layered (global → project → user), every assembly emits a hash to logs, and the assembled prompt fits a budget (default ≤ 200 tokens base, profile may extend with rationale)
 - [x] **HARNESS-07
@@ -70,7 +71,8 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [x] **CONTEXT-01
 **: AGENTS.md / `.pi/SYSTEM.md` discipline; layered global → project → user; example AGENTS.md template shipped for emmy projects
-- [ ] **CONTEXT-02**: Auto-compaction with per-profile policy (Gemma 4 may want different aggressiveness than Qwen 3.6)
+- [x] **CONTEXT-02
+**: Auto-compaction with per-profile policy (Gemma 4 may want different aggressiveness than Qwen 3.6)
 - [x] **CONTEXT-03**: File pinning via pi's `@file` reference + read-at-session-start
 - [x] **CONTEXT-04
 **: Per-profile prompt-prefix discipline documented (system → AGENTS.md → tool defs → user; never reorder) so prefix caching is maximized
@@ -189,7 +191,7 @@ Which phases cover which requirements. Updated by roadmapper 2026-04-20.
 | HARNESS-02 | Phase 2 | Done † |
 | HARNESS-03 | Phase 2 | Done |
 | HARNESS-04 | Phase 2 | Done |
-| HARNESS-05 | Phase 3 | Pending |
+| HARNESS-05 | Phase 3 | Done |
 | HARNESS-06 | Phase 2 | Done † |
 | HARNESS-07 | Phase 2 | Done † |
 | HARNESS-08 | Phase 4 | Pending |
@@ -205,7 +207,7 @@ Which phases cover which requirements. Updated by roadmapper 2026-04-20.
 | TOOLS-08 | Phase 2 | Done |
 | TOOLS-09 | Phase 2 | Done |
 | CONTEXT-01 | Phase 2 | Done |
-| CONTEXT-02 | Phase 3 | Pending |
+| CONTEXT-02 | Phase 3 | Done |
 | CONTEXT-03 | Phase 2 | Done |
 | CONTEXT-04 | Phase 2 | Done |
 | CONTEXT-05 | Phase 2 | Done |

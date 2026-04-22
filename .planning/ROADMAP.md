@@ -155,7 +155,7 @@ Plans:
 Plans:
 - [x] 03-01-PLAN.md — Track B wire-through atomic wave: @emmy/provider streamSimple + tools customTools + 3-layer prompt authoritative + enable_thinking:false + reactive grammar live-path + a17f4a9 <think>-strip removal + SC-1 walkthrough **(complete 2026-04-22; verdict `sc1 green`; commits ab4648f RED + d4cd189 GREEN + 5e0ba97 walkthrough evidence + b18b257 SUMMARY)**
 - [x] 03-02-PLAN.md — Langfuse v3 compose stack + @emmy/telemetry dual-sink (JSONL + OTLP) + OTel SDK init + EmmyProfileStampProcessor + EMMY_TELEMETRY=off kill-switch (HARNESS-09 + TELEM-01) **(complete 2026-04-22; commits f410bfd infra + 02d46c5 RED + d11f13e GREEN + 946da4d healthcheck fix; Task 4 SC-1 trace walkthrough operator-gated — resume signal `p3-02 trace green`)**
-- [ ] 03-03-PLAN.md — @emmy/context package: emmyCompactionTrigger (reuses pi prepareCompaction+compact) + D-14 preservation pre-filter + D-16 fallback + D-12 fail-loud + SC-2 200-turn fixture (HARNESS-05 + CONTEXT-02)
+- [x] 03-03-PLAN.md — @emmy/context package: emmyCompactionTrigger + D-14 preservation pre-filter + D-16 fallback + D-12 fail-loud + SC-2 200-turn fixture (HARNESS-05 + CONTEXT-02) **(complete 2026-04-22; commits 42938e2 scaffold + b6557f4 trigger GREEN + 8756b67 SC-2 fixture/runner; fixture sha256:26149bfce4...a0a19b; stub-mode verdict=pass on default/alternate/disabled variants; live-mode matrix deferred to Plan 03-07; Rule-3 auto-fix folded in: pi 0.68 top-level exports narrower than planned, emmy uses EmmyCompactionPreparation + prepareCompactionLocal + injectable engine.summarize to preserve architectural invariant)**
 - [ ] 03-04-PLAN.md — 1 Hz TUI footer: vllm:gpu_cache_usage_perc parser + nvidia-smi TS port (N/A tolerant) + 5-sample sliding-window tok/s rate + graceful degrade + spec-accept placeholder (UX-02)
 - [ ] 03-05-PLAN.md — Lived-experience rating: Alt+Up/Alt+Down via pi input event (ANSI x1b[1;3A/B) + 13-field feedback.jsonl schema + idempotent upsert + pi-emmy --export-hf + HF-datasets loadable (TELEM-02 + TELEM-03)
 - [ ] 03-06-PLAN.md — OFFLINE OK badge: tool-registry boot audit + web_fetch allowlist runtime enforcement + warn-and-continue red flip + hostname-exact match (UX-03)
@@ -262,7 +262,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Serving Foundation + Profile Schema | 8/8 | Closed (with 3 documented deferrals) | 2026-04-21 |
 | 2. Pi-Harness MVP — Daily-Driver Baseline | 9/9 | Closed (with 5 Phase-3 wire-through deferrals) | 2026-04-21 |
-| 3. Observability + Agent-Loop Hardening + Lived-Experience | 1/7 | Executing (plan 03-01 complete) | - |
+| 3. Observability + Agent-Loop Hardening + Lived-Experience | 3/7 | Executing (Wave 2 closed 2026-04-22; plans 03-01/02/03 complete) | - |
 | 4. Gemma 4 Profile + Profile System Maturity | 0/? | Not started | - |
 | 5. Eval Harness + Reproducible Benchmark Suite | 0/? | Not started | - |
 | 6. Speculative Decoding + Latency Polish | 0/? | Not started | - |
