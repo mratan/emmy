@@ -157,7 +157,7 @@ Plans:
 - [x] 03-02-PLAN.md — Langfuse v3 compose stack + @emmy/telemetry dual-sink (JSONL + OTLP) + OTel SDK init + EmmyProfileStampProcessor + EMMY_TELEMETRY=off kill-switch (HARNESS-09 + TELEM-01) **(complete 2026-04-22; commits f410bfd infra + 02d46c5 RED + d11f13e GREEN + 946da4d healthcheck fix; Task 4 SC-1 trace walkthrough operator-gated — resume signal `p3-02 trace green`)**
 - [x] 03-03-PLAN.md — @emmy/context package: emmyCompactionTrigger + D-14 preservation pre-filter + D-16 fallback + D-12 fail-loud + SC-2 200-turn fixture (HARNESS-05 + CONTEXT-02) **(complete 2026-04-22; commits 42938e2 scaffold + b6557f4 trigger GREEN + 8756b67 SC-2 fixture/runner; fixture sha256:26149bfce4...a0a19b; stub-mode verdict=pass on default/alternate/disabled variants; live-mode matrix deferred to Plan 03-07; Rule-3 auto-fix folded in: pi 0.68 top-level exports narrower than planned, emmy uses EmmyCompactionPreparation + prepareCompactionLocal + injectable engine.summarize to preserve architectural invariant)**
 - [x] 03-04-PLAN.md — 1 Hz TUI footer: vllm:gpu_cache_usage_perc parser + nvidia-smi TS port (N/A tolerant) + 5-sample sliding-window tok/s rate + graceful degrade + spec-accept placeholder (UX-02) **(complete 2026-04-22; commits 64a625f RED + 498390c GREEN + a43bd03 parity driver; 322 bun tests pass (+48 vs baseline); honors verified metric name vllm:gpu_cache_usage_perc (not kv_cache_usage_perc — CONTEXT D-22 typo); Task 3 SC-4 parity verification operator-gated — resume signal `p3-04 footer green`)**
-- [ ] 03-05-PLAN.md — Lived-experience rating: Alt+Up/Alt+Down via pi input event (ANSI x1b[1;3A/B) + 13-field feedback.jsonl schema + idempotent upsert + pi-emmy --export-hf + HF-datasets loadable (TELEM-02 + TELEM-03)
+- [x] 03-05-PLAN.md — Lived-experience rating: Alt+Up/Alt+Down via pi input event (ANSI x1b[1;3A/B) + 13-field feedback.jsonl schema + idempotent upsert + pi-emmy --export-hf + HF-datasets loadable (TELEM-02 + TELEM-03) **(complete 2026-04-22; commits 35b7023 RED + 1fc10c7 GREEN; 353 bun tests pass (+31); 11 truths satisfied incl. emmy-synthesized turn_id scheme + idempotent upsert + D-18 input-event intercept before pi's keybind resolution; Task 3 interactive TUI verification operator-gated — resume signal `p3-05 feedback green`)**
 - [ ] 03-06-PLAN.md — OFFLINE OK badge: tool-registry boot audit + web_fetch allowlist runtime enforcement + warn-and-continue red flip + hostname-exact match (UX-03)
 - [ ] 03-07-PLAN.md — Phase close: profile v2→v3 bump + schema patch + PROFILE_NOTES provenance + air-gap CI extension + SC-1 walkthrough verdict + 8 REQ-IDs → Done + 5 Phase-2 Done† → Done + CLOSEOUT.md
 
@@ -262,7 +262,7 @@ Plans:
 |-------|----------------|--------|-----------|
 | 1. Serving Foundation + Profile Schema | 8/8 | Closed (with 3 documented deferrals) | 2026-04-21 |
 | 2. Pi-Harness MVP — Daily-Driver Baseline | 9/9 | Closed (with 5 Phase-3 wire-through deferrals) | 2026-04-21 |
-| 3. Observability + Agent-Loop Hardening + Lived-Experience | 4/7 | Executing (Wave 3 started 2026-04-22; plans 03-01/02/03/04 complete; 03-05/06/07 pending) | - |
+| 3. Observability + Agent-Loop Hardening + Lived-Experience | 5/7 | Executing (Wave 3 ongoing 2026-04-22; plans 03-01/02/03/04/05 complete; 03-06/07 pending) | - |
 | 4. Gemma 4 Profile + Profile System Maturity | 0/? | Not started | - |
 | 5. Eval Harness + Reproducible Benchmark Suite | 0/? | Not started | - |
 | 6. Speculative Decoding + Latency Polish | 0/? | Not started | - |
