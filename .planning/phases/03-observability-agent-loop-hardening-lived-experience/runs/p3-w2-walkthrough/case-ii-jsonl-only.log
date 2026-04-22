@@ -1,0 +1,24 @@
+✅ **Test passed** — 1 pass, 0 failures.
+
+Here's the final state of both files:
+
+### `src/hello.ts`
+
+```ts
+export function greet(name: string): string {
+  return "Hello, " + name;
+}
+```
+
+### `src/hello.test.ts`
+
+```ts
+import { greet } from "./hello";
+import { test, expect } from "bun:test";
+
+test("greet returns correct message", () => {
+  expect(greet("world")).toBe("Hello, world");
+});
+```
+
+Bun reported: **1 pass, 0 fail** — the assertion `greet("world") === "Hello, world"` succeeded.

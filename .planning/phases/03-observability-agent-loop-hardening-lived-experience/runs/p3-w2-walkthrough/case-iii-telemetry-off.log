@@ -1,0 +1,36 @@
+=== pi-emmy SC-1 walkthrough (Phase 3 Wave 2) ===
+work_dir: /tmp/emmy-p3-w2-walkthrough
+prompt:   Create src/hello.ts that exports function greet(name: string): string returning "Hello, " + name. Add a test in src/hello.test.ts using bun test that asserts greet("world") === "Hello, world". Run bun test and report the result. Show me the final state of both files.
+All tests pass. Here's the final state of both files:
+
+---
+
+**`src/hello.ts`**
+```ts
+export function greet(name: string): string {
+    return "Hello, " + name;
+}
+```
+
+**`src/hello.test.ts`**
+```ts
+import { describe, it, expect } from "bun:test";
+import { greet } from "./hello";
+
+describe("greet", () => {
+    it('should return "Hello, world" for input "world"', () => {
+        expect(greet("world")).toBe("Hello, world");
+    });
+});
+```
+
+---
+
+**Test result:** ✅ 1 pass, 0 fail — Ran 1 test across 1 file in 12ms.
+=== stderr tail ===
+[emmy] OBSERVABILITY: OFF (EMMY_TELEMETRY=off or --no-telemetry)
+pi-emmy starting (profile=qwen3.6-35b-a3b@v2, base_url=http://127.0.0.1:8002, telemetry=OFF)
+prompt.assembled sha256=acde256e6ca13cdf40e939216c953948b121601c84be0dbc346ea1d307a45482
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=acde256e6ca13cdf40e939216c953948b121601c84be0dbc346ea1d307a45482, layers=system.md,tool_defs,user)
+pi-emmy transcript=/tmp/emmy-p3-w2-walkthrough/runs/phase2-sc3-capture/session-2026-04-22T06-46-02-613Z.jsonl
