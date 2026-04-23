@@ -82,6 +82,24 @@ def _cmd_profile_hash(args: argparse.Namespace) -> int:
     return 1
 
 
+def _cmd_swap_profile(args: argparse.Namespace) -> int:
+    """`emmy swap-profile --from PATH --to PATH [--port N] [--run-dir DIR] [--no-rollback]`
+
+    Phase 4 PROFILE-08 atomic swap primitive. Proxies to
+    ``emmy_serve.swap.orchestrator.swap_profile`` — see its docstring for the
+    exit-code scheme (0/2/3/4/5/6) and the JSON-per-line stdout contract.
+    """
+    from .swap.orchestrator import swap_profile
+
+    return swap_profile(
+        Path(args.old_profile),
+        Path(args.new_profile),
+        args.port,
+        Path(args.run_dir),
+        no_rollback=args.no_rollback,
+    )
+
+
 # --- parser -------------------------------------------------------------------
 
 
@@ -136,6 +154,38 @@ def build_parser() -> argparse.ArgumentParser:
         help="compare and report (default)",
     )
     _attach_handler(h, _cmd_profile_hash)
+
+    # --- emmy swap-profile (Phase 4 PROFILE-08) ---
+    swap = sub.add_parser(
+        "swap-profile",
+        help=(
+            "atomically swap the loaded profile with pre-flight validation "
+            "+ rollback on post-stop failure (PROFILE-08, D-04/D-05 LOCKED)"
+        ),
+    )
+    swap.add_argument(
+        "--from",
+        required=True,
+        dest="old_profile",
+        help="path to profiles/<name>/v<N>/ currently loaded",
+    )
+    swap.add_argument(
+        "--to",
+        required=True,
+        dest="new_profile",
+        help="path to profiles/<name>/v<N>/ to swap IN",
+    )
+    swap.add_argument("--port", type=int, default=8002)
+    swap.add_argument("--run-dir", default="runs/swap")
+    swap.add_argument(
+        "--no-rollback",
+        action="store_true",
+        help=(
+            "skip rollback on post-stop failure — used internally by the "
+            "rollback() recursive call to prevent infinite loops"
+        ),
+    )
+    _attach_handler(swap, _cmd_swap_profile)
 
     return p
 
