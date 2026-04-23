@@ -1,0 +1,15 @@
+{"ts": "2026-04-23T16:22:19.663823+00:00", "phase": "stopping vLLM"}
+{"ts": "2026-04-23T16:22:22.998900+00:00", "phase": "loading weights", "pct": 0}
+{"ts": "2026-04-23T16:22:23.347493+00:00", "phase": "loading weights", "pct": 50}
+{"ts": "2026-04-23T16:22:23.347538+00:00", "phase": "loading weights", "pct": 90}
+{"ts": "2026-04-23T16:22:23.347545+00:00", "phase": "warmup"}
+{"ts": "2026-04-23T16:27:23.482483+00:00", "phase": "rollback: stopping failed engine"}
+{"ts": "2026-04-23T16:27:23.513529+00:00", "phase": "rollback: restarting prior profile"}
+{"ts": "2026-04-23T16:27:23.548926+00:00", "phase": "stopping vLLM"}
+{"ts": "2026-04-23T16:27:24.574063+00:00", "phase": "loading weights", "pct": 0}
+{"ts": "2026-04-23T16:27:25.035559+00:00", "phase": "loading weights", "pct": 50}
+{"ts": "2026-04-23T16:27:25.035624+00:00", "phase": "loading weights", "pct": 90}
+{"ts": "2026-04-23T16:27:25.035631+00:00", "phase": "warmup"}
+{"ts": "2026-04-23T16:29:13.932338+00:00", "phase": "ready"}
+smoke ok: tok/s=9.92 tokens_out=100
+{"rolled_back": true, "rollback_succeeded": true}

@@ -1,0 +1,4 @@
+{
+  "check": "swap-postboot",
+  "reason": "wait_for_vllm timeout: /v1/models did not respond in 300s; last error: [Errno 111] Connection refused"
+}

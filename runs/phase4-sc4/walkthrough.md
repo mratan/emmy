@@ -85,36 +85,77 @@ runs/phase4-sc4/
 
 ---
 
-## Exit-6 Case (post-stop rollback)
+## Exit-6 Cases (post-stop rollback) — CAPTURED
 
-*Deferred to end of this autonomous session — requires a real vLLM restart cycle (~3 min per attempt). Will be executed after KV bisection + thermal runs on Gemma 4 complete, before restoring the Qwen default. Evidence will be appended below.*
+Exit-6 evidence was **captured incidentally but decisively** during the SC-1 Qwen→Gemma 4 swap attempts (`runs/phase4-sc1/`). The Gemma 4 profile failed at vLLM boot in two separate runs (first on tool-parser name, then on Transformers architecture recognition — see `runs/phase4-sc1/walkthrough.md` for full diagnosis). Both failures exercised the **exact exit-6 path** that SC-4 demands.
 
-**Planned command:**
+### Case 3 — original Gemma 4 v1 bundle (`tool_call_parser: gemma4` rejected by vLLM 0.17.1)
+
+**Command:**
 ```bash
-# Construct a profile that passes preflight but fails at vLLM boot —
-# e.g., serving.yaml.engine.model pointing at a container-internal path
-# whose bind-mount exists but directory is empty.
 uv run emmy swap-profile \
   --from profiles/qwen3.6-35b-a3b/v3.1 \
-  --to   /tmp/qwen-v3.1-bad-model-path \
-  --run-dir runs/phase4-sc4/exit6-case-empty-model-dir
+  --to   profiles/gemma-4-26b-a4b-it/v1 \
+  --port 8002 \
+  --run-dir runs/phase4-sc1/swap-qwen-to-gemma
 ```
 
-**Expected:**
-- Exit code: 6
-- stdout: 4 progress phases fire verbatim until the `loading weights` phase, then rollback triggers
-- Rollback invokes the same primitive with `--no-rollback` to re-boot the prior profile
-- Final state: prior Qwen engine back up, observable via `/v1/models`
+**Result:**
+- Exit code: **6** ✓
+- Preflight passed (v1 bundle is schema-valid; digest/image/render all OK)
+- Forward path: 4 progress phases emitted verbatim (`stopping vLLM` → `loading weights 0/50/90` → `warmup`)
+- vLLM container started with Gemma 4 config → immediately crashed on `KeyError: invalid tool call parser: gemma4`
+- Probe waited 300 s for `/v1/models`; `Connection refused` throughout → timeout triggers rollback
+- Rollback: `rollback: stopping failed engine` → `rollback: restarting prior profile` → swap primitive re-entered with `--no-rollback` flag
+- 4 progress phases fire again in reverse direction as Qwen rolls back in
+- `ready` at 16:29:13; post-rollback smoke `tok/s=9.92 tokens_out=100` ✓
+- Final envelope: `{"rolled_back": true, "rollback_succeeded": true}` ✓
+- Qwen3.6 back on :8002 ✓
+- Diagnostic bundle with complete failed-container docker logs at `runs/phase4-sc1/swap-qwen-to-gemma/boot-failures/20260423T162723Z-swap-postboot-failure/`
+
+### Case 4 — hotfix bundle (`tool_call_parser: functiongemma` — rejected at model-class layer)
+
+**Command:**
+```bash
+# Bundle copied to /tmp with tool_call_parser patched to functiongemma, hash recomputed
+uv run emmy swap-profile \
+  --from profiles/qwen3.6-35b-a3b/v3.1 \
+  --to   /tmp/gemma-4-26b-a4b-it-fix-parser \
+  --port 8002 \
+  --run-dir runs/phase4-sc1/swap-qwen-to-gemma-fixed
+```
+
+**Result:**
+- Exit code: **6** ✓
+- Preflight passed
+- Forward 4 progress phases verbatim
+- vLLM start failed one layer deeper: `pydantic ValidationError: The checkpoint you are trying to load has model type gemma4 but Transformers does not recognize this architecture`
+- Probe timeout → rollback → 4 progress phases again → Qwen `ready` at 16:39:00; smoke `tok/s=10.06 tokens_out=100` ✓
+- Final envelope: `{"rolled_back": true, "rollback_succeeded": true}` ✓
+
+### What Exit-6 Runs Proved
+
+1. **`no_rollback=True` recursion guard works.** Rollback re-enters the primitive with the flag set; no infinite loop. (Also covered by `test_rollback_of_rollback_prevented`, but now live-verified.)
+2. **Prior engine restored cleanly end-to-end.** Both rollback cycles include probe → smoke pass. Qwen is not just "container started" — it's responding to chat requests.
+3. **Forward path does not leak into rollback state.** `rolled_back: true` + `rollback_succeeded: true` envelope correctly distinguishes the two outcomes.
+4. **Diagnostic bundle captures the failed container's docker logs** before the orchestrator removes the container — critical for debugging because the failing container is ephemeral.
+5. **Progress phases fire 2× per exit-6 swap** (forward + rollback) with the same four-label contract.
 
 ---
 
-## SC-4 Verdict (exit-5 portion)
+## SC-4 Verdict
 
-**`sc4 phase4 green`** — exit-5 cases ✓ (2/2 cases verified).
+**`sc4 phase4 green`** — all 4 failure-mode cases verified (2 × exit-5 preflight-fail + 2 × exit-6 post-stop-rollback).
 
-**Invariants proven:**
-- D-05 LOCKED (validate-first-then-stop): preflight catches both schema and digest failures BEFORE any `docker stop` invocation. Container uptime unchanged across both test runs.
-- Clear error messages surface via stderr + structured `check.json` in diagnostic bundle.
-- Prior engine remains served on :8002 with zero disruption to the currently active Qwen3.6 session.
+**Invariants proven (end-to-end on live DGX Spark hardware):**
+- D-05 LOCKED (validate-first-then-stop): preflight catches pre-swap failures without any `docker stop` invocation. Container uptime unchanged across exit-5 cases.
+- D-04 LOCKED ("prior model still loaded"): post-stop failures trigger rollback via the same primitive; prior engine is reloaded cleanly and re-verified via smoke test before returning.
+- Clear error messages on both failure classes (stderr for exit-5, structured diagnostic bundle + rollback envelope for exit-6).
+- JSON progress stream is stable across forward + rollback paths with identical label contract (D-02).
+
+**Evidence integrity at time of verdict:**
+- `docker ps | grep emmy-serve` shows `Up 3 minutes` (post-rollback Qwen) ✓
+- `curl http://127.0.0.1:8002/v1/models` returns `qwen3.6-35b-a3b` ✓
+- No stale Gemma 4 container artifacts (`docker ps -a` clean) ✓
 
 **Exit-6 follow-up:** scheduled later in this session — see above.
