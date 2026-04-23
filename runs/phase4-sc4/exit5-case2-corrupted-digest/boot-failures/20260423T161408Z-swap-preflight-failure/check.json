@@ -1,0 +1,4 @@
+{
+  "check": "swap-preflight",
+  "reason": "image not in local docker: sha256:0000000000000000000000000000000000000000000000000000000000000000"
+}

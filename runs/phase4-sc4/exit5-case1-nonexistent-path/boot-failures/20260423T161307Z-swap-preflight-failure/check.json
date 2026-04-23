@@ -1,0 +1,4 @@
+{
+  "check": "swap-preflight",
+  "reason": "schema invalid: validate_bundle returned 1"
+}
