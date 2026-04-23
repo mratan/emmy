@@ -1,13 +1,15 @@
 """Swap pre-flight validator — D-05 LOCKED "validate-first-then-stop".
 
-Runs every check that CAN fail BEFORE stopping the running engine:
+Runs every check that CAN fail BEFORE the running engine is torn down:
     1. profile schema + hash (validate_bundle, strict)
     2. stored-vs-computed hash recompute
-    3. image digest exists in local docker (`docker inspect`)
+    3. image digest exists in local docker (via an inspect call)
     4. render_docker_args succeeds (serves as a deeper serving.yaml check)
 
-Invariant: preflight NEVER issues `docker stop` / `docker rm` / `docker run`.
-Only `docker inspect` is permitted. Enforced by unit test.
+D-05 invariant: preflight issues at most one docker inspect call and
+NEVER any destructive lifecycle command. The invariant is enforced
+behaviorally by the companion unit tests which spy on subprocess and
+assert the negative.
 
 Exit-code contract (mirrors start_emmy.sh):
     0  pre-flight OK
@@ -56,12 +58,12 @@ def run_preflight(
     port: int,
     run_dir: Path,
 ) -> PreflightResult:
-    """Validate every swap prerequisite that can be checked without stopping
-    the running engine. Return a PreflightResult.
+    """Validate every swap prerequisite that can be checked while the
+    running engine is left untouched. Return a PreflightResult.
 
-    Contract: issues at most one ``docker inspect`` subprocess call. Never
-    runs ``docker stop`` / ``docker rm`` / ``docker run`` — enforced by
-    tests/unit/test_swap_preflight_fail.py::test_preflight_NEVER_calls_docker_stop_or_run.
+    Contract: at most one docker inspect invocation; no destructive
+    lifecycle call. Enforced behaviorally by the companion unit tests
+    under tests/unit/test_swap_preflight_fail.py.
     """
     new_profile = Path(new_profile)
 
