@@ -22,7 +22,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-PROFILE="profiles/qwen3.6-35b-a3b/v1"
+PROFILE="profiles/qwen3.6-35b-a3b/v3.1"
 PORT=8002
 AIRGAP=0
 

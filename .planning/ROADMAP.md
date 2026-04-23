@@ -165,15 +165,29 @@ Plans:
 
 ---
 
-### Phase 03.1: Operational polish — minimal-RAM profile, live auto-compaction + manual triggers, SearxNG web search, day-to-day documentation (INSERTED)
+### Phase 03.1: Operational polish — minimal-RAM profile, live auto-compaction + manual triggers, SearxNG web search, day-to-day documentation [x] Complete 2026-04-23
 
-**Goal:** [Urgent work - to be planned]
-**Requirements**: TBD
+**Goal:** Close three operational defects that surfaced in a day of Phase-3-certified daily-driver use: (A) 116/125 GB system RAM used + 8 GB swap on UMA with `gpu_memory_utilization=0.88` (CLAUDE.md Pitfall #3 warned about 0.75; drop to 0.55); (B) Plan 03-03 auto-compaction was stub-only — agent hit the 114,688-token hard wall during a real research session; wire live `ctx.compact()` + add `/clear` manual escape valve; (C) 5-host doc allowlist is too narrow for research — refine thesis into "no cloud INFERENCE" (hard) + "local-first EGRESS via self-hosted SearxNG" (new, auditable). Plus day-to-day ops documentation. Produces sibling profile v3.1 per D-02 immutability (v3 byte-identical).
+
+**Requirements**: TOOLS-10 (web_search), UX-07 (3-state badge); CONTEXT-02 advance (stub → live-wired); PROFILE-05 extended with D-29..D-38 provenance.
+
 **Depends on:** Phase 3
-**Plans:** 0 plans
+
+**Success Criteria** (all PASS at close):
+  1. `free -h` MemAvailable ≥ 40 GiB post-restart on v3.1 (observed: 42 GiB, 9× headroom vs v3's 4.6 GiB; swap dropped 7.2 → 2.9 GiB).
+  2. Live auto-compaction fires on turn_start when context crosses soft threshold (86 016 tokens); 90K-token live walkthrough survived without hitting the 114 688-token hard wall.
+  3. `/compact` + `/clear` slash commands dispatch end-to-end on the live pi 0.68 TUI.
+  4. `web_search` tool returns sensible results from SearxNG (tested live — agent correctly grounded "Bun 1.3.13 released 1 day prior" from Google + npm search results); SearxNG rotates upstreams with auto rate-limit fallback.
+  5. `web_fetch` returned-URL bypass works (exact-URL match; T-03.1-02-02 SSRF guard denies same-host different-path; kill-switches honored).
+  6. Air-gap CI split into `ci_verify_phase3` (STRICT) and `ci_verify_research_egress` (PERMISSIVE); both dry-run exit 0.
+  7. README + docs/runbook.md ship; CLAUDE.md thesis revised to "No cloud INFERENCE" + "Local-first EGRESS".
+
+**Plans:** 3 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 03.1 to break down)
+- [x] 03.1-01-PLAN.md — RAM fit + live compaction + /compact + /clear (commits b372908+3f49f32+339e6f1+e87937b+d86e9b6; v3.1 hash `sha256:fcdecb23...`) **complete 2026-04-23**
+- [x] 03.1-02-PLAN.md — SearxNG + web_search + web_fetch bypass + 3-state badge (commits 07fa0a3+d3afe7d+f2bddeb+891f6bd+cd435c9+89cf484; v3.1 hash `sha256:f9dcabd1...`) **complete 2026-04-23**
+- [x] 03.1-03-PLAN.md — README + runbook + CLAUDE.md thesis revision + CLOSEOUT (this plan) **complete 2026-04-23**
 
 ### Phase 4: Gemma 4 Profile + Profile System Maturity
 

@@ -258,3 +258,24 @@ Which phases cover which requirements. Updated by roadmapper 2026-04-20.
 ---
 *Requirements defined: 2026-04-20*
 *Last updated: 2026-04-20 — traceability filled by roadmapper*
+
+---
+
+## Phase 3.1 additions (2026-04-23)
+
+Phase 3.1 (operational polish — inserted between Phase 3 and Phase 4) added two REQ-IDs:
+
+- **TOOLS-10** (P3.1) — `web_search(query, max_results?)` tool hitting a self-hosted SearxNG loopback instance. Rotates Google + DuckDuckGo + Brave + Bing + Startpage upstreams with automatic rate-limit fallback. **Done** — Plan 03.1-02 commit `d3afe7d` + walkthrough fix `cd435c9`; live-tested on Spark (agent grounded "Bun 1.3.13" from real SearxNG results).
+- **UX-07** (P3.1) — Three-state offline badge: `OFFLINE OK` (green, stricter posture), `LOCAL LLM · WEB` (yellow, SearxNG up + web_search active), `CLOUD INFERENCE` (red, reserved — never fires today). Replaces the Phase 3 two-state badge while preserving the `NETWORK USED` red-flip for non-allowlisted web_fetch. **Done** — Plan 03.1-02 commit `891f6bd`.
+
+Additional Phase 3.1 advances (existing REQ-IDs):
+
+- **CONTEXT-02** — "Done (Plan 03-03 stub-mode)" → **"Done (Plan 03-03 stub + Plan 03.1-01 live-wired)"** after the live `ctx.compact()` call path was proven to fire on the real pi 0.68 runtime.
+- **PROFILE-05** — provenance discipline extended to v3.1 with D-29..D-38 citation entries in `profiles/qwen3.6-35b-a3b/v3.1/PROFILE_NOTES.md`.
+
+**Cumulative v1 totals after Phase 3.1:**
+- Total: **68 v1 REQ-IDs** (was 66 pre-3.1)
+- Done: **38 / 68** (was 36 / 66)
+- Mapped to phases: **68 / 68** ✓
+
+*Updated 2026-04-23 — Phase 3.1 close*

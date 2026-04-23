@@ -4,14 +4,14 @@
 > 1. **Specialized vLLM serving** for Gemma 4 + Qwen 3.6 (coding-tuned sampling, grammar-constrained tool output, long-context optimization, speculative decoding)
 > 2. **pi.dev (`pi-mono`) based harness** exposing all 8 customization surfaces opinionated harnesses hide
 
-**Done bar:** daily-driver replacement for Claude Code AND research-grade reproducible artifact. **No cloud dependency anywhere in the loop.**
+**Done bar:** daily-driver replacement for Claude Code AND research-grade reproducible artifact. **No cloud INFERENCE anywhere in the loop** — the LLM is 100% local, air-gap tested. **Local-first EGRESS** via a self-hosted SearxNG instance is the single authorized outbound component (loopback-bound from the harness's POV; disableable via `EMMY_WEB_SEARCH=off` for stricter posture). See Pitfall #8 + `docs/runbook.md` for the full air-gap posture.
 
 ## Planning Documents
 
 Always read these before substantive work — they define what we're building and why.
 
 - `.planning/PROJECT.md` — project context, core value, key decisions
-- `.planning/REQUIREMENTS.md` — 66 v1 requirements (SERVE/PROFILE/HARNESS/TOOLS/CONTEXT/EVAL/TELEM/UX/REPRO) + v2 + Out-of-Scope
+- `.planning/REQUIREMENTS.md` — 68 v1 requirements (SERVE/PROFILE/HARNESS/TOOLS/CONTEXT/EVAL/TELEM/UX/REPRO; +TOOLS-10 web_search + UX-07 3-state badge in Phase 3.1) + v2 + Out-of-Scope
 - `.planning/ROADMAP.md` — 7-phase plan with success criteria and traceability
 - `.planning/STATE.md` — current phase + project memory
 - `.planning/research/SUMMARY.md` — research synthesis with phase recommendations
@@ -61,7 +61,7 @@ profiles/<name>/v<N>/
 2. **Silent system-prompt delivery failure** — vLLM `/v1/messages` and `/v1/chat/completions` handle system messages differently per chat template. Use `[SP_OK]` canary in every benchmark loop; log the assembled prompt hash.
 3. **KV cache budget set from theory** — DGX Spark UMA shares model + KV + harness CPU. Default `gpu_memory_utilization=0.95` causes preemption. Start at 0.75, validate with 30-min sustained load.
 4. **DGX Spark thermal throttle** — short benchmarks look fine; 2-hour sessions throttle 2.8→~2 GHz. Run a 2-hour sustained-load thermal validation per profile.
-5. **Hidden cloud dependencies** — `VLLM_NO_USAGE_STATS=1` required; HF gated models need auth even offline. Verify with explicit air-gap test.
+5. **Hidden cloud dependencies** — `VLLM_NO_USAGE_STATS=1` required; HF gated models need auth even offline. Verify with explicit air-gap test. **Note (Phase 3.1):** SearxNG is NOT a hidden dep — it's the one loopback egress we intentionally ship and document. What makes it acceptable: self-hosted, digest-pinned, disable-able (`EMMY_WEB_SEARCH=off` or stop the container), observable (all queries logged to `tool.web_search` events). Air-gap CI split into two validators: `ci_verify_phase3` (STRICT — zero outbound, for inference-posture gate) and `ci_verify_research_egress` (PERMISSIVE — SearxNG OK, blocks 12 cloud-inference endpoints).
 6. **Grammar fighting the model** — constrained decoding is a correctness backstop, not a quality lever. Parse unconstrained first; retry under grammar on parse failure only. Include a no-grammar baseline in every profile.
 7. **Speculative decoding regression** — only wins when draft is cheap, acceptance > 0.5, and workload isn't compute-saturated. Always run paired spec-on/spec-off benchmark.
 8. **Test-set contamination** — HumanEval and original SWE-bench likely in 2026 pretraining. Use terminal-bench 2.0, LiveCodeBench, SWE-bench Verified. Include held-out and rephrased contamination controls.
