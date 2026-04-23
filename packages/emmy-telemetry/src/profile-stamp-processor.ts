@@ -10,6 +10,15 @@
 // before BatchSpanProcessor(OTLPExporter) fans out.
 //
 // Reference: RESEARCH.md §Pattern 2 (verbatim).
+//
+// Plan 04-03 D-23 extension — harness hot-swap support:
+//   The @opentelemetry/sdk-node 0.205 + sdk-trace-base 2.1 pinned here do NOT
+//   expose a public addSpanProcessor/removeSpanProcessor on the tracer provider.
+//   Rather than tearing down + rebuilding the entire SDK on every /profile
+//   swap, this processor now holds a MUTABLE profile reference — setProfile()
+//   atomically replaces it so subsequent onStart calls stamp the new attrs.
+//   The same processor instance lives through the swap; only its internal
+//   profile pointer moves. See swapSpanProcessor() in otel-sdk.ts.
 
 import type { ReadableSpan, Span, SpanProcessor } from "@opentelemetry/sdk-trace-base";
 
@@ -20,7 +29,29 @@ export interface ProfileStampAttrs {
 }
 
 export class EmmyProfileStampProcessor implements SpanProcessor {
-	constructor(private readonly profile: ProfileStampAttrs) {}
+	// NOT readonly — Plan 04-03 D-23 uses setProfile() to hot-swap the stamp
+	// without rebuilding the OTel SDK. All other fields remain internal.
+	private profile: ProfileStampAttrs;
+
+	constructor(profile: ProfileStampAttrs) {
+		this.profile = profile;
+	}
+
+	/**
+	 * Plan 04-03 D-23 — replace the current profile reference so subsequent
+	 * onStart calls stamp the new profile's id/version/hash. Atomic under the
+	 * single-threaded Node event loop: any span started strictly after this
+	 * call sees the new attrs; any started strictly before sees the old attrs.
+	 * The /profile command guards against concurrent spans via D-06 isIdle().
+	 */
+	setProfile(profile: ProfileStampAttrs): void {
+		this.profile = profile;
+	}
+
+	/** Read-only view of the currently stamped profile (introspection + tests). */
+	getProfile(): ProfileStampAttrs {
+		return this.profile;
+	}
 
 	onStart(span: Span): void {
 		span.setAttributes({
@@ -41,4 +72,20 @@ export class EmmyProfileStampProcessor implements SpanProcessor {
 	async forceFlush(): Promise<void> {
 		/* no-op */
 	}
+}
+
+/**
+ * Plan 04-03 D-23 — hot-swap the profile reference on an existing processor.
+ *
+ * Pass the SAME processor instance that was installed into the OTel SDK at
+ * initOtel() time; this updates its internal profile ref so going-forward
+ * spans stamp the new profile. The SDK does not need to be restarted and no
+ * processor-add/processor-remove is required (the pinned sdk-trace-base 2.1
+ * doesn't expose those mutators publicly).
+ */
+export function swapSpanProcessor(
+	processor: EmmyProfileStampProcessor,
+	newProfile: ProfileStampAttrs,
+): void {
+	processor.setProfile(newProfile);
 }

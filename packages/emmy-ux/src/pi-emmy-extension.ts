@@ -59,6 +59,7 @@ import {
 	type RetryState,
 } from "@emmy/provider";
 import {
+	EmmyProfileStampProcessor,
 	emitEvent,
 	TurnTracker,
 	type TurnMeta,
@@ -71,14 +72,18 @@ import {
 	EMMY_FEEDBACK_UP_KEYID,
 	handleFeedbackRating,
 } from "./feedback-ui";
+import { reloadHarnessProfile } from "./harness-swap";
 import {
 	startFooterPoller,
 	type FooterPollerHandle,
 } from "./metrics-poller";
 import { bindBadge } from "./offline-badge";
+import { scanProfileIndex } from "./profile-index";
+import { runSwapAndStreamProgress } from "./profile-swap-runner";
 // registerCompactCommand import dropped post-Plan-03.1-03 — pi 0.68 ships a
 // built-in /compact that collides; see pi-emmy-extension body comment.
-import { registerClearCommand } from "./slash-commands";
+// Plan 04-03: registerProfileCommand added alongside registerClearCommand.
+import { registerClearCommand, registerProfileCommand } from "./slash-commands";
 
 export interface EmmyExtensionOptions {
 	profile: ProfileSnapshot;
@@ -130,6 +135,38 @@ export interface EmmyExtensionOptions {
 	 * production callers omit it and get a fresh in-memory TurnTracker.
 	 */
 	turnTrackerImpl?: TurnTracker;
+	/**
+	 * Plan 04-03 (PROFILE-08 / UX-04) — absolute path of the CURRENTLY LOADED
+	 * profile bundle. Required to register /profile; the handler passes this
+	 * as the `--from` argument to the Python swap orchestrator. Omit to
+	 * disable /profile registration (useful in tests + --print mode).
+	 */
+	profileDir?: string;
+	/**
+	 * Plan 04-03 — vLLM port the swap orchestrator targets. Defaults to 8002.
+	 */
+	port?: number;
+	/**
+	 * Plan 04-03 — top-level profiles/ directory for filesystem-based
+	 * autocompletion. Defaults to "profiles" (relative to CWD).
+	 */
+	profilesRoot?: string;
+	/**
+	 * Plan 04-03 — the EmmyProfileStampProcessor installed in the live OTel
+	 * SDK. /profile's exit-0 hot-swap calls swapSpanProcessor on this handle
+	 * so subsequent spans stamp the new profile's id/version/hash. When
+	 * omitted, a fresh processor is created (tests + /profile swap without
+	 * an active OTel pipeline both work — the fresh processor is orphan but
+	 * the mutation itself is side-effect-free).
+	 */
+	profileStampProcessor?: EmmyProfileStampProcessor;
+	/**
+	 * Plan 04-03 test hook: inject an alternative runSwap implementation so
+	 * unit tests of the factory wiring don't spawn a real Python
+	 * orchestrator. Defaults to runSwapAndStreamProgress from
+	 * ./profile-swap-runner.
+	 */
+	runSwapImpl?: typeof runSwapAndStreamProgress;
 }
 
 /**
@@ -140,9 +177,32 @@ export interface EmmyExtensionOptions {
  * so pi's DefaultResourceLoader registers it alongside any on-disk extensions.
  */
 export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactory {
-	const { profile, assembledPromptProvider } = opts;
+	const { assembledPromptProvider } = opts;
+	// Plan 04-03 D-23 — profile is mutable at factory-closure scope so
+	// /profile's exit-0 hot-swap can replace it. Hook bodies read the live
+	// reference via closure capture; the setter below is handed to
+	// harness-swap.ts's reloadHarnessProfile as replaceProfileRef.
+	let currentProfile: ProfileSnapshot = opts.profile;
+	const setCurrentProfile = (snap: ProfileSnapshot): void => {
+		currentProfile = snap;
+	};
 	const retryLookup = opts.getRetryStateForSignal ?? getRetryStateForSignal;
 	const startPoller = opts.startFooterPollerImpl ?? startFooterPoller;
+
+	// Plan 04-03 — EmmyProfileStampProcessor handle for D-23 hot-swap. If the
+	// caller supplied one (production: pi-emmy.ts passes the processor
+	// installed at initOtel time), we mutate IT in place. Otherwise we
+	// construct a fresh one that is orphan but keeps the swap path
+	// side-effect-safe in test contexts.
+	const profileStampProcessor =
+		opts.profileStampProcessor ??
+		new EmmyProfileStampProcessor({
+			id: opts.profile.ref.id,
+			version: opts.profile.ref.version,
+			hash: opts.profile.ref.hash,
+		});
+
+	const runSwapImpl = opts.runSwapImpl ?? runSwapAndStreamProgress;
 
 	// Plan 03-04: footer poller handle lives at factory-closure scope so both
 	// session_start (start) and agent_end (stop) handlers can see it.
@@ -177,12 +237,17 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 	// when the user runs /compact with no args.
 	let compactPromptText: string | null = null;
 	try {
-		const harness = profile.harness as unknown as {
+		// Read from opts.profile (not the mutable currentProfile) because this
+		// read happens ONCE at factory construction; the prompt text is the
+		// pre-swap profile's compact.md. Plan 04-04 / Plan 04-06 may extend
+		// reloadHarnessProfile to refresh this too; for Plan 04-03 it stays
+		// bound to the boot-time profile (no regression).
+		const harness = opts.profile.harness as unknown as {
 			context?: { compaction?: { summarization_prompt_path?: string } };
 		};
 		const relPath = harness.context?.compaction?.summarization_prompt_path;
 		if (typeof relPath === "string" && relPath.length > 0) {
-			const fullPath = joinPath(profile.ref.path, relPath);
+			const fullPath = joinPath(opts.profile.ref.path, relPath);
 			if (existsSync(fullPath)) {
 				compactPromptText = readFileSync(fullPath, "utf8");
 			}
@@ -244,7 +309,7 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 			const snapshot = assembledPromptProvider();
 			handleBeforeProviderRequest({
 				payload,
-				profile,
+				profile: currentProfile,
 				assembledPrompt: snapshot,
 				retryState,
 			});
@@ -271,7 +336,7 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 			emitEvent({
 				event: "harness.assembly",
 				ts: new Date().toISOString(),
-				profile: profile.ref,
+				profile: currentProfile.ref,
 				model: modelName,
 				"gen_ai.system": "vllm",
 				"gen_ai.request.model": modelName,
@@ -292,7 +357,7 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 					const meta = buildTurnMeta(
 						event as TurnEndEvent,
 						sessionId,
-						profile,
+						currentProfile,
 						emmyTurnCounter++,
 					);
 					turnTracker.recordTurnComplete(meta);
@@ -397,6 +462,29 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 		// registerCompactCommand(pi, { compactPromptText });  // ← removed; pi built-in wins
 		registerClearCommand(pi);
 
+		// Plan 04-03 (PROFILE-08 / UX-04) — /profile <name>[@<variant>] slash
+		// command. Registered only when opts.profileDir is supplied: absence
+		// signals test/--print mode where /profile makes no sense. The
+		// reloadHarnessProfile callback composes three D-23 re-inits:
+		// profile cache + OTel stamp processor + web_fetch allowlist.
+		if (opts.profileDir) {
+			const profilesRoot = opts.profilesRoot ?? "profiles";
+			const profileIndex = scanProfileIndex(profilesRoot);
+			registerProfileCommand(pi, {
+				profileDir: opts.profileDir,
+				port: opts.port ?? 8002,
+				profileIndex,
+				runSwap: async ({ from, to, port, onProgress }) =>
+					runSwapImpl({ from, to, port, onProgress }),
+				reloadHarnessProfile: async (newDir) => {
+					await reloadHarnessProfile(newDir, {
+						replaceProfileRef: setCurrentProfile,
+						profileStampProcessor,
+					});
+				},
+			});
+		}
+
 		// Plan 03-03 — turn_start handler invokes emmyCompactionTrigger per
 		// D-11 turn-boundary atomicity (Pitfall #3). Plan 03.1-01 (D-30)
 		// extracted the handler body into runTurnStartCompaction so tests
@@ -406,7 +494,7 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 		pi.on("turn_start", async (_event, ctx) => {
 			await runTurnStartCompaction(
 				ctx as unknown as TurnStartCompactionCtx,
-				profile,
+				currentProfile,
 			);
 		});
 	};

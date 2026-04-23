@@ -121,7 +121,11 @@ function coerceAttr(v: unknown): string | number | boolean {
 export { configureTelemetry, getTelemetryContext, resetTelemetryContext } from "./session-context";
 export { appendJsonlAtomic, writeJsonAtomic } from "./atomic-append";
 export { initOtel, shutdownOtel, resolveTelemetryEnabled } from "./otel-sdk";
-export { EmmyProfileStampProcessor } from "./profile-stamp-processor";
+export {
+	EmmyProfileStampProcessor,
+	swapSpanProcessor,
+	type ProfileStampAttrs,
+} from "./profile-stamp-processor";
 
 // Plan 03-06 — UX-03 offline audit pure functions + D-26 LOOPBACK_HOSTS.
 // Plan 03.1-02 D-36 — SEARXNG_LOOPBACK_PORT + classifyEgressHost.
