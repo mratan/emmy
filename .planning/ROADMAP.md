@@ -339,6 +339,26 @@ How the early phases address the 8 critical pitfalls from research/PITFALLS.md (
 
 Hash-anchored edits (P1 differentiator from FEATURES.md) land in P2 as the **default** edit format, not as later polish.
 
+## Backlog
+
+### Phase 999.1: Remote inference mode (client-host harness + SSH-tunnel to Spark vLLM) (BACKLOG)
+
+**Goal:** [Captured for future planning]
+**Requirements:** TBD
+**Plans:** 0 plans
+
+**Captured context (2026-04-23):** Enable a split deployment where emmy's harness runs on a client machine (laptop/workstation) and the vLLM serving layer stays on the DGX Spark, reachable via SSH. Operator preference: keep code files on the client; keep GPU work on the Spark.
+
+Three concrete changes scoped:
+1. Teach the swap primitive to run `docker`/`scripts/start_emmy.sh` over SSH when `EMMY_SERVE_HOST` is set (today assumes localhost).
+2. Surface an optional `base_url` override on the harness's emmy provider (already parameterized internally — just needs config surface).
+3. Document profile-sync workflow: client + Spark pull from the same repo; profile hash mismatch surfaces as a loud swap-preflight failure (Pitfall #1-adjacent).
+
+Air-gap posture is preserved — SSH tunnel is loopback-equivalent from the harness POV (`pi-emmy` still talks to `127.0.0.1:8002`; only the docker lifecycle commands get ssh-proxied). Landing: likely post-Phase 5 eval; not a blocker for v1 feature completeness.
+
+Plans:
+- [ ] TBD (promote with /gsd-review-backlog when ready)
+
 ---
 
 *Roadmap created: 2026-04-20*
