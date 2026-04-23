@@ -11,7 +11,7 @@ Requirements for initial release. Each maps to roadmap phases.
 
 - [ ] **SERVE-01**: System runs vLLM 0.19.x inside the pinned NGC container `nvcr.io/nvidia/vllm:26.03.post1-py3` on DGX Spark (no upstream PyPI wheels — SM121 kernel failures)
 - [ ] **SERVE-02**: System serves `Qwen/Qwen3.6-35B-A3B-FP8` as the primary model with measurable throughput (target ≥ 60 tok/s on Spark)
-- [ ] **SERVE-03**: System serves `google/gemma-4-26B-A4B-it` (the MoE variant — *not* the 31B dense, which is bandwidth-bound at 6.9 tok/s) as the second first-class model
+- [x] **SERVE-03**: System serves `google/gemma-4-26B-A4B-it` (the MoE variant — *not* the 31B dense, which is bandwidth-bound at 6.9 tok/s) as the second first-class model
 - [ ] **SERVE-04**: vLLM endpoint is OpenAI-compatible (`/v1/chat/completions`) and harness uses it with `extra_body` for grammar / `chat_template_kwargs` overrides
 - [x] **SERVE-05
 **: Grammar-constrained tool-call output via XGrammar (vLLM 0.19 default) is enabled per profile and validated by a parse-rate smoke test
@@ -30,8 +30,8 @@ Requirements for initial release. Each maps to roadmap phases.
 - [ ] **PROFILE-04**: `harness.yaml` carries prompt paths, context limits, tool format, per-tool sampling overrides, retry policy, compaction settings; hot-reloadable per session
 - [ ] **PROFILE-05**: `PROFILE_NOTES.md` records provenance for every default with citations (e.g. "source: Qwen team blog 2026-04-16") — implements the "stand on shoulders" project principle
 - [ ] **PROFILE-06**: Profiles are immutable: any field change creates a new version directory; never mutated in place
-- [ ] **PROFILE-07**: System ships v1 profiles for both `qwen3.6-35b-a3b` and `gemma-4-26b-a4b-it`
-- [ ] **PROFILE-08**: `/profile <name>` slash command swaps both vLLM (via reload) and harness state atomically with visible progress
+- [x] **PROFILE-07**: System ships v1 profiles for both `qwen3.6-35b-a3b` and `gemma-4-26b-a4b-it`
+- [x] **PROFILE-08**: `/profile <name>` slash command swaps both vLLM (via reload) and harness state atomically with visible progress
 - [ ] **PROFILE-09**: Profile schema is CI-validated; a per-profile validation smoke test runs at boot (system-prompt echo `[SP_OK]` + tool-call parse + minimal generation)
 
 ### Harness (HARNESS) — pi.dev integration & customization surfaces
@@ -48,7 +48,7 @@ Requirements for initial release. Each maps to roadmap phases.
 **: System prompt assembly is layered (global → project → user), every assembly emits a hash to logs, and the assembled prompt fits a budget (default ≤ 200 tokens base, profile may extend with rationale)
 - [x] **HARNESS-07
 **: Sampling control is per-tool / per-task via the profile (planner, editor, critic can use different sampling)
-- [ ] **HARNESS-08**: Multi-model routing is supported within a single model first (profile-routing for planner/editor/critic roles); cross-model routing deferred to v2 unless dual-load proves feasible
+- [x] **HARNESS-08**: Multi-model routing is supported within a single model first (profile-routing for planner/editor/critic roles); cross-model routing deferred to v2 unless dual-load proves feasible
 - [x] **HARNESS-09**: Observability hooks emit OTel GenAI semconv spans across the vLLM ↔ harness boundary; profile fields embedded in every event
 - [x] **HARNESS-10**: Tool registry is extensible: adding/removing/composing tools is a simple pi extension, no fork required
 
@@ -101,7 +101,7 @@ Requirements for initial release. Each maps to roadmap phases.
 - [x] **UX-01**: TUI is the primary surface (pi-tui-based)
 - [x] **UX-02**: GPU/KV/spec-accept TUI footer (`[GPU 87% • KV 34% • spec accept 71% • tok/s 38]`) — reads `nvidia-smi` + vLLM `/metrics`
 - [x] **UX-03**: Offline-OK badge — startup audits tool registry; green "OFFLINE OK" if every path is local, red "NETWORK USED" if any tool went external
-- [ ] **UX-04**: Model-swap UX — visible progress during `/profile` swap (`stopping vLLM`, `loading weights X%`, `warmup`, `ready`); no crash UX
+- [x] **UX-04**: Model-swap UX — visible progress during `/profile` swap (`stopping vLLM`, `loading weights X%`, `warmup`, `ready`); no crash UX
 - [x] **UX-05**: CLI / scripted mode (one-shot prompts, JSON I/O) — pi `print` and `json` modes; needed for eval automation
 - [ ] **UX-06**: SDK / RPC mode (programmatic embedding) — eval harness uses pi SDK directly
 
@@ -167,7 +167,7 @@ Which phases cover which requirements. Updated by roadmapper 2026-04-20.
 |-------------|-------|--------|
 | SERVE-01 | Phase 1 | Pending |
 | SERVE-02 | Phase 1 | Pending |
-| SERVE-03 | Phase 4 | Pending |
+| SERVE-03 | Phase 4 | Done (Plan 04-01 + 04-06; 2026-04-23) |
 | SERVE-04 | Phase 1 | Pending |
 | SERVE-05 | Phase 2 | Done |
 | SERVE-06 | Phase 6 | Pending |
@@ -182,8 +182,8 @@ Which phases cover which requirements. Updated by roadmapper 2026-04-20.
 | PROFILE-04 | Phase 1 | Pending |
 | PROFILE-05 | Phase 1 | Pending |
 | PROFILE-06 | Phase 1 | Pending |
-| PROFILE-07 | Phase 4 | Pending |
-| PROFILE-08 | Phase 4 | Pending |
+| PROFILE-07 | Phase 4 | Done (Plans 04-01 + 04-04 + 04-06; 2026-04-23) |
+| PROFILE-08 | Phase 4 | Done † (Plans 04-02 + 04-03 + 04-06; 2026-04-23 — live walkthrough pending sc1 phase4 green) |
 | PROFILE-09 | Phase 1 | Pending |
 | HARNESS-01 | Phase 2 | Done |
 | HARNESS-02 | Phase 2 | Done (wire-through landed Plan 03-01) |
@@ -192,7 +192,7 @@ Which phases cover which requirements. Updated by roadmapper 2026-04-20.
 | HARNESS-05 | Phase 3 | Done (Plan 03-03; 2026-04-22) |
 | HARNESS-06 | Phase 2 | Done (wire-through landed Plan 03-01) |
 | HARNESS-07 | Phase 2 | Done (wire-through landed Plan 03-01) |
-| HARNESS-08 | Phase 4 | Pending |
+| HARNESS-08 | Phase 4 | Done † (Plans 04-04 + 04-06; 2026-04-23 — live walkthrough pending sc3 phase4 green) |
 | HARNESS-09 | Phase 3 | Done (Plan 03-02; 2026-04-22) |
 | HARNESS-10 | Phase 2 | Done |
 | TOOLS-01 | Phase 2 | Done |
@@ -224,7 +224,7 @@ Which phases cover which requirements. Updated by roadmapper 2026-04-20.
 | UX-01 | Phase 2 | Done |
 | UX-02 | Phase 3 | Done (Plan 03-04; 2026-04-22) |
 | UX-03 | Phase 3 | Done (Plan 03-06; 2026-04-22) |
-| UX-04 | Phase 4 | Pending |
+| UX-04 | Phase 4 | Done † (Plans 04-03 + 04-06; 2026-04-23 — live walkthrough pending sc1 phase4 green) |
 | UX-05 | Phase 2 | Done |
 | UX-06 | Phase 5 | Pending |
 | REPRO-01 | Phase 1 | Pending |

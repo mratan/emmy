@@ -16,7 +16,7 @@
 - [x] **Phase 1: Serving Foundation + Profile Schema** — emmy-serve with NGC vLLM container, Qwen3.6 end-to-end, profile registry on disk, KV/thermal/air-gap/SP_OK validation. **Closed 2026-04-21** with 3 documented deferrals (SC-1 architectural, SC-4→Phase 7, SC-5 re-validation→Phase 5); see 01-CLOSEOUT.md.
 - [x] **Phase 2: Pi-Harness MVP — Daily-Driver Baseline** — pi-coding-agent with custom vLLM provider, full P1 toolset (hash-anchored edits default + MCP + web_fetch), grammar-constrained tool calls, AGENTS.md discipline; author can daily-drive. **Closed 2026-04-21** with SC-1 green + SC-2/3/4/5 pass; v2 profile hash `sha256:24be3eea...85d8b`; 5 architectural wire-through items carry to Phase 3. See `02-CLOSEOUT.md`.
 - [x] **Phase 3: Observability + Agent-Loop Hardening + Lived-Experience** — Langfuse v3 + OTel GenAI semconv, smart context management with per-profile compaction, lived-experience telemetry (Alt+Up/Down), GPU/KV TUI footer, offline-OK badge. **Closed 2026-04-22** with v3 profile hash `sha256:2beb99c7...d4d3718` + 5/5 SCs green + 8 Phase-3 REQ-IDs flipped Done + 5 Phase-2 Done† promoted to Done (13 REQ-IDs total); see 03-CLOSEOUT.md.
-- [ ] **Phase 4: Gemma 4 Profile + Profile System Maturity** — second first-class model proves the abstraction; `/profile` atomic swap with progress UX; within-model planner/editor/critic routing
+- [x] **Phase 4: Gemma 4 Profile + Profile System Maturity** — second first-class model proves the abstraction; `/profile` atomic swap with progress UX; within-model planner/editor/critic routing
 - [ ] **Phase 5: Eval Harness + Reproducible Benchmark Suite** — eval runner imports harness via SDK; terminal-bench 2.0 + prior Phase 1 prompts + SWE-bench Verified + LiveCodeBench; ≥3 samples + std + provenance + executable-paired-with-judge
 - [ ] **Phase 6: Speculative Decoding + Latency Polish** — Qwen3-MTP and EAGLE-3 (where available) configured per profile; paired spec-on/spec-off benchmark gate
 - [ ] **Phase 7: Research-Grade Publication** — pin everything to digests, write methodology, publish lived-experience HF dataset, document "stand on shoulders" defaults; clean-Spark reproducer can verify every claim
@@ -218,7 +218,7 @@ Plans:
 - [x] 04-03-PLAN.md — TS `/profile` slash command + progress UX + D-23 harness hot-swap (PROFILE-08 + UX-04)
 - [x] 04-04-PLAN.md — `profiles/routes.yaml` + 3 Qwen v3.1 sibling variants + OTel variant/role stamping (HARNESS-08)
 - [x] 04-05-PLAN.md — D-19 no-model-conditionals audit (Python + TS) with self-test fixtures (reinforces SC-2)
-- [ ] 04-06-PLAN.md — Operator-gated KV bisection + 2-hour thermal + SC-1/SC-3/SC-4 walkthroughs + CLOSEOUT (closes all 5 REQ-IDs)
+- [x] 04-06-PLAN.md — Operator-gated KV bisection + 2-hour thermal + SC-1/SC-3/SC-4 walkthroughs + CLOSEOUT (closes all 5 REQ-IDs)
 
 ---
 
