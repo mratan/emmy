@@ -11,8 +11,16 @@
 //
 // --mode=stub (default): summarize() returns a deterministic "SUMMARY" string.
 //   No HTTP, no GPU — suitable for CI and the Plan 03-03 green-gate.
-// --mode=live: reserved for Plan 03-07. Currently falls back to stub with a
-//   warning; Plan 03-07 wires a real emmy-serve round-trip.
+// --mode=live: POSTs to a real emmy-serve /v1/chat/completions once per
+//   variant (default + alternate). The summarize() payload serializes
+//   messagesToSummarize as a plain user turn, prepends the profile's
+//   prompts/compact*.md as a system turn, and asserts the response is a
+//   non-empty string. --variant=disabled still uses stubEngine() because
+//   its expected behavior is {ran:false} (the null compaction config never
+//   reaches summarize). Config via env:
+//     EMMY_SC2_BASE_URL           (default http://127.0.0.1:8002)
+//     EMMY_SC2_SERVED_MODEL_NAME  (default qwen3.6-35b-a3b)
+//     EMMY_SC2_TIMEOUT_MS         (default 600000; ~10min per summarize)
 // --variant=default: reads profile's prompts/compact.md (D-13 default).
 // --variant=alternate: reads prompts/compact.alternate.md (Plan 03-07 Task 1
 //   creates this; Plan 03-03 falls back to default if missing).
@@ -155,6 +163,98 @@ function stubEngine(): CompactionEngine {
 	};
 }
 
+// ---- Plan 03-07 carry-forward: live engine for SC-2 matrix ----------------
+// Builds a CompactionEngine whose summarize() does ONE real round-trip
+// against emmy-serve. Matches Phase 1's wire shape (no chat_template_kwargs;
+// emmy-serve's Qwen template handles system/user turns natively). Returns
+// metadata in a side-channel so the report can record per-variant vLLM
+// latency + token counts without expanding CompactionEngine's return type.
+interface LiveRoundTripStats {
+	latency_ms: number;
+	prompt_tokens: number | null;
+	completion_tokens: number | null;
+	finish_reason: string | null;
+	summary_chars: number;
+	base_url: string;
+	served_model_name: string;
+}
+
+function liveEngine(stats: { last: LiveRoundTripStats | null }): CompactionEngine {
+	const baseUrl = process.env.EMMY_SC2_BASE_URL ?? "http://127.0.0.1:8002";
+	const servedModelName = process.env.EMMY_SC2_SERVED_MODEL_NAME ?? "qwen3.6-35b-a3b";
+	const timeoutMs = Number(process.env.EMMY_SC2_TIMEOUT_MS ?? 600_000);
+
+	return {
+		shouldCompact: () => true,
+		estimateTokens: (entry) => String(entry.content ?? "").length / 4,
+		summarize: async ({ preparation, customInstructions }) => {
+			// Clamp the serialized history so the summarize request fits under
+			// profile.serving.engine.max_model_len minus max_tokens + headroom.
+			// Max input = 131072 - 1024 - ~2K system headroom ≈ 128K tokens ≈
+			// 512K chars (chars/4 estimator). Per-entry cap 1500 chars ×
+			// ~200 entries ≈ 300K chars well under the ceiling; add a hard
+			// global cap in case a single entry dominates.
+			const PER_ENTRY_CAP = 1500;
+			const GLOBAL_CAP = 400_000;
+			let historyBlock = preparation.messagesToSummarize
+				.map((e) => `[${e.role}] ${String(e.content ?? "").slice(0, PER_ENTRY_CAP)}`)
+				.join("\n\n");
+			if (historyBlock.length > GLOBAL_CAP) {
+				historyBlock = historyBlock.slice(0, GLOBAL_CAP) + "\n\n[...truncated for SC-2 live cap...]";
+			}
+			const body = {
+				model: servedModelName,
+				messages: [
+					{ role: "system", content: customInstructions },
+					{
+						role: "user",
+						content: `Summarize the following ${preparation.messagesToSummarize.length}-entry session batch:\n\n${historyBlock}`,
+					},
+				],
+				temperature: 0.2,
+				top_p: 0.95,
+				max_tokens: 1024,
+				stream: false,
+			};
+			const ctl = new AbortController();
+			const tm = setTimeout(() => ctl.abort(new Error("timeout")), timeoutMs);
+			const t0 = Date.now();
+			try {
+				const resp = await fetch(`${baseUrl.replace(/\/$/, "")}/v1/chat/completions`, {
+					method: "POST",
+					headers: { "content-type": "application/json" },
+					body: JSON.stringify(body),
+					signal: ctl.signal,
+				});
+				if (!resp.ok) {
+					const text = await resp.text().catch(() => "(unreadable)");
+					throw new Error(`vLLM ${resp.status}: ${text.slice(0, 256)}`);
+				}
+				const json = (await resp.json()) as {
+					choices: Array<{ message: { content: string }; finish_reason: string }>;
+					usage?: { prompt_tokens: number; completion_tokens: number };
+				};
+				const summary = json.choices[0]?.message?.content ?? "";
+				if (!summary.trim()) {
+					throw new Error("live summarize returned empty summary");
+				}
+				stats.last = {
+					latency_ms: Date.now() - t0,
+					prompt_tokens: json.usage?.prompt_tokens ?? null,
+					completion_tokens: json.usage?.completion_tokens ?? null,
+					finish_reason: json.choices[0]?.finish_reason ?? null,
+					summary_chars: summary.length,
+					base_url: baseUrl,
+					served_model_name: servedModelName,
+				};
+				return { summary };
+			} finally {
+				clearTimeout(tm);
+			}
+		},
+	};
+}
+
 /**
  * Write the generated fixture to a JSONL file (one SessionEntry per line).
  * The JSONL is committed to the runs dir for audit / replay.
@@ -195,6 +295,7 @@ interface RunReport {
 	invariant_details: Record<string, string>;
 	timing_ms: number;
 	events_count: number;
+	live_stats?: LiveRoundTripStats | null;
 }
 
 export async function runSc2(args: CliArgs): Promise<RunReport> {
@@ -216,6 +317,7 @@ export async function runSc2(args: CliArgs): Promise<RunReport> {
 	const { profile, cleanup } = buildTestProfile(args.variant);
 	const events: Array<Record<string, unknown>> = [];
 	const t0 = Date.now();
+	const liveStatsCell: { last: LiveRoundTripStats | null } = { last: null };
 
 	let result: { ran: boolean; elided: number; preserved: number; fallback?: boolean };
 	let d12Thrown = false;
@@ -225,6 +327,14 @@ export async function runSc2(args: CliArgs): Promise<RunReport> {
 		// If the fixture never crosses (disabled variant short fixture), fall
 		// back to the final cum value.
 		const triggerTokens = crossingTurn != null ? cum[Math.min(crossingTurn + 5, cum.length - 1)]! : cum[cum.length - 1]!;
+		// Live mode uses the live engine for default + alternate variants.
+		// The disabled variant expects {ran:false} (null compaction config never
+		// reaches summarize), so the stub engine is sufficient and avoids a
+		// wasted GPU trip.
+		const selectedEngine =
+			args.mode === "live" && args.variant !== "disabled"
+				? liveEngine(liveStatsCell)
+				: stubEngine();
 		result = await emmyCompactionTrigger({
 			profile,
 			entries: fixture,
@@ -233,7 +343,7 @@ export async function runSc2(args: CliArgs): Promise<RunReport> {
 			eventType: "turn_start",
 			model: null,
 			apiKey: "unused",
-			engine: stubEngine(),
+			engine: selectedEngine,
 			emitEvent: (r) => events.push(r),
 		});
 	} catch (err) {
@@ -313,6 +423,7 @@ export async function runSc2(args: CliArgs): Promise<RunReport> {
 		},
 		timing_ms: timingMs,
 		events_count: events.length,
+		live_stats: args.mode === "live" && args.variant !== "disabled" ? liveStatsCell.last : null,
 	};
 
 	writeFileSync(join(outDir, "report.json"), JSON.stringify(report, null, 2) + "\n", "utf8");

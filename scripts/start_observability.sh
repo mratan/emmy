@@ -57,9 +57,14 @@ if [[ ! -f "$ENV_FILE" ]]; then
   REDIS_PW=$(openssl rand -base64 24 | tr -d '=+/')
   POSTGRES_PW=$(openssl rand -base64 24 | tr -d '=+/')
   MINIO_PW=$(openssl rand -base64 24 | tr -d '=+/')
-  S3_EVENT_SK=$(openssl rand -base64 24 | tr -d '=+/')
-  S3_MEDIA_SK=$(openssl rand -base64 24 | tr -d '=+/')
-  S3_BATCH_SK=$(openssl rand -base64 24 | tr -d '=+/')
+  # The three LANGFUSE_S3_*_SECRET_ACCESS_KEY values MUST equal MINIO_PW —
+  # chainguard's MinIO image only has root credentials (no IAM users), so
+  # Langfuse connects as access-key-id="minio" / secret=MINIO_ROOT_PASSWORD.
+  # Pre-2026-04-23 this script generated three *different* secrets, which
+  # caused SignatureDoesNotMatch on every OTLP ingestion S3 upload.
+  S3_EVENT_SK="$MINIO_PW"
+  S3_MEDIA_SK="$MINIO_PW"
+  S3_BATCH_SK="$MINIO_PW"
 
   # Use awk for in-place field replacement rather than sed -i because base64 +
   # hex secrets may contain characters sed treats specially (though we already

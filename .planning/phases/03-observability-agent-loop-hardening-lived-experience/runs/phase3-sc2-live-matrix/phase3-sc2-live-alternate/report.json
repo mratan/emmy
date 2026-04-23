@@ -1,0 +1,43 @@
+{
+  "verdict": "pass",
+  "mode": "live",
+  "variant": "alternate",
+  "fixture_hash": "26149bfce42c79e13a26a976780f29410991566fbcd399c65b53a1abd3a0a19b",
+  "fixture_turns": 200,
+  "threshold_crossing_turn": 125,
+  "token_budget": {
+    "context_tokens_at_trigger": 90169.5,
+    "context_window": 114688,
+    "soft_threshold_pct": 0.75
+  },
+  "result": {
+    "ran": true,
+    "elided": 181,
+    "preserved": 19
+  },
+  "invariants": {
+    "goalPreserved": true,
+    "lastNVerbatim": true,
+    "errorResultsVerbatim": true,
+    "filePinsVerbatim": true,
+    "compactionEvent": true
+  },
+  "invariant_details": {
+    "goalPreserved": "goal u-goal preserved verbatim",
+    "lastNVerbatim": "last 5 turns preserved verbatim",
+    "errorResultsVerbatim": "all 9 error-flagged tool results preserved verbatim",
+    "filePinsVerbatim": "all 2 file pins preserved verbatim",
+    "compactionEvent": "compaction.complete: elided=181, preserved=19"
+  },
+  "timing_ms": 47007,
+  "events_count": 2,
+  "live_stats": {
+    "latency_ms": 47006,
+    "prompt_tokens": 75919,
+    "completion_tokens": 1024,
+    "finish_reason": "length",
+    "summary_chars": 4105,
+    "base_url": "http://127.0.0.1:8002",
+    "served_model_name": "qwen3.6-35b-a3b"
+  }
+}

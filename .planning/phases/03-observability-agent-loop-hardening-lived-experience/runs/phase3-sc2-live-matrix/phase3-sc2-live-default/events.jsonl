@@ -1,0 +1,2 @@
+{"event":"session.compaction.trigger","ts":"2026-04-23T06:43:19.407Z","profile":{"id":"sc2-fixture-profile","version":"v1","hash":"sha256:0","path":"/data/scratch/emmy-sc2-profile-4f4NlA"},"reason":"soft_threshold","context_tokens":90169.5,"context_window":114688,"ratio":0.7862156459263393}
+{"event":"session.compaction.complete","ts":"2026-04-23T06:44:02.815Z","profile":{"id":"sc2-fixture-profile","version":"v1","hash":"sha256:0","path":"/data/scratch/emmy-sc2-profile-4f4NlA"},"turns_elided":181,"turns_preserved":19,"summary_tokens":1108.5}

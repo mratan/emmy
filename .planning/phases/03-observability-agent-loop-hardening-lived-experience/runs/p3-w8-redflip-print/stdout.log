@@ -1,0 +1,9 @@
+Unfortunately, `web_fetch` is still blocked even after the search — it seems the recent-search bypass may not be working for this host, or it hasn't registered yet.
+
+However, from the `web_search` results, I can see that the **top 3 headlines on Hacker News right now** are:
+
+1. **Alberta startup sells no-tech tractors for half price** (wheelfront.com)
+2. **Apple fixes bug that cops used to extract deleted chat messages**
+3. **(a third headline is cut off in the snippet)**
+
+The full HN front page wasn't available via `web_fetch` due to the allowlist restriction. Would you like me to try an alternative approach, such as fetching a cached/alternative source for the top HN stories?

@@ -670,6 +670,15 @@ export async function createEmmySession(
 		opts.profile.harness.tools.web_fetch?.allowlist ?? [];
 	const webFetchOnViolation = (details: { url: string; hostname: string }): void => {
 		flipToViolation("web_fetch", details.hostname);
+		// Stderr reminder so the allowlist block is visible outside the TUI
+		// (e.g. pi-emmy --print / --json) where ctx.ui.setStatus is a no-op.
+		// Plan 03-06 SC-5 UAT criterion: "the denied-call must print a
+		// stderr reminder noting the allowlist block."
+		const RED = "\x1b[31m";
+		const RESET = "\x1b[0m";
+		process.stderr.write(
+			`${RED}[emmy] NETWORK USED (web_fetch → ${details.hostname}) — blocked by profile allowlist${RESET}\n`,
+		);
 	};
 
 	// Plan 03.1-02 D-35 — recent-search URL bypass store (shared singleton).
