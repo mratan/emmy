@@ -336,6 +336,42 @@ SP_OK canary re-fires on the new session because pi's `newSession()` triggers a 
 
 | Run ID | Date | Purpose | Evidence |
 |--------|------|---------|----------|
-| phase3.1-01-walkthrough | pending | Plan 03.1-01 operator walkthrough — D-29 RAM (`free -h` ≥ 40G) + D-30 live compaction + D-31 `/compact` + D-32 `/clear` | `runs/phase3.1-01/walkthrough.md` (appended by Task 3) |
+| phase3.1-01-walkthrough | 2026-04-23 | Plan 03.1-01 operator walkthrough — D-29 RAM (42G available post-restart vs 4.6G on v3, 9× headroom) + D-30 live compaction (session survived ~90K-token sequence without 400 context-length error) + D-31 `/compact` (pi built-in conflict — minor deviation, see below) + D-32 `/clear` (dispatches, confirms, ctx.newSession resets, SP_OK re-fires) | `.planning/phases/03.1-operational-polish-minimal-ram-profile-live-auto-compaction-/runs/phase3.1-01/walkthrough.md` |
+
+#### phase3.1-01-walkthrough detail
+
+```yaml
+run_id: phase3.1-01-walkthrough
+date: 2026-04-23
+hash: sha256:fcdecb2355688167afda98f1310d5e06e2b2c039927d5dda52271fb6ad3fee5f
+verdict: p3.1-01 compaction green
+observed_free_h_gib: 42            # ≥ 40 gate: PASS
+baseline_free_h_gib: 4.6           # v3 pre-restart
+baseline_swap_gib: 7.2             # v3 pre-restart
+post_swap_gib: 2.9                 # v3.1 post-restart (4.3 GiB flushed)
+cold_start_s: 158
+smoke_test_tok_s: 10.16
+compaction_fired: true
+compaction_evidence: "compaction-live-wiring.test.ts 6/6 + session survival"
+manual_compact_succeeded: "via pi built-in (emmy extension registration conflicts; yellow warning at session start)"
+manual_clear_succeeded: true
+sp_ok_refires_after_clear: true
+```
+
+#### Deviation: pi 0.68 built-in `/compact` conflicts with emmy's extension registration
+
+Pi 0.68 ships a built-in slash command `/compact` (at `dist/core/slash-commands.js:19`: `{ name: "compact", description: "Manually compact the session context" }`). Emmy's Plan 03.1-01 Task 2 registered the same name via `pi.registerCommand("compact", ...)`. Pi detects the collision at session start and emits:
+
+```
+Warning: Extension command '/compact' conflicts with built-in interactive command. Skipping in autocomplete.
+```
+
+Pi's built-in still fires when the user types `/compact` and dispatches to `session.compact()` (the same method emmy's auto-compaction path uses via `ctx.compact()` in the turn_start handler). Functionally the manual command works; the deviation is that **emmy's profile-defined `prompts/compact.md` is NOT threaded through pi's built-in manual path** — only through the auto-path.
+
+**Impact:**
+- Auto-compaction (turn_start, hot path): uses profile prompt. Correct per D-11 / D-31.
+- Manual `/compact` (rare path): uses pi's default prompt, NOT emmy's profile prompt. User-typed args still flow through to pi's built-in.
+
+**Follow-up (defer to 03.1-03 cleanup):** remove emmy's `registerCompactCommand` call from `pi-emmy-extension.ts` so the yellow warning goes away. Pi's built-in is sufficient for manual triggers; the profile-prompt discipline is preserved on the hot path (auto-compaction).
 
 
