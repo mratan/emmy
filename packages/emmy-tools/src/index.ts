@@ -35,4 +35,17 @@ export {
 	WebFetchAllowlistError,
 	type EnforcementContext,
 } from "./web-fetch-allowlist";
+// Plan 03.1-02 (D-34, D-35): web_search tool + search-returned-URL bypass.
+export {
+	webSearch,
+	registerWebSearchTool,
+	resetTurnSearchCount,
+	__resetSearchCountForTests,
+	type WebSearchConfig,
+	type SearchResult,
+	type WebSearchToolErrorResult,
+	type WebSearchOpts,
+	type PiToolDefinitionShape,
+	type RegisterWebSearchToolOpts,
+} from "./web-search";
 export const PACKAGE_VERSION = "0.1.0";

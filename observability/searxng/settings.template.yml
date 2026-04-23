@@ -1,0 +1,56 @@
+# observability/searxng/settings.template.yml
+#
+# Plan 03.1-02 D-33 — SearxNG settings template. start_searxng.sh expands
+# ${SEARXNG_SECRET_KEY} into settings.yml at first boot (then mounts that
+# file into the container read-only per T-03.1-02-05).
+#
+# Engine preference: google > duckduckgo > brave > bing. SearxNG auto-
+# rotates on rate-limit/timeout from any individual engine, which is exactly
+# the lived-experience resilience we want (the problem this plan solves).
+#
+# JSON API format is enabled on top of html so both the web UI (127.0.0.1:8888
+# for debugging) and the emmy tool path (/search?format=json) work.
+
+use_default_settings: true
+
+general:
+  debug: false
+  instance_name: "emmy-searxng"
+
+server:
+  secret_key: "${SEARXNG_SECRET_KEY}"
+  limiter: false          # loopback-only use; rate-limiting is per-turn on the emmy side
+  image_proxy: false      # emmy tool path doesn't render images
+  port: 8080
+  bind_address: "0.0.0.0" # container-internal; docker-compose binds loopback-only
+
+search:
+  safe_search: 0
+  autocomplete: ""
+  formats:
+    - html
+    - json
+
+ui:
+  static_use_hash: true
+
+# Redis cache — use the sibling-container Redis (service DNS name "redis").
+redis:
+  url: redis://redis:6379/0
+
+# Engines — D-33 preference order. Any engine missing this key defaults to
+# `disabled: false` (SearxNG default engine list is already broad). Be explicit
+# for the primary four so the preference is self-documenting.
+engines:
+  - name: google
+    disabled: false
+    shortcut: g
+  - name: duckduckgo
+    disabled: false
+    shortcut: d
+  - name: brave
+    disabled: false
+    shortcut: br
+  - name: bing
+    disabled: false
+    shortcut: b

@@ -42,6 +42,7 @@ from .schema import (
     ServingConfig,
     ToolsConfig,
     WebFetchConfig,
+    WebSearchConfig,
 )
 
 __all__ = [
@@ -60,6 +61,7 @@ __all__ = [
     "ContextConfig",
     "GrammarConfig",
     "WebFetchConfig",
+    "WebSearchConfig",
     "ToolsConfig",
     "AgentLoopConfig",
     "CommunitySource",

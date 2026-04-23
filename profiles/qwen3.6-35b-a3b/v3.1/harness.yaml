@@ -44,6 +44,20 @@ tools:
       - docs.vllm.ai
       - huggingface.co
       - docs.langfuse.com
+    # Plan 03.1-02 D-35 — returned-URL bypass TTL (ms). URLs returned by a
+    # recent web_search call are fetchable without allowlist entry for this
+    # many ms. Exact URL match (NOT hostname substring) per T-03.1-02-02.
+    # 0 disables the bypass entirely.
+    search_bypass_ttl_ms: 300000
+  web_search:
+    # Plan 03.1-02 D-34 — SearxNG-backed web_search tool. base_url is loopback-
+    # only; tool is NOT registered when enabled=false OR EMMY_WEB_SEARCH=off
+    # OR EMMY_TELEMETRY=off. Rate-limited per-turn (T-03.1-02-03).
+    enabled: true
+    base_url: http://127.0.0.1:8888
+    max_results_default: 10
+    rate_limit_per_turn: 10
+    timeout_ms: 10000
 
 agent_loop:
   max_iterations: 25                             # Unchanged from v1; revisit at Phase 5 eval

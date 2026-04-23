@@ -1,0 +1,77 @@
+# observability/searxng/docker-compose.yaml
+#
+# Plan 03.1-02 (D-33) — self-hosted SearxNG stack for web_search tool.
+# Sibling of observability/langfuse/docker-compose.yaml; same air-gap
+# discipline (D-09 digest-pinned per Phase 3 Plan 03-02 pattern).
+#
+# Topology:
+#   - searxng: SearxNG JSON API + (loopback-only) web UI on :8888
+#   - redis: dedicated Redis for SearxNG's search cache (own container; NOT
+#     shared with Langfuse's Redis — the planner considered sharing via
+#     `external: true`, but found the compose-project-name coupling fragile
+#     (Langfuse's Redis container name varies with compose project dir), and
+#     Redis is ~30 MB RAM + negligible disk. Self-contained sibling stack is
+#     the simpler and more robust choice.).
+#
+# Port binding policy:
+#   - searxng: 127.0.0.1:8888:8080 loopback-only (T-03.1-02-01..04 containment).
+#   - redis:   NO host port binding (internal-only; searxng service reaches it
+#              via compose-default service-name DNS `redis:6379`).
+#
+# First-boot requires network to pull the digest-pinned images; subsequent
+# boots are byte-identical re-use of the local image cache. SearxNG's OWN
+# outbound connections (to google.com, duckduckgo.com, brave.com, bing.com)
+# happen per-search and are explicit in the refined thesis (D-33).
+#
+# Upstream reference: https://github.com/searxng/searxng-docker (fetched 2026-04-22).
+# Digest captured locally 2026-04-22 via
+#   `docker pull searxng/searxng:latest && docker inspect searxng/searxng:latest --format '{{index .RepoDigests 0}}'`
+
+services:
+  searxng:
+    image: searxng/searxng@sha256:37c616a774b90fb5df9239eb143f1b11866ddf7b830cd1ebcca6ba11b38cc2bf
+    restart: always
+    ports:
+      # Loopback-only bind — T-03.1-02-01 / T-03.1-02-04 containment.
+      - "127.0.0.1:8888:8080"
+    environment:
+      # SearxNG uses UWSGI_WORKERS to size its worker pool; 1 is plenty for
+      # single-user daily-driver research load. Keeps memory footprint small.
+      UWSGI_WORKERS: "1"
+      UWSGI_THREADS: "4"
+      # settings.yml reads this at startup via jinja expansion.
+      SEARXNG_SECRET_KEY: ${SEARXNG_SECRET_KEY}
+      # SearxNG reads SEARXNG_BASE_URL for canonical link generation; set to
+      # loopback so it never leaks a non-loopback URL into its responses.
+      SEARXNG_BASE_URL: http://127.0.0.1:8888/
+    volumes:
+      # Mount the generated settings.yml read-only; T-03.1-02-05 mitigation
+      # (shell-shell edits to the generated file won't propagate until restart).
+      - ./settings.yml:/etc/searxng/settings.yml:ro
+    depends_on:
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # SearxNG's /healthz endpoint. curl ships inside the container per
+      # searxng-docker upstream.
+      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 30s
+
+  redis:
+    # Redis digest reused verbatim from observability/langfuse/docker-compose.yaml
+    # (same image cache, same air-gap capture). Different container; not shared.
+    image: redis@sha256:0c87e07e20a8157992ba7de345b55cfaf6853210b3423c92d1a365fe603d15e0
+    restart: always
+    command: >
+      --save ""
+      --appendonly no
+    # No host port binding — internal-only. SearxNG container reaches it via
+    # compose-default DNS: `redis:6379`.
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 5s
+      retries: 10

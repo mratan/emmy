@@ -114,6 +114,9 @@ def test_web_fetch_config_search_bypass_ttl_negative_rejected():
 def test_tools_config_web_search_optional_default_none():
     cfg = schema.ToolsConfig(format="openai")
     assert cfg.web_search is None
+    # search_bypass_ttl_ms default is reachable from the nested WebFetchConfig
+    # only when the block is explicitly supplied — its presence is NOT implied.
+    assert cfg.web_fetch is None
 
 
 def test_tools_config_with_web_search_block():

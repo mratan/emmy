@@ -48,6 +48,8 @@ eval/phase3/fixtures/
 .env
 .env.local
 observability/langfuse/.env
+observability/searxng/.env
+observability/searxng/settings.yml
 
 # TS/Node
 node_modules/

@@ -223,16 +223,49 @@ class GrammarConfig(BaseModel):
 
 
 class WebFetchConfig(BaseModel):
-    """web_fetch allowlist policy (Phase 3 D-26..D-28).
+    """web_fetch allowlist policy (Phase 3 D-26..D-28 + Phase 3.1 D-35).
 
     Shipped in v3; v1/v2 validate without it (Optional[WebFetchConfig] = None on
     ToolsConfig). Hostname-EXACT matching enforced at runtime by
     ``packages/emmy-tools/src/web-fetch-allowlist.ts`` (Plan 03-06). An empty
     allowlist means default-deny (all non-loopback hosts blocked).
+
+    Plan 03.1-02 D-35 — ``search_bypass_ttl_ms`` extends enforcement: URLs
+    returned by a recent ``web_search`` call are fetchable without allowlist
+    entry for ``search_bypass_ttl_ms`` milliseconds (default 300000 = 5 min).
+    0 disables the bypass entirely. Exact URL match (NOT hostname substring)
+    per T-03.1-02-02 SSRF mitigation.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     allowlist: list[str] = Field(default_factory=list)
+    # D-35 — Plan 03.1-02 returned-URL bypass TTL (ms). 0 = disabled.
+    search_bypass_ttl_ms: int = Field(default=300000, ge=0)
+
+
+class WebSearchConfig(BaseModel):
+    """web_search tool config (Phase 3.1 D-34).
+
+    Shipped in v3.1; v1/v2/v3 validate without it (Optional[WebSearchConfig]
+    = None on ToolsConfig). SearxNG JSON API at ``base_url`` is the only
+    permitted target (loopback-only). Runtime enforcement in
+    ``packages/emmy-tools/src/web-search.ts``.
+
+    Knobs:
+      - enabled: master switch. False or None → tool not registered.
+      - base_url: SearxNG endpoint; MUST be loopback-bound for T-03.1-02
+        trust-boundary containment.
+      - max_results_default: returned to the model when it omits max_results.
+      - rate_limit_per_turn: T-03.1-02-03 DoS guard; hard-cap per agent turn.
+      - timeout_ms: per-call HTTP timeout; keeps agent loop responsive.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    enabled: bool = False
+    base_url: str = "http://127.0.0.1:8888"
+    max_results_default: int = Field(default=10, ge=1, le=50)
+    rate_limit_per_turn: int = Field(default=10, ge=1, le=100)
+    timeout_ms: int = Field(default=10000, ge=1000, le=60000)
 
 
 class ToolsConfig(BaseModel):
@@ -247,6 +280,9 @@ class ToolsConfig(BaseModel):
     # D-26..D-28 — per-profile web_fetch allowlist. v1/v2 validate without it;
     # v3 ships the block. Runtime enforcement in @emmy/tools/web-fetch-allowlist.
     web_fetch: Optional[WebFetchConfig] = None
+    # Phase 3.1 D-34 — per-profile web_search config. v1/v2/v3 validate without
+    # it; v3.1 ships the block. Runtime enforcement in @emmy/tools/web-search.
+    web_search: Optional[WebSearchConfig] = None
 
 
 class AgentLoopConfig(BaseModel):
@@ -328,6 +364,7 @@ __all__ = [
     "ContextConfig",
     "GrammarConfig",
     "WebFetchConfig",
+    "WebSearchConfig",
     "ToolsConfig",
     "AgentLoopConfig",
     "HarnessConfig",
