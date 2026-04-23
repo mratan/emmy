@@ -36,6 +36,16 @@ runs/**
 !runs/phase2-sc4/**
 !runs/phase2-sc5/
 !runs/phase2-sc5/**
+!runs/phase4-kv/
+!runs/phase4-kv/**
+!runs/phase4-thermal/
+!runs/phase4-thermal/**
+!runs/phase4-sc1/
+!runs/phase4-sc1/**
+!runs/phase4-sc3/
+!runs/phase4-sc3/**
+!runs/phase4-sc4/
+!runs/phase4-sc4/**
 
 # HF cache + models (never committed)
 models/
