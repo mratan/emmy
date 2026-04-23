@@ -53,19 +53,29 @@ import {
 import {
 	getRetryStateForSignal,
 	handleBeforeProviderRequest,
+	resolveVariant,
 	type AssembledPromptSnapshot,
 	type BeforeProviderRequestPayload,
 	type ProfileSnapshot,
+	type ResolvedVariant,
 	type RetryState,
+	type RoleKey,
+	type RoutesConfig,
+	type VariantSnapshot,
 } from "@emmy/provider";
 import {
+	clearCurrentTurnRoleContext,
 	EmmyProfileStampProcessor,
 	emitEvent,
+	setCurrentTurnRoleContext,
 	TurnTracker,
 	type TurnMeta,
 } from "@emmy/telemetry";
 // Plan 03.1-02 — per-turn rate-limit reset for web_search (T-03.1-02-03).
 import { resetTurnSearchCount } from "@emmy/tools";
+// Plan 04-04 (HARNESS-08) — routes.yaml + per-variant profile loader.
+import { loadProfile } from "./profile-loader";
+import { loadRoutes, RoutesLoadError } from "./routes-loader";
 
 import {
 	EMMY_FEEDBACK_DOWN_KEYID,
@@ -229,6 +239,189 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 	// produce distinct turn_ids (no collapse).
 	let emmyTurnCounter = 0;
 
+	// Plan 04-04 (HARNESS-08 / D-08) — load routes.yaml at factory construction.
+	// Absence (ENOENT) is non-fatal: emmy defaults to single-variant mode using
+	// the boot profile on every turn (D-08 "absence = default-only mode"). The
+	// variant snapshot cache is populated lazily on first resolveVariant per
+	// role, keyed by variantPath so the variant's harness.yaml is read off
+	// disk at most once per session.
+	const profilesRoot = opts.profilesRoot ?? "profiles";
+	let routes: RoutesConfig | null = null;
+	try {
+		routes = loadRoutes(joinPath(profilesRoot, "routes.yaml"));
+	} catch (err) {
+		// ENOENT / parse error → default-only mode. Log once so operators
+		// notice in event.jsonl but never crash the factory.
+		if (!(err instanceof Error && err.message.includes("ENOENT"))) {
+			if (err instanceof RoutesLoadError) {
+				// Malformed file — log the structured error so the operator can
+				// fix it. Routes stay null → default-only; base profile wins.
+				console.error(`[emmy] routes.yaml unusable — default-only mode: ${err.message}`);
+			}
+			// Any other error also routes to default-only.
+		}
+		routes = null;
+	}
+
+	// Lazy per-variant snapshot cache. Keys on the RESOLVED variant path
+	// (e.g. "profiles/qwen3.6-35b-a3b/v3.1-reason") so the cache survives
+	// /profile swaps where only the default might move (the variants still
+	// live on disk and produce byte-identical serving.yaml).
+	const variantCache = new Map<string, VariantSnapshot>();
+
+	/**
+	 * Load a variant bundle's harness.yaml fields into a VariantSnapshot.
+	 * Reads the raw harness.yaml (no parse of non-variant fields) so the
+	 * snapshot can carry the variant's sampling_defaults +
+	 * chat_template_kwargs — fields not exposed on ProfileSnapshot but
+	 * present in the schema (VariantSamplingDefaults; Plan 04-04 Task 1).
+	 * Also calls loadProfile so profile.hash is populated for
+	 * emmy.profile.variant_hash stamping on OTel spans (D-12).
+	 */
+	async function loadVariantSnapshot(
+		resolved: ResolvedVariant,
+		role: RoleKey,
+	): Promise<VariantSnapshot | null> {
+		const cached = variantCache.get(resolved.variantPath);
+		if (cached) {
+			return { ...cached, role };
+		}
+		let snap;
+		try {
+			snap = await loadProfile(resolved.variantPath);
+		} catch (err) {
+			console.error(
+				`[emmy] variant ${resolved.variant} failed to load — falling back to base profile: ${
+					err instanceof Error ? err.message : String(err)
+				}`,
+			);
+			return null;
+		}
+		// Parse harness.yaml raw for the two variant-level fields. loadProfile's
+		// ProfileSnapshot doesn't expose them (they're optional and live on
+		// harness.yaml root per Phase 4 schema extension). We read the file
+		// once and cache the result.
+		let variantHarness: {
+			sampling_defaults?: VariantSnapshot["harness"]["sampling_defaults"];
+			chat_template_kwargs?: VariantSnapshot["harness"]["chat_template_kwargs"];
+			per_tool_sampling?: VariantSnapshot["harness"]["per_tool_sampling"];
+			prompts?: VariantSnapshot["harness"]["prompts"];
+		} = {};
+		try {
+			const yaml = await import("js-yaml");
+			const raw = yaml.default.load(
+				readFileSync(joinPath(resolved.variantPath, "harness.yaml"), "utf8"),
+			) as {
+				sampling_defaults?: VariantSnapshot["harness"]["sampling_defaults"];
+				chat_template_kwargs?: VariantSnapshot["harness"]["chat_template_kwargs"];
+				tools?: { per_tool_sampling?: VariantSnapshot["harness"]["per_tool_sampling"] };
+				prompts?: VariantSnapshot["harness"]["prompts"];
+			};
+			variantHarness = {
+				sampling_defaults: raw?.sampling_defaults,
+				chat_template_kwargs: raw?.chat_template_kwargs,
+				per_tool_sampling: raw?.tools?.per_tool_sampling,
+				prompts: raw?.prompts,
+			};
+		} catch {
+			// Can't read harness.yaml raw — ProfileSnapshot was loaded above
+			// so the bundle is structurally valid; just no variant fields.
+		}
+		const snapshot: VariantSnapshot = {
+			profileId: resolved.profileId,
+			variant: resolved.variant,
+			variantHash: snap.ref.hash,
+			role,
+			harness: variantHarness,
+		};
+		variantCache.set(resolved.variantPath, snapshot);
+		return snapshot;
+	}
+
+	/**
+	 * D-11 role classifier — PURE on payload shape. Must not branch on
+	 * profile id or model name (D-19 audit). Heuristic (planner seed):
+	 *   1. turn envelope override (payload.emmy.role) — highest precedence
+	 *      so callers can force a role for tests / replay
+	 *   2. last user message regex matches plan/edit/critic keywords
+	 *   3. payload contains a tools[] descriptor + next tool hint points
+	 *      at edit|write (iteration 2+ refinement where the model already
+	 *      emitted a tool call)
+	 *   4. else → "default"
+	 * First-invocation: iteration 1 has no tool hint; user-message regex
+	 * does the work. Iteration 2+ may reclassify to "edit" if the model
+	 * emits an edit tool call — one turn_id can therefore carry spans with
+	 * different roles, as documented in Plan 04-04 Task 2g.1.
+	 */
+	function classifyRole(
+		payload: BeforeProviderRequestPayload & {
+			emmy?: { role?: RoleKey };
+			tools?: Array<{ function?: { name?: string } }>;
+		},
+	): RoleKey {
+		// Explicit override via emmy envelope — supported primarily for
+		// testing + replay; not set on the live path.
+		const explicit = (payload.emmy as { role?: RoleKey } | undefined)?.role;
+		if (
+			explicit === "plan" ||
+			explicit === "edit" ||
+			explicit === "critic" ||
+			explicit === "default"
+		) {
+			return explicit;
+		}
+
+		// Last user message text — the user's most recent turn drives the
+		// initial classification. `messages` is the full transcript; take the
+		// last role==="user" entry.
+		let lastUserText = "";
+		for (let i = payload.messages.length - 1; i >= 0; i--) {
+			const m = payload.messages[i];
+			if (m && m.role === "user") {
+				const c = m.content;
+				if (typeof c === "string") {
+					lastUserText = c;
+				} else if (Array.isArray(c)) {
+					lastUserText = c
+						.map((item) =>
+							typeof item === "string"
+								? item
+								: typeof (item as { text?: unknown }).text === "string"
+									? ((item as { text: string }).text)
+									: "",
+						)
+						.join(" ");
+				}
+				break;
+			}
+		}
+
+		// Ordering matters (Plan 04-04 note): check message-text FIRST because
+		// turn.nextTool is only populated on iteration 2+. Regex intentionally
+		// case-insensitive with leading-word anchor.
+		if (/^(plan:|think about|architect|design|strategy|outline)/i.test(lastUserText)) {
+			return "plan";
+		}
+		if (/^(edit|write|modify|rename|refactor|fix)\s/i.test(lastUserText)) {
+			return "edit";
+		}
+		if (/^(review|critique|audit|check|verify)\s/i.test(lastUserText)) {
+			return "critic";
+		}
+
+		// Fallthrough iteration-2+ refinement — if the payload includes a tool
+		// hint (pi may surface the next tool on retry), check it.
+		const tools = (payload as { tools?: Array<{ function?: { name?: string } }> }).tools;
+		if (Array.isArray(tools)) {
+			for (const t of tools) {
+				const n = t?.function?.name;
+				if (n === "edit" || n === "write") return "edit";
+			}
+		}
+
+		return "default";
+	}
+
 	// Plan 03.1-01 Task 2 (D-31) — read the profile-defined compaction prompt
 	// once at factory-construction time. The /compact handler uses this as the
 	// base customInstructions (user-supplied args are appended per D-31's
@@ -300,18 +493,48 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 			}
 		});
 
-		pi.on("before_provider_request", (event, ctx) => {
+		pi.on("before_provider_request", async (event, ctx) => {
 			// Cast event.payload (declared as `unknown` in pi 0.68 types) to our
 			// structural shape. Pi's onPayload surfaces the OpenAI-compat chat
 			// request body; field names match our BeforeProviderRequestPayload.
 			const payload = event.payload as BeforeProviderRequestPayload;
 			const retryState = ctx.signal ? retryLookup(ctx.signal) ?? null : null;
 			const snapshot = assembledPromptProvider();
+
+			// Plan 04-04 (HARNESS-08 / D-11 / D-12) — per-turn variant routing.
+			// Classify role on payload shape (tool-name + message regex; NEVER
+			// model-name), resolve to a variant dir via routes.yaml, load (or
+			// cache-hit) the variant's harness.yaml fields, set the OTel turn
+			// context, and pass the snapshot to handleBeforeProviderRequest.
+			// When routes.yaml is absent (or malformed) we skip entirely —
+			// the base profile handles the turn exactly as before (D-08
+			// "absence = default-only mode").
+			let variantSnapshot: VariantSnapshot | undefined;
+			if (routes) {
+				const isCanaryEarly =
+					typeof (payload as { emmy?: { is_sp_ok_canary?: boolean } }).emmy === "object" &&
+					(payload as { emmy?: { is_sp_ok_canary?: boolean } }).emmy?.is_sp_ok_canary === true;
+				if (!isCanaryEarly) {
+					const role = classifyRole(payload);
+					const resolved = resolveVariant(role, routes, profilesRoot);
+					const vs = await loadVariantSnapshot(resolved, role);
+					if (vs) {
+						variantSnapshot = vs;
+						setCurrentTurnRoleContext({
+							variant: vs.variant,
+							variantHash: vs.variantHash,
+							role,
+						});
+					}
+				}
+			}
+
 			handleBeforeProviderRequest({
 				payload,
 				profile: currentProfile,
 				assembledPrompt: snapshot,
 				retryState,
+				variantSnapshot,
 			});
 
 			// SP_OK canary requests carry a sentinel on `payload.emmy.is_sp_ok_canary`
@@ -379,8 +602,15 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 		// unconditionally so EMMY_TELEMETRY=off still resets the counter
 		// between turns (prevents unbounded accumulation across long sessions
 		// when telemetry is disabled).
+		//
+		// Plan 04-04 (HARNESS-08 / D-12) — also clear the per-turn variant/role
+		// OTel context so the next turn starts with a fresh slate. If
+		// before_provider_request sets a new context, the stamp processor sees
+		// it; if not (routes.yaml absent / canary), getCurrentTurnRoleContext
+		// returns `{}` and the processor omits the variant/role attrs.
 		pi.on("turn_end", () => {
 			resetTurnSearchCount();
+			clearCurrentTurnRoleContext();
 		});
 
 		// Plan 03-08 fix-forward (TELEM-02): register keyboard shortcuts via

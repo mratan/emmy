@@ -126,6 +126,15 @@ export {
 	swapSpanProcessor,
 	type ProfileStampAttrs,
 } from "./profile-stamp-processor";
+// Phase 4 Plan 04-04 (HARNESS-08 / D-12) — per-turn variant/role context
+// read by profile-stamp-processor.onStart and populated by
+// pi-emmy-extension.ts's before_provider_request handler.
+export {
+	setCurrentTurnRoleContext,
+	clearCurrentTurnRoleContext,
+	getCurrentTurnRoleContext,
+	type TurnRoleContext,
+} from "./turn-role-context";
 
 // Plan 03-06 — UX-03 offline audit pure functions + D-26 LOOPBACK_HOSTS.
 // Plan 03.1-02 D-36 — SEARXNG_LOOPBACK_PORT + classifyEgressHost.

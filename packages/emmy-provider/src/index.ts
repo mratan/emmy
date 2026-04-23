@@ -33,6 +33,17 @@ export {
 	type AssembledPromptSnapshot,
 	type RetryState,
 } from "./before-request-hook";
+// Phase 4 Plan 04-04 (HARNESS-08) — routes.yaml variant resolver + shared
+// RouteRef/RoutesConfig types. Lives here (not @emmy/ux) to break the
+// circular dependency with routes-loader.ts (@emmy/ux already imports
+// @emmy/provider).
+export {
+	resolveVariant,
+	type RoleKey,
+	type RouteRef,
+	type RoutesConfig,
+	type ResolvedVariant,
+} from "./variant-resolver";
 export * from "./types";
 export * from "./errors";
 

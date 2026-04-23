@@ -33,7 +33,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { RetryState } from "./grammar-retry";
-import type { ProfileSnapshot } from "./types";
+import type { ProfileSnapshot, VariantSnapshot } from "./types";
 
 export type { RetryState };
 
@@ -42,6 +42,14 @@ export interface BeforeProviderRequestPayload {
 	messages: Array<{ role: string; content: unknown }>;
 	extra_body?: Record<string, unknown>;
 	chat_template_kwargs?: Record<string, unknown>;
+	// Phase 4 HARNESS-08 — variant-level sampling fields applied when a
+	// variantSnapshot is present. Their absence (undefined) means the wire
+	// layer or profile layer downstream is responsible for sampling
+	// defaults; presence is a per-turn override.
+	temperature?: number;
+	top_p?: number;
+	top_k?: number;
+	max_tokens?: number;
 	/**
 	 * Emmy-private payload namespace. Used today for the SP_OK canary
 	 * pass-through flag; future fields (turn_id correlation, trace context)
@@ -60,8 +68,13 @@ export function handleBeforeProviderRequest(args: {
 	profile: ProfileSnapshot;
 	assembledPrompt: AssembledPromptSnapshot;
 	retryState: RetryState | null;
+	// Phase 4 Plan 04-04 (HARNESS-08) — per-turn variant snapshot. When
+	// present, its harness.sampling_defaults / chat_template_kwargs override
+	// the base profile's values. When absent (existing callers + Phase 3
+	// wiring), the hook's behavior is unchanged.
+	variantSnapshot?: VariantSnapshot;
 }): void {
-	const { payload, profile, assembledPrompt, retryState } = args;
+	const { payload, profile, assembledPrompt, retryState, variantSnapshot } = args;
 
 	// SP_OK canary guard — never mutate the canary's payload. The canary runs
 	// BEFORE pi's extension runtime exists, so this branch is defensive only.
@@ -72,6 +85,33 @@ export function handleBeforeProviderRequest(args: {
 		...(payload.chat_template_kwargs ?? {}),
 		enable_thinking: false,
 	};
+
+	// (a1) Phase 4 HARNESS-08 — variant snapshot application. Overrides the
+	// enable_thinking default (a) and the base profile sampling whenever a
+	// variant is active for the current turn. Tool-name + message-text based
+	// role classification means temperature=0.6 on a "plan" turn and
+	// temperature=0.0 on an "edit" turn, without restarting the vLLM engine
+	// (serving.yaml is byte-identical across sibling variants per D-10).
+	if (variantSnapshot) {
+		const sd = variantSnapshot.harness.sampling_defaults;
+		if (sd) {
+			if (typeof sd.temperature === "number") payload.temperature = sd.temperature;
+			if (typeof sd.top_p === "number") payload.top_p = sd.top_p;
+			if (typeof sd.top_k === "number") payload.top_k = sd.top_k;
+			if (typeof sd.max_tokens === "number") payload.max_tokens = sd.max_tokens;
+		}
+		if (variantSnapshot.harness.chat_template_kwargs) {
+			payload.chat_template_kwargs = {
+				...(payload.chat_template_kwargs ?? {}),
+				...variantSnapshot.harness.chat_template_kwargs,
+			};
+		}
+		// Note: variant-specific system prompt mutation is deferred to the
+		// @emmy/ux caller; pi-emmy-extension.ts's before_provider_request
+		// handler rebuilds assembledPrompt.text when harness.prompts.system
+		// points at a variant-specific file. This hook only applies the
+		// chat-request-shape fields directly.
+	}
 
 	// (b) D-02b: reactive grammar injection (Phase 2 D-11 live-path wiring).
 	if (retryState?.wantsGrammar === true) {

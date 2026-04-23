@@ -86,4 +86,11 @@ export {
 	type RunBootAuditOpts,
 } from "./offline-badge";
 
+// Phase 4 Plan 04-04 (HARNESS-08 / D-08) — routes.yaml loader. Parses the
+// top-level profiles/routes.yaml file + throws RoutesLoadError on malformed
+// input. Consumed at pi-emmy-extension.ts factory startup; variant
+// resolution itself lives in @emmy/provider's resolveVariant (no I/O).
+export { loadRoutes, RoutesLoadError } from "./routes-loader";
+export type { RouteRef, RoutesConfig } from "./routes-loader";
+
 export const PACKAGE_VERSION = "0.1.0";

@@ -140,6 +140,39 @@ export interface ChatResponse {
 	};
 }
 
+// Phase 4 Plan 04-04 (HARNESS-08 / D-10 / D-12) — per-turn variant snapshot
+// computed by pi-emmy-extension.ts's before_provider_request handler and
+// passed into handleBeforeProviderRequest to apply variant-specific
+// sampling_defaults + chat_template_kwargs to the outgoing payload.
+//
+// Sibling variants (v3.1-default / v3.1-reason / v3.1-precise) share a
+// byte-identical serving.yaml (engine byte-identity, CI-enforced). Only
+// harness.yaml fields — sampling_defaults, chat_template_kwargs,
+// per_tool_sampling, prompts — differ per variant. The snapshot carries
+// those fields into the wire path so the engine does NOT need to restart
+// when the role routes to a different variant.
+//
+// `variantHash` is the variant bundle's content hash (sha256 of the manifest
+// produced by emmy_serve/profile/hasher.py). The OTel span processor stamps
+// it as `emmy.profile.variant_hash` for Langfuse/trace correlation (D-12).
+export interface VariantSnapshot {
+	profileId: string;
+	variant: string;
+	variantHash: string;
+	role: "plan" | "edit" | "critic" | "default";
+	harness: {
+		sampling_defaults?: {
+			temperature?: number;
+			top_p?: number;
+			top_k?: number;
+			max_tokens?: number;
+		};
+		per_tool_sampling?: Record<string, { temperature?: number }>;
+		chat_template_kwargs?: Record<string, unknown>;
+		prompts?: { system?: string };
+	};
+}
+
 export interface GrammarRetryEvent {
 	event: "grammar.retry" | "grammar.retry.success" | "grammar.retry.exhausted";
 	ts: string;

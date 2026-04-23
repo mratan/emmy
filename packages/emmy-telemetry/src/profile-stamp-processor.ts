@@ -22,6 +22,8 @@
 
 import type { ReadableSpan, Span, SpanProcessor } from "@opentelemetry/sdk-trace-base";
 
+import { getCurrentTurnRoleContext } from "./turn-role-context";
+
 export interface ProfileStampAttrs {
 	id: string;
 	version: string;
@@ -59,6 +61,21 @@ export class EmmyProfileStampProcessor implements SpanProcessor {
 			"emmy.profile.version": this.profile.version,
 			"emmy.profile.hash": this.profile.hash,
 		});
+		// Phase 4 Plan 04-04 (D-12) — per-turn variant/role attribution.
+		// Absent when no variant-aware turn context exists (pre-Phase-4 wire
+		// paths + SP_OK canary + every span fired outside of the before-
+		// request → turn_end window). Backward-compat for Plan 03-02
+		// span-attribute tests: only stamp KEYS that are populated.
+		const turnCtx = getCurrentTurnRoleContext();
+		if (turnCtx.variant) {
+			span.setAttribute("emmy.profile.variant", turnCtx.variant);
+		}
+		if (turnCtx.variantHash) {
+			span.setAttribute("emmy.profile.variant_hash", turnCtx.variantHash);
+		}
+		if (turnCtx.role) {
+			span.setAttribute("emmy.role", turnCtx.role);
+		}
 	}
 
 	onEnd(_span: ReadableSpan): void {
