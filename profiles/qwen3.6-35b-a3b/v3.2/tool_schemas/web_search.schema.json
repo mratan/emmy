@@ -1,0 +1,21 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "web_search",
+  "description": "Search the open web via a local self-hosted SearxNG instance. Returns an array of {title, url, snippet, engine} records. Rate-limited per agent turn.",
+  "type": "object",
+  "properties": {
+    "query": {
+      "type": "string",
+      "description": "Search query."
+    },
+    "max_results": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 50,
+      "default": 10,
+      "description": "Maximum number of results to return."
+    }
+  },
+  "required": ["query"],
+  "additionalProperties": false
+}
