@@ -2,14 +2,14 @@
 gsd_state_version: 1.0
 milestone: v0.68.0
 milestone_name: milestone
-status: closed-phase-3
-last_updated: "2026-04-22T09:30:00.000Z"
+status: unknown
+last_updated: "2026-04-23T08:20:09.044Z"
 progress:
-  total_phases: 7
-  completed_phases: 3
-  total_plans: 24
-  completed_plans: 24
-  percent: 43
+  total_phases: 8
+  completed_phases: 4
+  total_plans: 34
+  completed_plans: 28
+  percent: 82
 ---
 
 # State: Emmy
@@ -23,7 +23,7 @@ progress:
 
 **Project:** Emmy — fully-local coding agent on NVIDIA DGX Spark
 **Core Value:** A local coding agent good enough to be the author's daily driver, structured rigorously enough to be a public research artifact others can reproduce — with no cloud dependency anywhere in the loop.
-**Current Focus:** Phase 03 — observability-agent-loop-hardening-lived-experience
+**Current Focus:** Phase 04 — gemma-4-profile-profile-system-maturity
 
 **Authoritative documents:**
 
@@ -40,8 +40,8 @@ progress:
 
 ## Current Position
 
-Phase: 03 (observability-agent-loop-hardening-lived-experience) — **CLOSED 2026-04-22**
-Plan: 7 of 7 complete (plans 03-01/02/03/04/05/06/07 all landed 2026-04-22)
+Phase: 04 (gemma-4-profile-profile-system-maturity) — EXECUTING
+Plan: 1 of 6
 **Phase 1:** Serving Foundation + Profile Schema — closed 2026-04-21 with 3 documented deferrals; see `.planning/phases/01-serving-foundation-profile-schema/01-CLOSEOUT.md`
 **Phase 2:** Pi-Harness MVP — Daily-Driver Baseline — closed 2026-04-21 with SC-1 green + SC-2/3/4/5 pass; 5 Phase-3 wire-through deferrals; see `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-CLOSEOUT.md`
 **Phase 3:** Observability + Agent-Loop Hardening + Lived-Experience — closed 2026-04-22 with SC-1 phase3 green + SC-2/3/4/5 pass; v3 profile hash `sha256:2beb99c7...d4d3718`; 8 Phase-3 REQ-IDs + 5 Phase-2 Done† promoted to Done (13 total flipped; cumulative 36); 5 operator-gated evidence items deferred (not blockers); see `.planning/phases/03-observability-agent-loop-hardening-lived-experience/03-CLOSEOUT.md`
