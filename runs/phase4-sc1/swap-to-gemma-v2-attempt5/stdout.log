@@ -1,0 +1,7 @@
+{"ts": "2026-04-23T18:23:34.188582+00:00", "phase": "stopping vLLM"}
+{"ts": "2026-04-23T18:23:37.481237+00:00", "phase": "loading weights", "pct": 0}
+{"ts": "2026-04-23T18:23:37.939894+00:00", "phase": "loading weights", "pct": 50}
+{"ts": "2026-04-23T18:23:37.939957+00:00", "phase": "loading weights", "pct": 90}
+{"ts": "2026-04-23T18:23:37.939963+00:00", "phase": "warmup"}
+{"ts": "2026-04-23T18:30:28.472182+00:00", "phase": "ready"}
+smoke ok: tok/s=37.17 tokens_out=100

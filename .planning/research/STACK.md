@@ -5,7 +5,7 @@
 **Confidence:** HIGH overall (key recommendations cross-verified against vendor docs, NVIDIA developer forums, community benchmarks, and the prior `setup_local_opencode` repo)
 
 > Two architecturally separate parts:
-> - **Part 1 (Serving):** vLLM 0.19.x in NGC container `nvcr.io/nvidia/vllm:26.03.post1-py3`, serving Qwen3.6-35B-A3B-FP8 + Qwen3-Coder-Next-80B-A3B-FP8 + Gemma-4-26B-A4B-it (FP8 runtime quant), with XGrammar structured output, EAGLE-3 / Qwen3-MTP speculative decoding, prefix caching + chunked prefill.
+> - **Part 1 (Serving):** vLLM 0.19.x via per-slot pinned containers — Qwen3.6-35B-A3B-FP8 + Qwen3-Coder-Next-80B-A3B-FP8 on NGC `nvcr.io/nvidia/vllm:26.03.post1-py3`; Gemma-4-26B-A4B-it on upstream `vllm/vllm-openai:gemma4-0409-arm64-cu130` (Day-1 Gemma 4 release; NGC's 26.03 ships vLLM 0.17.1 + Transformers 4.57.x which pre-date `Gemma4ForCausalLM` — verified 2026-04-23). All served FP8 runtime quant, with XGrammar structured output, EAGLE-3 / Qwen3-MTP speculative decoding, prefix caching + chunked prefill.
 > - **Part 2 (Harness):** `@mariozechner/pi-coding-agent` (the "pi.dev" project — `pi-mono` monorepo by Mario Zechner) at v0.68.0 as the runtime SDK, wrapped with custom `pi.registerProvider` for local vLLM endpoints, custom tools, and event-hook observability piped to a self-hosted Langfuse v3 backend over OTLP.
 
 ---

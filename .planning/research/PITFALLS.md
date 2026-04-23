@@ -568,6 +568,32 @@ Capability gap between frontier and local models is real and asymmetric (some sk
 
 ---
 
+### Pitfall 21: NGC container Transformers pin drifts behind upstream model releases
+
+NGC `nvcr.io/nvidia/vllm:YY.MM-py3` ships on a monthly cadence; the bundled `transformers` and `vllm` are frozen at tag time. New model architectures (new `model_type` string, new `*ForCausalLM` class) land first in upstream HuggingFace Transformers + upstream vLLM, and the NGC container usually lags by **4+ weeks**. For day-1 serving of a new model family, the NGC image may validate every other profile check (image digest present, schema valid, preflight green) then fail at vLLM boot with `pydantic ValidationError: model_type <X> not recognized`.
+
+**Verified empirically 2026-04-23:** Gemma 4 26B-A4B released 2026-04-02 with native `gemma4` model class. NGC `vllm:26.03.post1-py3` (released 2026-04-09, vLLM 0.17.1 + Transformers 4.57.x) does NOT load it — even after patching `tool_call_parser: gemma4` → `functiongemma` (the Gemma 3 parser name). Transformers library itself predates `Gemma4ForCausalLM`. Loss of work: two real swap attempts, ~15 minutes of wall-clock + two clean D-04 rollbacks (which at least proves the rollback primitive works).
+
+**Examples (this project):**
+- Gemma 4 26B-A4B on NGC 26.03.post1: `ValidationError: The checkpoint you are trying to load has model type 'gemma4' but Transformers does not recognize this architecture`
+- Qwen3.5 architecture on NGC 26.01 prior repo incident: similar class-missing error (forum thread vllm-ngc-container-26-01-py3-incompatible-with-new-qwen3-5-architecture-transformers-dependency-conflict #363328)
+
+**Mitigations:**
+- **Per-slot container pinning:** do NOT hard-couple every profile to the same container digest. Phase 4 v2 formalizes `container_image` + `container_image_digest` as per-profile fields, so Gemma 4 can sit on upstream `vllm/vllm-openai:*-arm64-cu130` while Qwen slots stay on NGC. Single project-wide container constant was Phase 1/2's simplification; it breaks the first time any model out-paces NGC's cadence.
+- **Bundle validation that EXERCISES vLLM boot, not just schema:** profile validator passing is necessary but insufficient — add a "preflight boot" mode to the swap primitive that attempts a `docker run --rm ... vllm --help` against the pinned image before committing to a schema bump. (Out of scope for Phase 4; queue for Phase 5 eval-harness boot matrix.)
+- **Upstream day-1 fallback path:** when NGC lags, upstream `vllm/vllm-openai:<model>-<date>-<arch>-<cu>` images ship Day-1. They're bigger-surface (less NVIDIA-integration-tested) but they boot. Pin by digest to preserve reproducibility; re-migrate to NGC when a tag catches up.
+- **Detection:** this failure surfaces ONLY at vLLM startup — the swap primitive's exit-6 post-stop rollback path catches it cleanly, but the symptom is `wait_for_vllm timeout: /v1/models did not respond in 300s; last error: Connection refused`. That's too generic to diagnose from the rollback envelope alone; rely on `runs/boot-failures/*/docker-logs.txt` which captures the failing container's stderr before it's removed.
+
+**Warning signs:**
+- Brand-new model family (<30 days from release)
+- Profile `model_hf_id` bumps but `container_image_digest` doesn't
+- STACK.md claims "vLLM 0.19.x" support but the pinned NGC tag ships 0.17.x (check with `docker run --rm <image> python -c 'import vllm; print(vllm.__version__)'`)
+- Forum posts from NVIDIA engineers recommending "upgrading transformers to X.Y.Z and patching vLLM"
+
+**Phase to address:** Phase 4 v2 (this profile); Phase 5 (add boot-matrix test to eval harness). Severity: **Medium** — phase can close with deferrals but blocks the operator-gated evidence chain until resolved.
+
+---
+
 ## Technical Debt Patterns
 
 Shortcuts that seem reasonable but create long-term problems.

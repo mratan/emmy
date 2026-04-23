@@ -51,11 +51,19 @@ def swap_profile(
     run_dir: Path,
     *,
     no_rollback: bool = False,
+    warmup_timeout_s: int = 900,
 ) -> int:
     """Atomically swap the loaded profile from ``old_profile`` to ``new_profile``.
 
     Emits JSON progress lines to stdout; returns an exit code aligned with
     start_emmy.sh's scheme plus 5 (pre-flight fail) / 6 (post-stop fail).
+
+    ``warmup_timeout_s`` (default 900s / 15 min) caps how long wait_for_vllm
+    polls /v1/models before declaring the new engine failed. The default used
+    to be 300s but that's too aggressive for Gemma 4 on the upstream
+    vllm-openai container (no fastsafetensors → ~4.5 min weight load on its
+    own, plus CUDA graph compile). 900s covers realistic cold-boot on any
+    currently-shipping model/container combo with margin to spare.
     """
     old_profile = Path(old_profile)
     new_profile = Path(new_profile)
@@ -123,7 +131,7 @@ def swap_profile(
     emit(LOADING, pct=90)
     emit(WARMUP)  # D-02 label 3
     try:
-        wait_for_vllm(f"http://127.0.0.1:{port}", timeout_s=300)
+        wait_for_vllm(f"http://127.0.0.1:{port}", timeout_s=warmup_timeout_s)
     except TimeoutError as e:
         write_swap_failure_bundle(
             run_dir,

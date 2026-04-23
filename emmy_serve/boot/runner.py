@@ -121,6 +121,11 @@ def render_docker_only_args(
         "-v",
         f"{hf_cache_mount}:/hf-cache:ro",
     ]
+    # Phase 4 v2 — optional per-profile entrypoint override. Used by upstream
+    # vllm-openai images where the ENTRYPOINT is baked to `[vllm serve]` and
+    # concatenates with our `vllm serve <flags>` CMD. Empty string clears it.
+    if engine.container_entrypoint_override is not None:
+        args += ["--entrypoint", engine.container_entrypoint_override]
     if airgap:
         args += ["--network", "none"]
     else:

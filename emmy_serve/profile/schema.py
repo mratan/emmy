@@ -52,6 +52,15 @@ class EngineConfig(BaseModel):
     served_model_name: str
     container_image: str
     container_image_digest: str
+    # Phase 4 v2 — optional per-profile `docker run --entrypoint` override.
+    # NGC images carry `/opt/nvidia/nvidia_entrypoint.sh` which just `exec`s the
+    # CMD, so the runner's default `vllm serve <flags>` CMD works as-is. Some
+    # upstream images (e.g. `vllm/vllm-openai:gemma4-*-arm64-cu130`) bake
+    # `[vllm serve]` as the ENTRYPOINT, which concatenates with the CMD and
+    # breaks the CLI parse. Setting this to an empty string clears the
+    # entrypoint so the CMD runs as the full exec chain. Unset = use image's
+    # default ENTRYPOINT (backward-compat with Qwen v1/v2/v3/v3.1 profiles).
+    container_entrypoint_override: Optional[str] = None
 
     # --- context + memory ---
     max_model_len: int = Field(gt=0)
