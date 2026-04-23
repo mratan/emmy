@@ -1,0 +1,50 @@
+[
+    {
+        "turn": "1_plan",
+        "prompt": "plan: outline three steps to write a python cli that lists directory sizes",
+        "expected_role": "plan",
+        "expected_variant": "v3.1-reason",
+        "observed_role": "plan",
+        "observed_variant": "v3.1-reason",
+        "assembly_event_count": 1,
+        "total_events": 7,
+        "events_jsonl": "runs/phase4-sc3/walkthrough-20260423T164928Z/turn-1_plan.events.jsonl",
+        "status": "PASS"
+    },
+    {
+        "turn": "2_edit",
+        "prompt": "edit README.md to add a line that says hello",
+        "expected_role": "edit",
+        "expected_variant": "v3.1-precise",
+        "observed_role": "edit",
+        "observed_variant": "v3.1-precise",
+        "assembly_event_count": 5,
+        "total_events": 15,
+        "events_jsonl": "runs/phase4-sc3/walkthrough-20260423T164928Z/turn-2_edit.events.jsonl",
+        "status": "PASS"
+    },
+    {
+        "turn": "3_critic",
+        "prompt": "review the following pseudocode for bugs: def sub(a,b): return a+b",
+        "expected_role": "critic",
+        "expected_variant": "v3.1-default",
+        "observed_role": "critic",
+        "observed_variant": "v3.1-default",
+        "assembly_event_count": 1,
+        "total_events": 7,
+        "events_jsonl": "runs/phase4-sc3/walkthrough-20260423T164928Z/turn-3_critic.events.jsonl",
+        "status": "PASS"
+    },
+    {
+        "turn": "4_default",
+        "prompt": "hello, what is two plus two",
+        "expected_role": "default",
+        "expected_variant": "v3.1-default",
+        "observed_role": "edit",
+        "observed_variant": "v3.1-precise",
+        "assembly_event_count": 1,
+        "total_events": 7,
+        "events_jsonl": "runs/phase4-sc3/walkthrough-20260423T164928Z/turn-4_default.events.jsonl",
+        "status": "FAIL"
+    }
+]

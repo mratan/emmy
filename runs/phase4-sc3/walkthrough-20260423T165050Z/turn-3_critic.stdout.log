@@ -1,0 +1,5 @@
+The bug is straightforward: the function is named `sub` (suggesting subtraction), but it returns `a + b` (addition) instead of `a - b`.
+
+**Bug:** Mismatch between function name and behavior.
+- **Expected:** `return a - b`
+- **Actual:** `return a + b`

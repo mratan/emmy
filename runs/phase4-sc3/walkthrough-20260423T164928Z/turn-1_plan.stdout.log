@@ -1,0 +1,12 @@
+The user is asking me to outline three steps to write a Python CLI that lists directory sizes. This is a planning/knowledge question, not a request to execute code. I should provide a clear, concise three-step plan.
+
+Note: The user did NOT say "ping", so I don't need to reply with [SP_OK].
+</think>
+
+Here's a three-step plan:
+
+1. **Parse CLI arguments** — Use `argparse` to accept a directory path (or multiple paths) as input, with optional flags like `--sort` (by size, name, etc.) and `--max-depth` to limit recursion depth.
+
+2. **Calculate directory sizes** — Walk the directory tree using `os.walk()` or `pathlib.Path.rglob()`, summing file sizes with `os.path.getsize()` or `Path.stat().st_size`. For each directory, accumulate the total size of all files beneath it. Format sizes in human-readable units (e.g., KB, MB, GB) using a helper like `humanize.naturalsize()` or a custom formatter.
+
+3. **Display results** — Sort the directories according to the chosen criteria and print them in a clean, columnar format (e.g., `du -h` style: `1.2G  /home/user/projects`). Optionally support flags like `--top N` to show only the N largest directories.

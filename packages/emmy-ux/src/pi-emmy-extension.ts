@@ -67,6 +67,7 @@ import {
 	clearCurrentTurnRoleContext,
 	EmmyProfileStampProcessor,
 	emitEvent,
+	getCurrentTurnRoleContext,
 	setCurrentTurnRoleContext,
 	TurnTracker,
 	type TurnMeta,
@@ -409,14 +410,24 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 			return "critic";
 		}
 
-		// Fallthrough iteration-2+ refinement — if the payload includes a tool
-		// hint (pi may surface the next tool on retry), check it.
-		const tools = (payload as { tools?: Array<{ function?: { name?: string } }> }).tools;
-		if (Array.isArray(tools)) {
-			for (const t of tools) {
-				const n = t?.function?.name;
+		// Iteration-2+ refinement — check the most recent assistant message's
+		// tool_calls[], which is what the model actually chose on the prior
+		// iteration. Do NOT iterate `payload.tools[]` (tool DESCRIPTORS) —
+		// that catalog always contains `edit`/`write` and would misroute every
+		// non-keyword prompt to "edit". (SC-3 walkthrough 2026-04-23 surfaced
+		// this bug; fix narrows the check to assistant.tool_calls.)
+		for (let i = payload.messages.length - 1; i >= 0; i--) {
+			const m = payload.messages[i];
+			if (!m || m.role !== "assistant") continue;
+			const toolCalls = (m as { tool_calls?: Array<{ function?: { name?: string } }> }).tool_calls;
+			if (!Array.isArray(toolCalls) || toolCalls.length === 0) continue;
+			for (const tc of toolCalls) {
+				const n = tc?.function?.name;
 				if (n === "edit" || n === "write") return "edit";
 			}
+			// Most recent assistant turn had tool_calls but none were edit/write —
+			// stop scanning further back; this turn's refinement says "not edit".
+			break;
 		}
 
 		return "default";
@@ -556,6 +567,13 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 			const modelName = typeof (payload as { model?: unknown }).model === "string"
 				? ((payload as { model: string }).model)
 				: "";
+			// D-12 observability — include turn-role-context (variant + role)
+			// on the JSONL record too, not just on OTel spans. Without this, a
+			// JSONL-only deployment (no Langfuse auth) has no way to observe
+			// within-model role routing since the SpanProcessor-stamped attrs
+			// only land on exported spans. Absent when routes.yaml is missing
+			// or canary, matching the span-stamping behavior.
+			const turnCtx = getCurrentTurnRoleContext();
 			emitEvent({
 				event: "harness.assembly",
 				ts: new Date().toISOString(),
@@ -565,6 +583,9 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 				"gen_ai.request.model": modelName,
 				"emmy.prompt.sha256": snapshot.sha256,
 				...(retryState?.wantsGrammar ? { "emmy.grammar.retry": true } : {}),
+				...(turnCtx.variant ? { "emmy.profile.variant": turnCtx.variant } : {}),
+				...(turnCtx.variantHash ? { "emmy.profile.variant_hash": turnCtx.variantHash } : {}),
+				...(turnCtx.role ? { "emmy.role": turnCtx.role } : {}),
 			});
 		});
 
