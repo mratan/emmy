@@ -25,13 +25,34 @@ import {
 export const NETWORK_REQUIRED_TAG = "network-required";
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DEFAULT_MAX_BYTES = 2 * 1024 * 1024;
+// Phase 3.1 post-close: cap the final markdown response size. Plan 03.1-02
+// walkthrough discovered that a single web_fetch on a JavaScript-heavy site
+// (Yahoo Finance, CNN) returned 271K tokens in one turn — 2.4× max_model_len.
+// 40 000 chars ≈ 10K tokens ≈ 1/12 of the 114 688-token input budget, leaving
+// room for several fetches + the rest of the conversation. Pages exceeding
+// this are head+tail-truncated (not rejected) so snippets of long docs still
+// reach the agent.
+const DEFAULT_MAX_MARKDOWN_CHARS = 40_000;
+const TRUNCATE_HEAD_CHARS = 24_000;
+const TRUNCATE_TAIL_CHARS = 12_000;
+
+function truncateHeadTail(markdown: string, maxChars: number): string {
+	if (markdown.length <= maxChars) return markdown;
+	const droppedChars = markdown.length - TRUNCATE_HEAD_CHARS - TRUNCATE_TAIL_CHARS;
+	return (
+		markdown.slice(0, TRUNCATE_HEAD_CHARS) +
+		`\n\n[…web_fetch truncated ${droppedChars.toLocaleString()} chars from middle — page is longer than the ${maxChars.toLocaleString()}-char per-fetch cap; refine the URL or use web_search for targeted snippets…]\n\n` +
+		markdown.slice(-TRUNCATE_TAIL_CHARS)
+	);
+}
 
 export async function webFetch(
   url: string,
-  opts: { timeoutMs?: number; maxBytes?: number } = {},
+  opts: { timeoutMs?: number; maxBytes?: number; maxMarkdownChars?: number } = {},
 ): Promise<{ markdown: string; contentType: string; url: string }> {
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const maxBytes = opts.maxBytes ?? DEFAULT_MAX_BYTES;
+  const maxMarkdownChars = opts.maxMarkdownChars ?? DEFAULT_MAX_MARKDOWN_CHARS;
   const ctl = new AbortController();
   const tm = setTimeout(() => ctl.abort(new Error("timeout")), timeoutMs);
   try {
@@ -63,6 +84,7 @@ export async function webFetch(
     } else {
       markdown = text;
     }
+    markdown = truncateHeadTail(markdown, maxMarkdownChars);
     return { markdown, contentType, url: resp.url };
   } catch (e) {
     if (e instanceof ToolsError) throw e;
@@ -109,7 +131,7 @@ export type WebFetchToolResult = WebFetchToolErrorResult | WebFetchToolOkResult;
 export async function webFetchWithAllowlist(
 	url: string,
 	enforcement: EnforcementContext,
-	opts: { timeoutMs?: number; maxBytes?: number } = {},
+	opts: { timeoutMs?: number; maxBytes?: number; maxMarkdownChars?: number } = {},
 ): Promise<WebFetchToolResult> {
 	try {
 		enforceWebFetchAllowlist(url, enforcement);

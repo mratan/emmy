@@ -616,7 +616,7 @@ export async function createEmmySession(
 		"- grep(pattern, path?, flags?): ripgrep-style search.",
 		"- find(path, name?, type?): filesystem find.",
 		"- ls(path, long?, all?): list a directory.",
-		"- web_fetch(url, timeout_ms?): HTTP GET → markdown. Gated by per-profile allowlist PLUS recent-web_search-URL bypass.",
+		"- web_fetch(url, timeout_ms?): HTTP GET → markdown. Output capped at ~40K chars (~10K tokens) with head+tail truncation — for research, prefer reading web_search snippets directly; only web_fetch when you need structured content a snippet can't convey. Gated by per-profile allowlist PLUS recent-web_search-URL bypass.",
 	];
 	// Phase 3.1 D-34: check the profile directly (webSearchConfig is derived later
 	// at the buildNativeToolDefs call site, but for the prompt layer we inspect
