@@ -48,7 +48,12 @@ function emmyInstallRoot(): string {
 }
 
 function defaultProfilePath(): string {
-	return resolve(emmyInstallRoot(), "profiles/qwen3.6-35b-a3b/v2");
+	// Phase 3.1 (Plan 03.1-03 post-close fix): default bumped v2 → v3.1 so
+	// `pi-emmy` with no `--profile` runs on the daily-driver profile that
+	// includes web_search + live compaction + allowlist bypass. Previously
+	// the default was v2 (Phase 2 baseline, no web_search). Users can still
+	// opt into v1/v2/v3 explicitly via `--profile` or `EMMY_PROFILE_ROOT`.
+	return resolve(emmyInstallRoot(), "profiles/qwen3.6-35b-a3b/v3.1");
 }
 
 type Mode = "tui" | "print" | "json";
@@ -104,7 +109,7 @@ function parseArgs(argv: string[]): ParsedArgs {
 function usage(): string {
 	return `pi-emmy — Emmy harness (daily-driver)
   Usage: pi-emmy [--profile <dir>] [--base-url <url>] [--print <prompt>|--json <prompt>|--print-environment|--export-hf <out_dir>]
-  Defaults: --profile <emmy-install>/profiles/qwen3.6-35b-a3b/v2 (override via $EMMY_PROFILE_ROOT or --profile), --base-url http://127.0.0.1:8002
+  Defaults: --profile <emmy-install>/profiles/qwen3.6-35b-a3b/v3.1 (override via $EMMY_PROFILE_ROOT or --profile), --base-url http://127.0.0.1:8002
   --export-hf <out_dir>: export ~/.emmy/telemetry/feedback.jsonl as a HuggingFace datasets-loadable artifact (TELEM-02) and exit.
   Exit codes: 0=ready, 1=runtime failure (SP_OK/MCP), 2=usage error (e.g. --export-hf without <out_dir>), 4=prerequisite missing (profile dir, vLLM, or emmy profile validate failed)`;
 }

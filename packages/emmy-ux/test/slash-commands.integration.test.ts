@@ -97,35 +97,26 @@ function captureExtensionCommands() {
 
 describe("createEmmyExtension — slash commands (Plan 03.1-01 Task 2)", () => {
 	// ------------------------------------------------------------------------
-	// Test D — /compact invokes ctx.compact with profile prompt
+	// Test D — /compact is NOT registered (post-Plan-03.1-03 cleanup)
 	// ------------------------------------------------------------------------
-	test("Test D: /compact invokes ctx.compact with profile compact.md contents", async () => {
-		await withProfileBundle(async ({ profile, promptText }) => {
+	// Plan 03.1-01 originally registered /compact via emmy's extension, but pi
+	// 0.68 ships a built-in /compact (dist/core/slash-commands.js:19) that
+	// collides and wins. Plan 03.1-03 post-close dropped emmy's registration
+	// to silence the yellow "conflicts with built-in" warning. Pi's built-in
+	// dispatches to session.compact() which is the same method emmy's
+	// auto-compaction uses via ctx.compact() on turn_start. Manual /compact
+	// now uses pi's default prompt (profile prompts/compact.md only flows
+	// through the auto-path; that's the documented trade-off).
+	test("Test D: emmy does NOT register /compact (pi built-in wins; post-Plan-03.1-03 cleanup)", async () => {
+		await withProfileBundle(async ({ profile }) => {
 			const { api, commands } = captureExtensionCommands();
-			const factory = createEmmyExtension({
+			createEmmyExtension({
 				profile,
 				assembledPromptProvider: () => ({ sha256: "deadbeef", text: "SP" } as never),
-				telemetryEnabled: false, // skip feedback shortcut reg to keep spy sharp
-			});
-			factory(api as never);
+				telemetryEnabled: false,
+			})(api as never);
 
-			expect(commands.has("compact")).toBe(true);
-			const handler = commands.get("compact")!.handler;
-
-			const compactCalls: Array<{ customInstructions?: string }> = [];
-			const fakeCtx = {
-				compact: (o?: { customInstructions?: string }) => compactCalls.push(o ?? {}),
-				ui: { setStatus: () => {} },
-			};
-
-			await handler("", fakeCtx);
-			expect(compactCalls.length).toBe(1);
-			expect(compactCalls[0]!.customInstructions).toBe(promptText);
-
-			await handler("focus on design decisions", fakeCtx);
-			expect(compactCalls.length).toBe(2);
-			expect(compactCalls[1]!.customInstructions).toContain(promptText);
-			expect(compactCalls[1]!.customInstructions).toContain("focus on design decisions");
+			expect(commands.has("compact")).toBe(false);
 		});
 	});
 
@@ -205,29 +196,9 @@ describe("createEmmyExtension — slash commands (Plan 03.1-01 Task 2)", () => {
 		});
 	});
 
-	// ------------------------------------------------------------------------
-	// Test D-missing — when profile compact.md is missing, /compact passes
-	// empty customInstructions (D-16 fallback into pi's built-in prompt)
-	// ------------------------------------------------------------------------
-	test("Test D-missing: /compact with missing profile prompt passes empty customInstructions", async () => {
-		await withProfileBundle(
-			async ({ profile }) => {
-				const { api, commands } = captureExtensionCommands();
-				createEmmyExtension({
-					profile,
-					assembledPromptProvider: () => ({ sha256: "deadbeef", text: "SP" } as never),
-					telemetryEnabled: false,
-				})(api as never);
-				const handler = commands.get("compact")!.handler;
-
-				const compactCalls: Array<{ customInstructions?: string }> = [];
-				await handler("", {
-					compact: (o?: { customInstructions?: string }) => compactCalls.push(o ?? {}),
-					ui: { setStatus: () => {} },
-				});
-				expect(compactCalls[0]!.customInstructions).toBe("");
-			},
-			{ writePrompt: false },
-		);
-	});
+	// Test D-missing superseded: emmy no longer registers /compact at all
+	// (see Test D above). Pi's built-in /compact fires with its default
+	// prompt regardless of whether the profile's prompts/compact.md exists.
+	// Profile-prompt D-16 fallback discipline is enforced on the auto-path
+	// (turn_start → ctx.compact) and covered by compaction-live-wiring tests.
 });

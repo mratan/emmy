@@ -76,10 +76,9 @@ import {
 	type FooterPollerHandle,
 } from "./metrics-poller";
 import { bindBadge } from "./offline-badge";
-import {
-	registerClearCommand,
-	registerCompactCommand,
-} from "./slash-commands";
+// registerCompactCommand import dropped post-Plan-03.1-03 — pi 0.68 ships a
+// built-in /compact that collides; see pi-emmy-extension body comment.
+import { registerClearCommand } from "./slash-commands";
 
 export interface EmmyExtensionOptions {
 	profile: ProfileSnapshot;
@@ -386,7 +385,16 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 		// register regardless of the telemetryEnabled gate. /compact is a
 		// manual escape valve at any context level; /clear resets the
 		// session from an over-full state (interactive-only).
-		registerCompactCommand(pi, { compactPromptText });
+		// Plan 03.1-03 post-close: emmy's /compact was colliding with pi 0.68's
+		// built-in /compact (dist/core/slash-commands.js:19), emitting a yellow
+		// "Extension command '/compact' conflicts with built-in…" warning at
+		// session start. Pi's built-in dispatches to session.compact() — the
+		// same method emmy's auto-compaction uses via ctx.compact() on turn_start.
+		// So the conflict was redundant: pi's built-in ran, emmy's was skipped.
+		// Removed to silence the warning. Trade-off: manual /compact now uses
+		// pi's default prompt (not emmy's profile prompts/compact.md); that
+		// prompt only flows through the auto-path now. Accept.
+		// registerCompactCommand(pi, { compactPromptText });  // ← removed; pi built-in wins
 		registerClearCommand(pi);
 
 		// Plan 03-03 — turn_start handler invokes emmyCompactionTrigger per
