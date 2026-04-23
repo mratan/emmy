@@ -209,8 +209,16 @@ Plans:
   4. A swap that fails (e.g. corrupted weight file) leaves the user with a clear error message and the prior model still loaded — no crash, no half-loaded engine.
   5. The Gemma 4 profile's `PROFILE_NOTES.md` cites at least one community source per documented sampling default (per the "stand on shoulders" project principle), reviewable in git.
 
-**Plans**: TBD
+**Plans**: 6 plans
 **UI hint**: yes
+
+Plans:
+- [ ] 04-01-PLAN.md — Gemma 4 v1 profile bundle (SERVE-03 + PROFILE-07) + schema reasoning_parser extension; bundle + schema tests
+- [ ] 04-02-PLAN.md — Python `emmy-serve swap-profile` primitive (PROFILE-08) — preflight + 4-phase progress + rollback-via-same-primitive; exit codes 0/2/3/4/5/6
+- [ ] 04-03-PLAN.md — TS `/profile` slash command + progress UX + D-23 harness hot-swap (PROFILE-08 + UX-04)
+- [ ] 04-04-PLAN.md — `profiles/routes.yaml` + 3 Qwen v3.1 sibling variants + OTel variant/role stamping (HARNESS-08)
+- [ ] 04-05-PLAN.md — D-19 no-model-conditionals audit (Python + TS) with self-test fixtures (reinforces SC-2)
+- [ ] 04-06-PLAN.md — Operator-gated KV bisection + 2-hour thermal + SC-1/SC-3/SC-4 walkthroughs + CLOSEOUT (closes all 5 REQ-IDs)
 
 ---
 
