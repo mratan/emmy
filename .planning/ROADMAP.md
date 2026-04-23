@@ -216,7 +216,7 @@ Plans:
 - [x] 04-01-PLAN.md — Gemma 4 v1 profile bundle (SERVE-03 + PROFILE-07) + schema reasoning_parser extension; bundle + schema tests
 - [x] 04-02-PLAN.md — Python `emmy-serve swap-profile` primitive (PROFILE-08) — preflight + 4-phase progress + rollback-via-same-primitive; exit codes 0/2/3/4/5/6
 - [x] 04-03-PLAN.md — TS `/profile` slash command + progress UX + D-23 harness hot-swap (PROFILE-08 + UX-04)
-- [ ] 04-04-PLAN.md — `profiles/routes.yaml` + 3 Qwen v3.1 sibling variants + OTel variant/role stamping (HARNESS-08)
+- [x] 04-04-PLAN.md — `profiles/routes.yaml` + 3 Qwen v3.1 sibling variants + OTel variant/role stamping (HARNESS-08)
 - [x] 04-05-PLAN.md — D-19 no-model-conditionals audit (Python + TS) with self-test fixtures (reinforces SC-2)
 - [ ] 04-06-PLAN.md — Operator-gated KV bisection + 2-hour thermal + SC-1/SC-3/SC-4 walkthroughs + CLOSEOUT (closes all 5 REQ-IDs)
 
