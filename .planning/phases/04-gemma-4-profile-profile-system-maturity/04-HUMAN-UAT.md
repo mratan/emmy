@@ -8,7 +8,7 @@ updated: 2026-04-23
 
 ## Current Test
 
-[3 of 4 original items resolved 2026-04-23 via autonomous follow-up session on live DGX Spark; 1 item split into a new deferral (container upgrade) that blocks both KV and thermal]
+[SC-1 fully resolved + container-upgrade deferral resolved via profile v2; SC-3/SC-4 still green; KV + thermal unblocked but not yet run (~6h wall-clock, queued for next session). Autonomous follow-up session 2026-04-23 late.]
 
 ## Tests
 
@@ -17,7 +17,7 @@ updated: 2026-04-23
 expected: `scripts/find_kv_budget.py --profile profiles/gemma-4-26b-a4b-it/v1/` converges on a `gpu_memory_utilization` value under 30-min sustained load with zero preemption events + zero `dmesg` OOM events; measured value written into `serving.yaml.engine.gpu_memory_utilization` + decision log appended to `PROFILE_NOTES.md`. Starting seed: 0.55 (per 04-RESEARCH.md §2 given Gemma 4 26B ~28 GB weights + 16 GB KV at 128K context under Phase 3.1 UMA-pressure lesson).
 scaffold: `runs/phase4-kv/PENDING.md`
 resume_signal: `"p4 kv green"`
-result: **[blocked on `p4 gemma-container green`]** — 2026-04-23 autonomous follow-up attempted to boot Gemma 4 via the `swap-profile` primitive. Two attempts fired; both surfaced that the NGC container `emmy-serve/vllm:26.03.post1-fst` ships vLLM 0.17.1 with a Transformers library that pre-dates the `gemma4` model class. First attempt rejected `tool_call_parser: gemma4` (valid in vLLM 0.19+; the available name here is `functiongemma`). Second attempt with the parser patched hit a deeper failure — `pydantic ValidationError: Transformers does not recognize this architecture`. Full diagnostic evidence at `runs/phase4-sc1/swap-qwen-to-gemma{,-fixed}/boot-failures/`. Resolving this requires upgrading the NGC container to a build whose Transformers includes `Gemma4ForCausalLM` and bumping the Gemma 4 profile to v2. Tracked as new deferral resume signal `"p4 gemma-container green"`.
+result: **[unblocked 2026-04-23 late — ready to run]** — `p4 gemma-container green` resolved via profiles/gemma-4-26b-a4b-it/v2/ bundle (upstream `vllm/vllm-openai:gemma4-0409-arm64-cu130` container, vLLM 0.19.1.dev6 + Transformers 5.5.0, image local ID `sha256:db59febc6c47...`). Gemma 4 boots cleanly on this container (smoke test `tok/s=38.12` / 100 tokens). Updated path: `scripts/find_kv_budget.py --profile profiles/gemma-4-26b-a4b-it/v2/`. Starting seed still 0.55. Next session picks this up (~90-120 min DGX Spark GPU). Evidence of working boot: `runs/phase4-sc1/swap-qwen-to-gemma-sc1-confirm/`.
 
 ### 2. Gemma 4 2-hour thermal replay (two-pass: record-floors → assert-floors)
 
