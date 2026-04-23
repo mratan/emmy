@@ -1,0 +1,8 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=dc77e8e47b7c16544086da79dadb61f52f302c72d9fdc0d78d8c9f94f9f0d5a6
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=dc77e8e47b7c16544086da79dadb61f52f302c72d9fdc0d78d8c9f94f9f0d5a6, layers=system.md,tool_defs,user)
+pi-emmy transcript=/tmp/p3.1-02-search-test/runs/phase2-sc3-capture/session-2026-04-23T03-27-56-673Z.jsonl
+read, write, edit, bash, grep, find, ls, web_fetch

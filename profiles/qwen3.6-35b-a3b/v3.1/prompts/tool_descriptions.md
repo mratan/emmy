@@ -1,6 +1,6 @@
 # Native tool descriptions
 
-Eight tools are always available. Call exactly one per assistant turn.
+Nine tools are always available (eight Phase-2-stable + `web_search` added in Phase 3.1). Call exactly one per assistant turn.
 
 ## read
 
@@ -45,9 +45,24 @@ optional `all`.
 
 ## web_fetch
 
-HTTP GET → markdown. Reads documentation only (no inference). Tagged
-network-required; air-gap builds reject this tool at registration. Args:
-`url` (required), optional `timeout_ms` (default 30000).
+HTTP GET → markdown. Reads documentation only (no inference). Gated by a
+per-profile allowlist (hostname-exact) PLUS a returned-URL bypass: URLs
+emitted by a recent `web_search` call are fetchable without allowlist
+entry. Without search, only allowlisted hosts (currently `docs.python.org`,
+`developer.mozilla.org`, `docs.vllm.ai`, `huggingface.co`, `docs.langfuse.com`)
+resolve. Args: `url` (required), optional `timeout_ms` (default 30000).
+
+## web_search
+
+Search the open web via a local self-hosted SearxNG instance at
+`http://127.0.0.1:8888`. Returns `{title, url, snippet, engine}[]`.
+Upstream engines rotate automatically (Google, DuckDuckGo, Brave, Bing,
+Startpage) with fallback on rate-limit or timeout. Rate-limited to 10
+calls per agent turn. Use this when you need to look up current
+information, latest versions, docs, or answers not in your training;
+then follow up with `web_fetch` on any returned URL (bypass preserves
+air-gap — only search-returned URLs bypass the allowlist). Args:
+`query` (required), optional `max_results` (1-50, default 10).
 
 ## Style
 

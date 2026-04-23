@@ -602,8 +602,12 @@ export async function createEmmySession(
 		agentsMdPath = piSystemCandidate;
 	}
 
-	// 4. Tool-def overview text (descriptions for the 8-tool native floor).
-	const toolDefsText = [
+	// 4. Tool-def overview text (descriptions for the native tool floor).
+	// Phase 3.1 D-34: conditionally append web_search when the profile enables
+	// it + kill-switches are off, so the model actually knows the tool exists.
+	// (buildNativeToolDefs registers the pi ToolSpec; the system-prompt layer
+	// here is the user-facing description the LLM reads.)
+	const toolDefLines = [
 		"# Tools available",
 		"- read(path, line_range?): read a file; output tags each line with an 8-hex content-hash prefix for hash-anchored edits.",
 		"- write(path, content): overwrite a file (atomic fsync).",
@@ -612,8 +616,24 @@ export async function createEmmySession(
 		"- grep(pattern, path?, flags?): ripgrep-style search.",
 		"- find(path, name?, type?): filesystem find.",
 		"- ls(path, long?, all?): list a directory.",
-		"- web_fetch(url, timeout_ms?): HTTP GET → markdown (network-required; documentation reading only).",
-	].join("\n");
+		"- web_fetch(url, timeout_ms?): HTTP GET → markdown. Gated by per-profile allowlist PLUS recent-web_search-URL bypass.",
+	];
+	// Phase 3.1 D-34: check the profile directly (webSearchConfig is derived later
+	// at the buildNativeToolDefs call site, but for the prompt layer we inspect
+	// the raw profile block so the declaration order stays intact).
+	const _ws = (opts.profile.harness.tools as { web_search?: { enabled?: boolean; base_url?: string } }).web_search;
+	const webSearchActiveInPrompt =
+		_ws?.enabled === true &&
+		process.env.EMMY_WEB_SEARCH !== "off" &&
+		process.env.EMMY_TELEMETRY !== "off";
+	if (webSearchActiveInPrompt) {
+		toolDefLines.push(
+			"- web_search(query, max_results?): search the open web via local SearxNG at " +
+				(_ws?.base_url ?? "http://127.0.0.1:8888") +
+				". Returns {title, url, snippet, engine}[] with upstream-engine fallback. Use before web_fetch to look up current info / latest versions / docs.",
+		);
+	}
+	const toolDefsText = toolDefLines.join("\n");
 
 	// 5. Assemble prompt + emit SHA-256 audit trail (HARNESS-06 / CONTEXT-04).
 	const assembledPromptArgs: Parameters<typeof assemblePrompt>[0] = {

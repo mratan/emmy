@@ -139,6 +139,37 @@ export async function loadProfile(profileDir: string): Promise<ProfileSnapshot> 
 		  )
 		: undefined;
 
+	// Plan 03.1-02 (D-34): parse tools.web_search block (Phase-3.1 field; v3/v2/v1
+	// don't declare it → absent → tool not registered at session build time).
+	const webSearchRaw = toolsRaw.web_search as Record<string, unknown> | undefined;
+	const webSearchBlock: {
+		enabled: boolean;
+		base_url: string;
+		max_results_default: number;
+		rate_limit_per_turn: number;
+		timeout_ms: number;
+	} | undefined = webSearchRaw
+		? {
+				enabled: webSearchRaw.enabled === true,
+				base_url:
+					typeof webSearchRaw.base_url === "string"
+						? webSearchRaw.base_url
+						: "http://127.0.0.1:8888",
+				max_results_default:
+					typeof webSearchRaw.max_results_default === "number"
+						? webSearchRaw.max_results_default
+						: 10,
+				rate_limit_per_turn:
+					typeof webSearchRaw.rate_limit_per_turn === "number"
+						? webSearchRaw.rate_limit_per_turn
+						: 10,
+				timeout_ms:
+					typeof webSearchRaw.timeout_ms === "number"
+						? webSearchRaw.timeout_ms
+						: 10000,
+		  }
+		: undefined;
+
 	const retryOnUnparseableToolCall =
 		typeof agentLoopRaw.retry_on_unparseable_tool_call === "number"
 			? (agentLoopRaw.retry_on_unparseable_tool_call as number)
@@ -171,6 +202,7 @@ export async function loadProfile(profileDir: string): Promise<ProfileSnapshot> 
 				...(webFetchAllowlist !== undefined
 					? { web_fetch: { allowlist: webFetchAllowlist } }
 					: {}),
+				...(webSearchBlock !== undefined ? { web_search: webSearchBlock } : {}),
 			},
 			agent_loop: {
 				retry_on_unparseable_tool_call: retryOnUnparseableToolCall,
