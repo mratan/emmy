@@ -103,4 +103,89 @@ describe("loadRoutes", () => {
 			rmSync(tmp, { recursive: true, force: true });
 		}
 	});
+
+	// --- WR-01 (04-REVIEW.md) path-traversal hardening ---
+	// parseRef must reject path-traversal characters in both profileId and
+	// variant since these halves concatenate into a filesystem path downstream.
+	describe("path-traversal hardening (WR-01)", () => {
+		const badRefs: Array<[string, string]> = [
+			["default: ../escape@v1\n", "profile id '../escape'"],
+			["default: ..@v1\n", "profile id '..'"],
+			["default: ./local@v1\n", "profile id './local'"],
+			["default: /absolute@v1\n", "profile id '/absolute'"],
+			["default: qwen/sub@v1\n", "profile id 'qwen/sub'"],
+			["default: .hidden@v1\n", "profile id '.hidden'"],
+			["default: qwen@../escape\n", "variant '../escape'"],
+			["default: qwen@..\n", "variant '..'"],
+			["default: qwen@/absolute\n", "variant '/absolute'"],
+			["default: qwen@v1/sub\n", "variant 'v1/sub'"],
+			["default: qwen@.hidden\n", "variant '.hidden'"],
+			["default: qwen@v..1\n", "variant 'v..1'"],
+		];
+
+		for (const [yamlText, _descExcerpt] of badRefs) {
+			test(`rejects '${yamlText.trim()}'`, () => {
+				const tmp = mkdtempSync(join(tmpdir(), "emmy-routes-"));
+				try {
+					const p = join(tmp, "routes.yaml");
+					writeFileSync(p, yamlText, "utf8");
+					let err: Error | null = null;
+					try {
+						loadRoutes(p);
+					} catch (e) {
+						err = e as Error;
+					}
+					expect(err).toBeInstanceOf(RoutesLoadError);
+					expect(err?.message).toContain("disallowed characters");
+				} finally {
+					rmSync(tmp, { recursive: true, force: true });
+				}
+			});
+		}
+
+		test("NUL byte is caught by an earlier layer (YAML parser), still throws RoutesLoadError", () => {
+			// Defense in depth: js-yaml rejects NUL at parse time before our
+			// allowlist regex runs. The important invariant is that the loader
+			// surfaces SOME RoutesLoadError — not the specific message.
+			const tmp = mkdtempSync(join(tmpdir(), "emmy-routes-"));
+			try {
+				const p = join(tmp, "routes.yaml");
+				writeFileSync(p, "default: qwen\x00bad@v1\n", "utf8");
+				let err: Error | null = null;
+				try {
+					loadRoutes(p);
+				} catch (e) {
+					err = e as Error;
+				}
+				expect(err).toBeInstanceOf(RoutesLoadError);
+			} finally {
+				rmSync(tmp, { recursive: true, force: true });
+			}
+		});
+
+		test("accepts the shipped refs (regression guard)", () => {
+			// The 3 shipped variant names must all pass hardening.
+			const tmp = mkdtempSync(join(tmpdir(), "emmy-routes-"));
+			try {
+				const p = join(tmp, "routes.yaml");
+				writeFileSync(
+					p,
+					[
+						"default: qwen3.6-35b-a3b@v3.1-default",
+						"roles:",
+						"  plan: qwen3.6-35b-a3b@v3.1-reason",
+						"  edit: qwen3.6-35b-a3b@v3.1-precise",
+						"  critic: qwen3.6-35b-a3b@v3.1-default",
+						"",
+					].join("\n"),
+					"utf8",
+				);
+				const cfg = loadRoutes(p);
+				expect(cfg.default.profileId).toBe("qwen3.6-35b-a3b");
+				expect(cfg.default.variant).toBe("v3.1-default");
+			} finally {
+				rmSync(tmp, { recursive: true, force: true });
+			}
+		});
+	});
 });

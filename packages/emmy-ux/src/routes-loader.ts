@@ -46,9 +46,26 @@ export class RoutesLoadError extends Error {
 	}
 }
 
+// Path-traversal / absolute-path rejection. profileId and variant are both
+// concatenated into a filesystem path under `profiles/` downstream; rejecting
+// `..`, `/`, leading `.`, NULs, and anything not in [A-Za-z0-9_.-] closes the
+// attack surface flagged as WR-01 in 04-REVIEW.md.
+// A variant MAY contain `.` (we ship `v3.1-default`), but cannot START with one
+// and cannot contain `..`.
+const SAFE_ID = /^[A-Za-z0-9][A-Za-z0-9_.-]*$/;
+
+function isSafeIdent(s: string): boolean {
+	if (!SAFE_ID.test(s)) return false;
+	if (s.includes("..")) return false;
+	return true;
+}
+
 /**
  * Parse a `<profileId>@<variant>` string into a RouteRef. Throws
- * RoutesLoadError if either half is missing or empty.
+ * RoutesLoadError if either half is missing, empty, or contains path-traversal
+ * characters. Allowed chars: [A-Za-z0-9_.-], must not start with `.`, must not
+ * contain `..` — this keeps the downstream filesystem path under
+ * `profiles/<profileId>/<variant>/` safe from escape.
  */
 function parseRef(raw: unknown, field: string): RouteRef {
 	if (typeof raw !== "string") {
@@ -72,6 +89,18 @@ function parseRef(raw: unknown, field: string): RouteRef {
 	}
 	if (!variant) {
 		throw new RoutesLoadError(field, `missing variant in ref '${s}'`);
+	}
+	if (!isSafeIdent(profileId)) {
+		throw new RoutesLoadError(
+			field,
+			`profile id '${profileId}' contains disallowed characters (allowed: [A-Za-z0-9_.-], no leading '.', no '..')`,
+		);
+	}
+	if (!isSafeIdent(variant)) {
+		throw new RoutesLoadError(
+			field,
+			`variant '${variant}' contains disallowed characters (allowed: [A-Za-z0-9_.-], no leading '.', no '..')`,
+		);
 	}
 	return { profileId, variant };
 }

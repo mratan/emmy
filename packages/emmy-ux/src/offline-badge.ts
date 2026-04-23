@@ -196,6 +196,16 @@ export function __resetBadgeStateForTests(): void {
 	_ctx = null;
 }
 
+/**
+ * Test-only getter for the module-level audit result. Used by
+ * harness-swap-wr04.test.ts to assert reloadHarnessProfile runs the real
+ * audit against the new profile's allowlist. Production code should NEVER
+ * import this — read from a bound ctx instead.
+ */
+export function getBadgeStateForTests(): OfflineAuditResult | null {
+	return _lastResult;
+}
+
 // --- Boot audit helper ---------------------------------------------------
 
 export interface RunBootAuditOpts {

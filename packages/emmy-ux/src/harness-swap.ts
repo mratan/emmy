@@ -34,10 +34,14 @@
 //     from firing mid-generation; an open OTel span cannot be mid-flight.
 
 import { loadProfile } from "./profile-loader";
-import { setInitialAudit } from "./offline-badge";
+import {
+	runBootOfflineAudit,
+	setInitialAudit,
+} from "./offline-badge";
 import type { ProfileSnapshot } from "./types";
 import {
 	type EmmyProfileStampProcessor,
+	type EmmyToolRegistration,
 	swapSpanProcessor,
 } from "@emmy/telemetry";
 
@@ -52,6 +56,15 @@ export interface HarnessSwapHandles {
 	 * ref is mutated in place — no SDK rebuild required.
 	 */
 	profileStampProcessor: EmmyProfileStampProcessor;
+	/**
+	 * Return the current tool registrations so harness-swap can re-audit
+	 * against the NEW profile's allowlist (WR-04 fix — previously the badge
+	 * was hardcoded to green after swap, masking posture regressions when
+	 * swapping to a stricter-allowlist profile). When absent, falls back to
+	 * forcing green (pre-fix behavior) — callers should always provide this
+	 * for production code paths; test doubles may omit it.
+	 */
+	getToolRegistrations?: () => readonly EmmyToolRegistration[];
 }
 
 export interface ReloadHarnessProfileResult {
@@ -91,25 +104,37 @@ export async function reloadHarnessProfile(
 	});
 
 	// (4) web_fetch allowlist re-audit. The new profile's allowlist governs
-	//     future tool.web_fetch enforcement. Absent allowlist → empty array
-	//     (default-deny; red badge flips on next web_fetch attempt).
-	const newAllowlist =
-		snap.harness.tools.web_fetch?.allowlist ?? [];
-	setInitialAudit({
-		offline_ok: true,
-		violating_tool: null,
-		violating_host: null,
-		badge_state: "green",
-		// The audit-result shape carries allowlist through its own plumbing
-		// (see runBootOfflineAudit in offline-badge.ts); but the BADGE itself
-		// is driven by the fields above. Tool enforcement reads the allowlist
-		// from its own EnforcementContext wired via session.ts. In a full
-		// swap, session.ts's getEnforcementContext() must also re-read the
-		// ProfileSnapshot — the replaceProfileRef setter above feeds that
-		// path. The setInitialAudit call resets the badge state machine to
-		// green so a prior RED flip from the old profile doesn't persist
-		// spuriously after swap.
-	});
+	//     future tool.web_fetch enforcement. Absent allowlist → empty array.
+	//
+	//     WR-04 FIX: previously we hardcoded `badge_state: "green"` here,
+	//     which masked posture regressions when the new profile had a
+	//     stricter allowlist than the tools actually required. Now we run
+	//     the same runBootOfflineAudit the boot path runs — it correctly
+	//     flips the badge to red if any registered tool's required_hosts
+	//     aren't covered by the new allowlist.
+	const newAllowlist = snap.harness.tools.web_fetch?.allowlist ?? [];
+	if (handles.getToolRegistrations) {
+		const toolRegistrations = handles.getToolRegistrations();
+		const auditResult = runBootOfflineAudit({
+			toolRegistrations,
+			allowlist: newAllowlist,
+			// Swallow the stderr banner on swap — the /profile handler already
+			// notifies the user of the swap outcome; a second "[emmy] OFFLINE
+			// OK" line on top would be noise. The audit RESULT still propagates.
+			stderr: () => {},
+		});
+		setInitialAudit(auditResult);
+	} else {
+		// Legacy / test-double path: no registrations available, so preserve
+		// pre-WR-04 behavior (force green). Callers in production MUST supply
+		// getToolRegistrations to get the real audit.
+		setInitialAudit({
+			offline_ok: true,
+			violating_tool: null,
+			violating_host: null,
+			badge_state: "green",
+		});
+	}
 	// Mark the new allowlist as applied so downstream readers can observe
 	// the swap in tests without chasing enforcement-context internals.
 	_lastReloadAllowlist = [...newAllowlist];
