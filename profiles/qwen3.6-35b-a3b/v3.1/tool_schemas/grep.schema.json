@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "grep",
+    "description": "Run grep against a path. Returns stdout + exit_code.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "pattern": { "type": "string" },
+        "path": { "type": "string" },
+        "flags": { "type": "string" }
+      },
+      "required": ["pattern"],
+      "additionalProperties": false
+    }
+  }
+}

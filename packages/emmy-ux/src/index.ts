@@ -26,7 +26,15 @@ export { createEmmySession, type PiRuntime } from "./session";
 // Plan 03-01: Phase-3 pi 0.68 extension factory — installs the
 // before_provider_request hook (enable_thinking:false + Emmy 3-layer prompt
 // overwrite + reactive-grammar injection) on every live wire request.
-export { createEmmyExtension, type EmmyExtensionOptions } from "./pi-emmy-extension";
+// Plan 03.1-01 (D-30): runTurnStartCompaction extracted as a named helper so
+// unit tests can drive it with a fake ExtensionContext; the factory calls it
+// from pi.on("turn_start", ...) on the live path.
+export {
+	createEmmyExtension,
+	runTurnStartCompaction,
+	type EmmyExtensionOptions,
+	type TurnStartCompactionCtx,
+} from "./pi-emmy-extension";
 
 // Plan 03-04 (UX-02): TUI footer components.
 //   - formatFooter: pure renderer producing `GPU N% • KV N% • spec accept - • tok/s N`

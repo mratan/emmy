@@ -112,10 +112,15 @@ function withTempProfile(
 // ----------------------------------------------------------------------------
 
 describe("emmyCompactionTrigger — live-wire directive", () => {
-	test("Test 1: above soft threshold returns directive with shouldCompact=true + prompt text", async () => {
+	test("Test 1: above soft threshold returns directive with shouldCompact=true + prompt text (live-wire, no engine injected)", async () => {
 		await withTempProfile(async ({ profile }) => {
 			const entries = buildFixture(50);
-			// Pass pre-computed tokens such that ratio > 0.75 of 131072 = 98304
+			// Pass pre-computed tokens such that ratio > 0.75 of 131072 = 98304.
+			// NOTE: no `engine` injected — this is the LIVE production path.
+			// The default engine's summarize() throws "not configured", but the
+			// trigger must NOT reach it: when engine is absent, the trigger
+			// returns a directive and lets the turn_start handler drive
+			// pi's ctx.compact() instead (D-30).
 			const events: unknown[] = [];
 			const ctx: EmmyCompactionContext = {
 				profile,
@@ -126,14 +131,6 @@ describe("emmyCompactionTrigger — live-wire directive", () => {
 				model: {},
 				apiKey: "unused",
 				emitEvent: (r) => events.push(r),
-				// Inject a summarize that should NEVER be called in live-wire path.
-				engine: {
-					shouldCompact: () => true,
-					estimateTokens: () => 1,
-					summarize: async () => {
-						throw new Error("summarize must NOT be called on live-wire path (D-30)");
-					},
-				},
 			};
 
 			const result = await emmyCompactionTrigger(ctx);
@@ -151,6 +148,8 @@ describe("emmyCompactionTrigger — live-wire directive", () => {
 			expect(result.directive!.tokensBefore).toBe(100_000);
 			// Trigger event must have fired.
 			expect(events.some((e) => (e as { event?: string }).event === "session.compaction.trigger")).toBe(true);
+			// ran must be false — we did not compact internally.
+			expect(result.ran).toBe(false);
 		});
 	});
 

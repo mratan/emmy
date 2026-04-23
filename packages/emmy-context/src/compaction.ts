@@ -201,6 +201,46 @@ export interface EmmyCompactionResult {
 	preserved: number;
 	/** True iff the D-16 fallback path was taken (summarizer threw or missing prompt). */
 	fallback?: boolean;
+	/**
+	 * D-30 live-wire directive (Phase 3.1 Plan 03.1-01). When present and
+	 * `shouldCompact === true`, the turn_start handler invokes
+	 * `ctx.compact({customInstructions})` directly instead of going through
+	 * the (now-deprecated) engine.summarize injection point. The trigger
+	 * itself does NOT call summarize on the live path — ran=false whenever
+	 * a directive is returned.
+	 *
+	 * When `shouldCompact === false` (or directive absent), the caller should
+	 * NOT call ctx.compact — either the threshold was not crossed or an
+	 * internal short-circuit applies (e.g. disabled config, nothing to
+	 * summarize after preservation pre-filter).
+	 */
+	directive?: EmmyCompactionDirective;
+}
+
+/**
+ * D-30 live-wire directive. The trigger returns this when a turn_start
+ * boundary crosses the D-11 soft threshold; the turn_start handler reads
+ * it and invokes pi's native `ctx.compact({customInstructions})`.
+ *
+ * - `customInstructions` is the profile-defined `prompts/compact.md`
+ *   contents prepended to any operator args (D-31 addendum semantics).
+ *   Empty string is the D-16 fallback signal — pi's built-in
+ *   SUMMARIZATION_SYSTEM_PROMPT takes over.
+ * - `preservation` is the D-14 preservation set (informational — pi's
+ *   engine decides what to keep; the custom instructions tell the model
+ *   which entries are error-sensitive / file-pinned / TODO-state).
+ * - `tokensBefore` is ctx.contextTokens at directive construction, used
+ *   by telemetry events.
+ * - `reason` marks whether this directive was built from a soft-threshold
+ *   cross (auto) or a future "manual" path (reserved for Plan 03.1-01
+ *   Task 2 slash commands which do NOT go through this directive).
+ */
+export interface EmmyCompactionDirective {
+	shouldCompact: boolean;
+	customInstructions: string;
+	preservation: Set<string>;
+	tokensBefore: number;
+	reason: "soft_threshold" | "manual";
 }
 
 // CompactionSettings is only used inside prepareCompactionLocal but kept
@@ -260,8 +300,42 @@ export async function emmyCompactionTrigger(
 	if (ctx.eventType !== "turn_start") {
 		throw new IllegalCompactionTimingError(ctx.eventType);
 	}
+	// D-30 (Plan 03.1-01) — live-wire gate: when the caller does NOT inject
+	// an `engine`, the trigger runs in LIVE-WIRE mode and returns a directive
+	// instead of calling engine.summarize() itself. The turn_start handler in
+	// pi-emmy-extension.ts reads the directive and invokes pi's native
+	// ctx.compact({customInstructions}) directly. engine.summarize() remains
+	// the injection point for stub-mode tests (trigger.test.ts +
+	// summarize-fallback.integration.test.ts) and is NOT on the live path.
+	const stubMode = ctx.engine !== undefined;
 	const engine = ctx.engine ?? DEFAULT_ENGINE;
 	const emit: EmitEventFn = ctx.emitEvent ?? realEmitEvent;
+
+	// 1b. D-12 pre-ceiling guard (Plan 03.1-01 D-30 live-wire).
+	//     When the session has ALREADY overflowed the hard ceiling before
+	//     turn_start fires (e.g. a huge single-turn paste put us over),
+	//     pi's ctx.compact() cannot rescue us — there's no room for the
+	//     summarization round-trip itself. Raise SessionTooFullError at
+	//     entry so the turn_start handler aborts the turn with the
+	//     5-key diagnostic bundle (D-12 fail-loud), matching the
+	//     post-compaction path's error shape.
+	//
+	//     Note: this ONLY fires when ctx.contextWindow is a
+	//     max_input_tokens value (not the model context window). The
+	//     extension's readMaxInputTokens(profile) seeds contextWindow
+	//     with the harness.context.max_input_tokens ceiling.
+	if (ctx.contextWindow > 0 && ctx.contextTokens > ctx.contextWindow) {
+		throw new SessionTooFullError({
+			turn_index: ctx.entries.length,
+			tokens: ctx.contextTokens,
+			max_input_tokens: ctx.contextWindow,
+			compaction_attempt_result: {
+				elided: 0,
+				summary_tokens: 0,
+			},
+			preservation_list: [],
+		});
+	}
 
 	// 2. Load config
 	const cfg = loadCompactionConfig(ctx.profile);
@@ -319,12 +393,49 @@ export async function emmyCompactionTrigger(
 			error: `compaction prompt missing at ${promptFullPath}`,
 		});
 		ctx.setStatus?.("emmy.compacting", undefined);
+		// D-30 live-wire path: still return a directive so the turn_start
+		// handler can call ctx.compact({customInstructions: ""}) — pi's
+		// built-in SUMMARIZATION_SYSTEM_PROMPT will take over.
+		if (!stubMode) {
+			return {
+				ran: false,
+				elided: 0,
+				preserved: preserved.size,
+				directive: {
+					shouldCompact: true,
+					customInstructions: "",
+					preservation: preserved,
+					tokensBefore: ctx.contextTokens,
+					reason: "soft_threshold",
+				},
+			};
+		}
 		return {
 			...structuredPruneFallback(ctx, preserved, engine),
 			fallback: true,
 		};
 	}
 	const customInstructions = readFileSync(promptFullPath, "utf8");
+
+	// D-30 live-wire path (Plan 03.1-01) — return a directive and let the
+	// turn_start handler drive pi's ctx.compact({customInstructions}) itself.
+	// engine.summarize is NOT called. ran=false because we did not compact
+	// internally; the caller reads directive.shouldCompact + customInstructions.
+	if (!stubMode) {
+		ctx.setStatus?.("emmy.compacting", undefined);
+		return {
+			ran: false,
+			elided: 0,
+			preserved: preserved.size,
+			directive: {
+				shouldCompact: true,
+				customInstructions,
+				preservation: preserved,
+				tokensBefore: ctx.contextTokens,
+				reason: "soft_threshold",
+			},
+		};
+	}
 
 	// 8. Summarization round-trip
 	let summary: string;

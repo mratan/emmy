@@ -340,66 +340,109 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 		}
 
 		// Plan 03-03 — turn_start handler invokes emmyCompactionTrigger per
-		// D-11 turn-boundary atomicity (Pitfall #3). The trigger wraps pi's
-		// compaction engine with D-14 preservation + D-16 fallback + D-12
-		// hard-ceiling fail-loud. Read pi's context usage + session entries
-		// via ExtensionContext; convert pi-native entries to emmy-local
-		// SessionEntry shape before handing to the classifier.
-		//
-		// Live wiring notes (Plan 03-07 finalizes):
-		//   - ctx.sessionManager.getEntries() returns pi's discriminated union;
-		//     we adapt the SessionMessageEntry subset to emmy's simplified shape
-		//     (role + content). CompactionEntry / ThinkingLevelChange / etc.
-		//     are filtered out because pi already treats them as non-LLM data.
-		//   - ctx.getContextUsage() is optional; when null we skip the trigger
-		//     because there's no authoritative token count to compare vs
-		//     max_input_tokens. D-15 soft threshold is a RATIO, so missing
-		//     tokens => ratio unknown => safe to skip.
-		//   - SessionTooFullError propagates to the TUI via ctx.ui.setStatus
-		//     (D-17 visible status) + re-throw so pi halts the turn.
+		// D-11 turn-boundary atomicity (Pitfall #3). Plan 03.1-01 (D-30)
+		// extracted the handler body into runTurnStartCompaction so tests
+		// can drive it directly with a fake ExtensionContext. The helper
+		// also performs the live ctx.compact({customInstructions}) call when
+		// the trigger returns directive.shouldCompact === true.
 		pi.on("turn_start", async (_event, ctx) => {
-			const usage = ctx.getContextUsage?.();
-			if (!usage || usage.tokens == null) return;
-			const contextWindow = usage.contextWindow;
-			const maxInputTokens = readMaxInputTokens(profile) ?? contextWindow;
-
-			const piEntries = ctx.sessionManager?.getEntries?.() ?? [];
-			const emmyEntries = adaptPiEntries(piEntries);
-
-			const triggerCtx: EmmyCompactionContext = {
+			await runTurnStartCompaction(
+				ctx as unknown as TurnStartCompactionCtx,
 				profile,
-				entries: emmyEntries,
-				contextTokens: usage.tokens,
-				contextWindow: maxInputTokens,
-				eventType: "turn_start",
-				model: ctx.model,
-				apiKey: process.env.EMMY_VLLM_API_KEY ?? "unused",
-				setStatus: (key, text) => ctx.ui?.setStatus?.(key, text),
-			};
-
-			try {
-				const result = await emmyCompactionTrigger(triggerCtx);
-				if (result.ran) {
-					ctx.ui?.setStatus?.(
-						"emmy.last_compaction",
-						`compacted ${result.elided}→kept ${result.preserved}${result.fallback ? " (D-16 fallback)" : ""}`,
-					);
-				}
-			} catch (err) {
-				if (err instanceof SessionTooFullError) {
-					// D-12 fail-loud: surface to TUI and re-throw so pi aborts
-					// the turn. Operator sees the diagnostic bundle via
-					// session logs + events.jsonl.
-					ctx.ui?.setStatus?.("emmy.compaction_failure", err.message);
-					throw err;
-				}
-				// Other errors would have been caught inside the trigger and
-				// converted to D-16 fallback; anything reaching here is a
-				// wiring bug — let it propagate so the test suite catches it.
-				throw err;
-			}
+			);
 		});
 	};
+}
+
+/**
+ * Minimal ExtensionContext shape runTurnStartCompaction needs. Uses `unknown`
+ * for pi's opaque types so the helper stays decoupled from pi's full type
+ * surface — tests pass a plain object; the production turn_start handler
+ * passes pi's real ctx (cast through `unknown` at the call site).
+ */
+export interface TurnStartCompactionCtx {
+	getContextUsage?: () => { tokens: number | null; contextWindow: number; percent?: number | null } | undefined;
+	sessionManager?: { getEntries?: () => ReadonlyArray<unknown> };
+	model: unknown;
+	ui?: { setStatus?: (key: string, text: string | undefined) => void };
+	hasUI?: boolean;
+	compact: (options?: { customInstructions?: string }) => void;
+}
+
+/**
+ * Plan 03.1-01 (D-30) — turn_start compaction helper.
+ *
+ * Runs emmyCompactionTrigger in live-wire mode (no engine injected → trigger
+ * returns a directive instead of calling summarize itself). When the directive
+ * says shouldCompact, invoke pi's native ctx.compact({customInstructions}).
+ *
+ * Error handling:
+ *   - SessionTooFullError (D-12 pre-ceiling OR post-compaction overflow) is
+ *     surfaced via setStatus and re-thrown so pi aborts the turn. The
+ *     operator sees the 5-key diagnostic bundle in events.jsonl.
+ *   - Any other error (wiring bug, unexpected trigger throw) propagates
+ *     unchanged — D-16 fallback inside the trigger catches the common
+ *     missing-prompt case internally.
+ */
+export async function runTurnStartCompaction(
+	ctx: TurnStartCompactionCtx,
+	profile: ProfileSnapshot,
+): Promise<void> {
+	const usage = ctx.getContextUsage?.();
+	if (!usage || usage.tokens == null) return;
+	const contextWindow = usage.contextWindow;
+	const maxInputTokens = readMaxInputTokens(profile) ?? contextWindow;
+
+	const piEntries = ctx.sessionManager?.getEntries?.() ?? [];
+	const emmyEntries = adaptPiEntries(piEntries);
+
+	const triggerCtx: EmmyCompactionContext = {
+		profile,
+		entries: emmyEntries,
+		contextTokens: usage.tokens,
+		contextWindow: maxInputTokens,
+		eventType: "turn_start",
+		model: ctx.model,
+		apiKey: process.env.EMMY_VLLM_API_KEY ?? "unused",
+		setStatus: (key, text) => ctx.ui?.setStatus?.(key, text),
+		// IMPORTANT: no `engine` injected. The trigger returns a directive
+		// instead of calling engine.summarize itself (D-30 live-wire gate).
+	};
+
+	try {
+		const result = await emmyCompactionTrigger(triggerCtx);
+
+		// D-30 live-wire path: directive present → call pi's ctx.compact.
+		if (result.directive?.shouldCompact) {
+			ctx.ui?.setStatus?.(
+				"emmy.last_compaction",
+				"live compaction firing…",
+			);
+			ctx.compact({ customInstructions: result.directive.customInstructions });
+			return;
+		}
+
+		// Legacy stub-mode path (engine.summarize was injected — unreachable
+		// in production; only stub tests take this branch).
+		if (result.ran) {
+			ctx.ui?.setStatus?.(
+				"emmy.last_compaction",
+				`compacted ${result.elided}→kept ${result.preserved}${result.fallback ? " (D-16 fallback)" : ""}`,
+			);
+		}
+	} catch (err) {
+		if (err instanceof SessionTooFullError) {
+			// D-12 fail-loud: surface to TUI and re-throw so pi aborts
+			// the turn. Operator sees the diagnostic bundle via
+			// session logs + events.jsonl.
+			ctx.ui?.setStatus?.("emmy.compaction_failure", err.message);
+			throw err;
+		}
+		// Other errors would have been caught inside the trigger and
+		// converted to D-16 fallback; anything reaching here is a
+		// wiring bug — let it propagate so the test suite catches it.
+		throw err;
+	}
 }
 
 /**

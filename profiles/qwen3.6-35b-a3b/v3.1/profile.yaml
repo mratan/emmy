@@ -1,0 +1,34 @@
+profile:
+  id: qwen3.6-35b-a3b
+  version: v3.1
+  family: qwen3.6
+  base_model: Qwen/Qwen3.6-35B-A3B-FP8
+  description: "Qwen3.6-35B-A3B-FP8 primary coding profile, v3.1 operational polish\
+    \ \u2014 RAM headroom + live compaction (D-29, D-30, D-31, D-32)"
+  created: '2026-04-22'
+  hash: sha256:fcdecb2355688167afda98f1310d5e06e2b2c039927d5dda52271fb6ad3fee5f
+  hash_algorithm: sha256
+  hash_manifest_version: 1
+  tags:
+  - coding
+  - dgx-spark
+  - fp8
+  - qwen3.6
+  - phase-3
+  - phase-3.1
+  community_sources:
+  - title: Qwen3.6 release blog
+    url: https://qwen.ai/blog?id=qwen3.6
+    retrieved: '2026-04-18'
+  - title: vLLM Qwen3.5/3.6 recipes
+    url: https://docs.vllm.ai/projects/recipes/en/latest/Qwen/Qwen3.5.html
+    retrieved: '2026-04-18'
+  - title: Claude Code compaction behavior (industry reference)
+    url: https://docs.anthropic.com/claude/claude-code
+    retrieved: '2026-04-22'
+  - title: pi-coding-agent DEFAULT_COMPACTION_SETTINGS
+    url: https://github.com/badlogic/pi-mono
+    retrieved: '2026-04-22'
+  - title: DGX Spark UMA RAM accounting (CLAUDE.md Pitfall
+    url: https://docs.nvidia.com/dgx/dgx-spark/index.html
+    retrieved: '2026-04-22'
