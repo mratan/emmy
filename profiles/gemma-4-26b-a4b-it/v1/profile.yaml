@@ -1,0 +1,32 @@
+profile:
+  id: gemma-4-26b-a4b-it
+  version: v1
+  family: gemma-4
+  base_model: google/gemma-4-26B-A4B-it
+  description: Gemma 4 26B A4B MoE primary coding profile, Phase 4 v1 bundle (D-13..D-18)
+  created: '2026-04-23'
+  hash: sha256:6d2884fbca4ddb610657dde58429c430f5465ca540c427c18c68e9d742384450
+  hash_algorithm: sha256
+  hash_manifest_version: 1
+  tags:
+  - coding
+  - dgx-spark
+  - fp8
+  - gemma-4
+  - phase-4
+  community_sources:
+  - title: Google Gemma 4 model card
+    url: https://ai.google.dev/gemma/docs/core/model_card_4
+    retrieved: '2026-04-23'
+  - title: Gemma 4 function calling (native format)
+    url: https://ai.google.dev/gemma/docs/capabilities/text/function-calling-gemma4
+    retrieved: '2026-04-23'
+  - title: vLLM Gemma4 tool parser API docs
+    url: https://docs.vllm.ai/en/latest/api/vllm/tool_parsers/gemma4_tool_parser/
+    retrieved: '2026-04-23'
+  - title: vLLM Gemma 4 serving recipe
+    url: https://docs.vllm.ai/projects/recipes/en/latest/Google/Gemma4.html
+    retrieved: '2026-04-23'
+  - title: NVIDIA Gemma 4 Day-1 DGX Spark benchmarks
+    url: https://forums.developer.nvidia.com/t/gemma-4-day-1-inference-on-nvidia-dgx-spark-preliminary-benchmarks/365503
+    retrieved: '2026-04-23'

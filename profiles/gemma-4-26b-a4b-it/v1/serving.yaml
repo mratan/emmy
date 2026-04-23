@@ -1,0 +1,77 @@
+# profiles/gemma-4-26b-a4b-it/v1/serving.yaml
+# Phase 4 Plan 04-01 — Gemma 4 26B A4B MoE v1 bundle (D-13 .. D-18).
+# Container image + digest are byte-identical to profiles/qwen3.6-35b-a3b/v3.1/
+# (D-14): same NGC 26.03.post1-py3 + fastsafetensors layer. Operator-gated
+# KV finder + 2-hour thermal replay (D-15) land in Plan 04-06; this bundle
+# ships the LOW-end seed gpu_memory_utilization=0.55 per 04-RESEARCH.md §1
+# bullet 4 (reclaims ~40 GB vs v3's 0.88 on DGX Spark UMA 128 GB pool).
+# Every non-default knob cites a community source in PROFILE_NOTES.md (SC-5).
+
+engine:
+  # --- immutable identity ---
+  model: /models/gemma-4-26B-A4B-it               # container-internal path (matches -v mount)
+  model_hf_id: google/gemma-4-26B-A4B-it          # HF ID (BF16 weights; FP8 is RUNTIME quant per STACK.md line 122)
+  served_model_name: gemma-4-26b-a4b-it            # name vLLM exposes on /v1/models
+  container_image: emmy-serve/vllm:26.03.post1-fst                      # SAME image as Qwen v3.1 (D-14)
+  container_image_digest: sha256:77321e416cf49702ed6f04af9e5d39945726fea48970bb013617fddc659f9486  # SAME digest as Qwen v3.1 (D-14)
+
+  # --- context + memory ---
+  max_model_len: 131072                            # 128K; 04-RESEARCH.md §2; matches Qwen v3.1
+  gpu_memory_utilization: 0.55                     # STARTING seed per 04-RESEARCH.md §1 bullet 4; operator-gated KV finder (D-15) bisects UP in Plan 04-06
+  kv_cache_dtype: fp8                              # 04-RESEARCH.md §2 (Gemma 4 vLLM recipe)
+  enable_prefix_caching: true                      # SERVE-07
+  enable_chunked_prefill: true                     # SERVE-07
+  max_num_batched_tokens: 8192                     # 04-RESEARCH.md §2 — matches Qwen v3.1 RAM-headroom tuning
+  max_num_seqs: 4                                  # 04-RESEARCH.md §2 — NVIDIA Day-1 DGX Spark recipe; defensive against Gemma4ToolParser bug #39392 (pad-token leak under batch). PROFILE_NOTES.md documents max_num_seqs=1 as Phase-5 eval candidate if bug fires empirically.
+
+  # --- loader ---
+  load_format: fastsafetensors                      # SERVE-10 — ~3× cold-start speedup
+
+  # --- quantization ---
+  quantization: fp8                                 # RUNTIME quant on BF16 HF weights (NVFP4 disqualified by D-13 / STACK.md 121-122)
+
+  # --- tool-call parser ---
+  tool_call_parser: gemma4                          # D-17 RESOLVED — vLLM 0.19 native Gemma 4 parser
+  reasoning_parser: gemma4                          # D-17 — vLLM strips reasoning tokens engine-side; quirks.strip_thinking_tags=false below
+  enable_auto_tool_choice: true                     # required alongside tool_call_parser
+
+  # --- attention + backends ---
+  attention_backend: flashinfer                     # STACK.md + GB10 requirement; SAME as Qwen
+
+  # --- network / runtime ---
+  host: 0.0.0.0                                     # container-internal bind
+  port: 8000                                        # container-internal
+
+  # --- what is NOT here (deferred) ---
+  # speculative: null       — Phase 6 (EAGLE-3 availability for 26B TBD)
+  # enable_lora: false      — no LoRA in v1
+
+sampling_defaults:
+  # Source: Google Gemma 4 model card (https://ai.google.dev/gemma/docs/core/model_card_4).
+  # These are PRIORS; harness per-tool sampling overrides them. Changing them = new profile version.
+  # Phase-5 eval candidate: temperature=1.5 (Unsloth HF discussion #21) — NOT shipped today.
+  temperature: 1.0                                  # Google card default (vs Qwen 0.2)
+  top_p: 0.95                                       # Google card
+  top_k: 64                                         # Google card (vs Qwen 40)
+  repetition_penalty: 1.0                           # Google card (NOT 1.05; no repetition dampening declared)
+  max_tokens: 8192
+  stop: []                                          # gemma4 parser handles stop tokens
+
+speculative: null                                   # Phase 6 per 04-CONTEXT.md deferred list
+
+guided_decoding:
+  default_backend: xgrammar                         # vLLM 0.19 default
+
+quirks:
+  strip_thinking_tags: false                        # gemma4 reasoning_parser strips engine-side; harness does NOT re-strip
+  promote_reasoning_to_content: false               # reasoning_parser already routes to content field
+  buffer_tool_streams: false                        # gemma4 parser streams tool_calls natively (04-RESEARCH.md §2)
+
+env:
+  VLLM_NO_USAGE_STATS: "1"                          # SERVE-09 / D-12 layer c (enforced by schema._airgap_policy)
+  DO_NOT_TRACK: "1"
+  VLLM_LOAD_FORMAT: fastsafetensors
+  VLLM_FLASHINFER_MOE_BACKEND: latency
+  VLLM_DISABLE_COMPILE_CACHE: "1"
+  HF_HUB_OFFLINE: "1"                               # REPRO-04 (enforced by schema._airgap_policy)
+  TRANSFORMERS_OFFLINE: "1"
