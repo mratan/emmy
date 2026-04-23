@@ -165,6 +165,16 @@ Plans:
 
 ---
 
+### Phase 03.1: Operational polish — minimal-RAM profile, live auto-compaction + manual triggers, SearxNG web search, day-to-day documentation (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 3
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 03.1 to break down)
+
 ### Phase 4: Gemma 4 Profile + Profile System Maturity
 
 **Goal**: Adding `google/gemma-4-26B-A4B-it` (the MoE variant — explicitly NOT the bandwidth-bound 31B dense) as the second first-class model proves that "model-shaped" logic lives only in profiles. The `/profile` slash command swaps both vLLM (via reload) and harness state atomically with visible progress; within-model profile-routing for planner/editor/critic roles works; the README documents the "stand on shoulders" defaults sourced for each profile.
