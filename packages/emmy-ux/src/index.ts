@@ -70,6 +70,7 @@ export {
 } from "./nvidia-smi";
 
 // Plan 03-06 (UX-03): OFFLINE OK / NETWORK USED badge surface.
+// Plan 03.1-02 (D-36): 3-state badge — flipToYellow / flipToGreen + reserved red.
 export {
 	renderBadge,
 	renderBadgePlain,
@@ -77,7 +78,10 @@ export {
 	bindBadge,
 	setInitialAudit,
 	flipToViolation,
+	flipToYellow,
+	flipToGreen,
 	runBootOfflineAudit,
+	__resetBadgeStateForTests,
 	type BadgeCtx,
 	type RunBootAuditOpts,
 } from "./offline-badge";

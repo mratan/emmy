@@ -71,4 +71,35 @@ export interface NativeToolOpts {
 	 * in eval drivers and unit tests that don't care about the badge.
 	 */
 	webFetchOnViolation?: (details: { url: string; hostname: string }) => void;
+	/**
+	 * Plan 03.1-02 D-35 — recent search URL bypass store. When present, URLs
+	 * returned by recent web_search calls are fetchable without allowlist
+	 * entry (exact URL match, NOT hostname substring — T-03.1-02-02). The
+	 * store's TTL comes from profile.harness.tools.web_fetch.search_bypass_ttl_ms.
+	 * session.ts wires this to getOrCreateDefaultStore(ttlMs).
+	 */
+	recentSearchUrls?: import("./web-fetch-allowlist").RecentSearchUrlStore;
+	/**
+	 * Plan 03.1-02 D-34 — when set, registerNativeTools also registers the
+	 * web_search native tool. cfg pulled from profile.harness.tools.web_search;
+	 * absent means the profile doesn't have the block (no tool registered).
+	 */
+	webSearchConfig?: import("./web-search").WebSearchConfig;
+	/**
+	 * Plan 03.1-02 D-34 — opt-in master switch for the web_search tool. When
+	 * false OR env kill-switches engage, tool is NOT registered.
+	 */
+	webSearchEnabled?: boolean;
+	/**
+	 * Plan 03.1-02 D-36 — hook fired on every successful web_search call so
+	 * session.ts can flip the badge to yellow. Optional.
+	 */
+	webSearchOnSuccess?: (
+		results: import("./web-search").SearchResult[],
+	) => void;
+	/**
+	 * Plan 03.1-02 — hook fired on web_search failure/fallback so session.ts
+	 * can flip the badge back to green. Optional.
+	 */
+	webSearchOnFallback?: (reason: string) => void;
 }

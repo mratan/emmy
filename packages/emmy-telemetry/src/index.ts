@@ -124,10 +124,13 @@ export { initOtel, shutdownOtel, resolveTelemetryEnabled } from "./otel-sdk";
 export { EmmyProfileStampProcessor } from "./profile-stamp-processor";
 
 // Plan 03-06 — UX-03 offline audit pure functions + D-26 LOOPBACK_HOSTS.
+// Plan 03.1-02 D-36 — SEARXNG_LOOPBACK_PORT + classifyEgressHost.
 export {
 	auditToolRegistry,
 	auditWebFetchUrl,
+	classifyEgressHost,
 	LOOPBACK_HOSTS,
+	SEARXNG_LOOPBACK_PORT,
 	type EmmyToolRegistration,
 	type OfflineAuditResult,
 } from "./offline-audit";

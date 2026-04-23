@@ -30,10 +30,15 @@ export {
 	type WebFetchToolErrorResult,
 } from "./web-fetch";
 // Plan 03-06: web_fetch runtime allowlist enforcement (D-27 + D-28).
+// Plan 03.1-02: D-35 returned-URL bypass.
 export {
 	enforceWebFetchAllowlist,
 	WebFetchAllowlistError,
+	recordSearchUrl,
+	getOrCreateDefaultStore,
+	__resetSearchStoreForTests,
 	type EnforcementContext,
+	type RecentSearchUrlStore,
 } from "./web-fetch-allowlist";
 // Plan 03.1-02 (D-34, D-35): web_search tool + search-returned-URL bypass.
 export {

@@ -63,6 +63,8 @@ import {
 	TurnTracker,
 	type TurnMeta,
 } from "@emmy/telemetry";
+// Plan 03.1-02 — per-turn rate-limit reset for web_search (T-03.1-02-03).
+import { resetTurnSearchCount } from "@emmy/tools";
 
 import {
 	EMMY_FEEDBACK_DOWN_KEYID,
@@ -305,6 +307,17 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 				}
 			});
 		}
+
+		// Plan 03.1-02 T-03.1-02-03 — reset web_search per-turn counter on
+		// every turn_end. Separate from the telemetry-gated feedback capture
+		// above because the rate-limit counter is a runtime safety guard that
+		// should fire regardless of whether Langfuse is active. Registered
+		// unconditionally so EMMY_TELEMETRY=off still resets the counter
+		// between turns (prevents unbounded accumulation across long sessions
+		// when telemetry is disabled).
+		pi.on("turn_end", () => {
+			resetTurnSearchCount();
+		});
 
 		// Plan 03-08 fix-forward (TELEM-02): register keyboard shortcuts via
 		// pi's authoritative extension API `pi.registerShortcut(keyId, {handler})`.

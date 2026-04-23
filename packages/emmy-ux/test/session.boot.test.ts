@@ -189,10 +189,15 @@ describe("createEmmySession — Wave 1 wire-through boot contract", () => {
 		// (Task 2 populates it by pushing native tool defs into it before the
 		// session finishes boot). If Task 2 hasn't landed, this array stays
 		// empty and the test fails with 0 !== 8.
-		expect(snap.registeredCustomTools.length).toBe(NATIVE_TOOL_NAMES.length);
+		//
+		// Plan 03.1-02 note: NATIVE_TOOL_NAMES now has 9 entries (web_search
+		// added for collision-check purposes), but web_search registers ONLY
+		// when the profile's harness.tools.web_search block is present + enabled.
+		// This test fixture's profile has NO web_search block → 8 tools register.
+		const expectedBase = [...NATIVE_TOOL_NAMES].filter((n) => n !== "web_search").sort();
+		expect(snap.registeredCustomTools.length).toBe(expectedBase.length);
 		const toolNames = snap.registeredCustomTools.map((t) => t.name).sort();
-		const expected = [...NATIVE_TOOL_NAMES].sort();
-		expect(toolNames).toEqual(expected);
+		expect(toolNames).toEqual(expectedBase);
 	});
 
 	test("Test 2: registerProvider is not a no-op — impl recorded with emmy:<id>@<version>", async () => {

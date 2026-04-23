@@ -50,10 +50,12 @@ import {
 import {
 	buildMcpToolDefs,
 	buildNativeToolDefs,
+	getOrCreateDefaultStore,
 	loadMcpServersConfig,
 	NATIVE_TOOL_NAMES,
 	registerMcpServers,
 	registerNativeTools,
+	type RecentSearchUrlStore,
 	type ToolDefinitionLike,
 } from "@emmy/tools";
 
@@ -76,7 +78,9 @@ import {
 
 import { SpOkCanaryError } from "./errors";
 import {
+	flipToGreen,
 	flipToViolation,
+	flipToYellow,
 	renderBadgePlain,
 	runBootOfflineAudit,
 	setInitialAudit,
@@ -648,12 +652,59 @@ export async function createEmmySession(
 		flipToViolation("web_fetch", details.hostname);
 	};
 
-	const nativeTools: ToolDefinitionLike[] = buildNativeToolDefs({
+	// Plan 03.1-02 D-35 — recent-search URL bypass store (shared singleton).
+	// TTL from profile's tools.web_fetch.search_bypass_ttl_ms (defaults to
+	// 5 min if the profile's block omits it — pydantic Optional[int]=300000).
+	const searchBypassTtlMs: number =
+		(opts.profile.harness.tools.web_fetch as { search_bypass_ttl_ms?: number } | undefined)
+			?.search_bypass_ttl_ms ?? 300000;
+	const recentSearchUrls: RecentSearchUrlStore = getOrCreateDefaultStore(searchBypassTtlMs);
+
+	// Plan 03.1-02 D-34 — web_search config from profile.harness.tools.web_search.
+	// When absent OR enabled=false, the tool is NOT registered. Env kill-switches
+	// (EMMY_WEB_SEARCH=off, EMMY_TELEMETRY=off) are honored inside
+	// registerWebSearchTool — absent from the check here.
+	interface WebSearchProfileBlock {
+		enabled?: boolean;
+		base_url?: string;
+		max_results_default?: number;
+		rate_limit_per_turn?: number;
+		timeout_ms?: number;
+	}
+	const webSearchProfile =
+		(opts.profile.harness.tools as { web_search?: WebSearchProfileBlock }).web_search;
+	const webSearchConfig = webSearchProfile
+		? {
+				baseUrl: webSearchProfile.base_url ?? "http://127.0.0.1:8888",
+				maxResultsDefault: webSearchProfile.max_results_default ?? 10,
+				rateLimitPerTurn: webSearchProfile.rate_limit_per_turn ?? 10,
+				timeoutMs: webSearchProfile.timeout_ms ?? 10000,
+		  }
+		: undefined;
+	const webSearchEnabled = webSearchProfile?.enabled === true;
+
+	// D-36 — badge transitions. On first successful web_search, flip yellow;
+	// on any fallback (searxng unreachable), flip green.
+	const webSearchOnSuccess = (): void => {
+		flipToYellow("searxng responded healthy");
+	};
+	const webSearchOnFallback = (reason: string): void => {
+		flipToGreen(reason);
+	};
+
+	const nativeToolOpts: Parameters<typeof buildNativeToolDefs>[0] = {
 		cwd: opts.cwd,
 		profileRef: opts.profile.ref,
 		webFetchAllowlist,
 		webFetchOnViolation,
-	});
+		recentSearchUrls,
+	};
+	if (webSearchConfig) nativeToolOpts.webSearchConfig = webSearchConfig;
+	if (webSearchEnabled) nativeToolOpts.webSearchEnabled = true;
+	nativeToolOpts.webSearchOnSuccess = webSearchOnSuccess;
+	nativeToolOpts.webSearchOnFallback = webSearchOnFallback;
+
+	const nativeTools: ToolDefinitionLike[] = buildNativeToolDefs(nativeToolOpts);
 	const registeredToolNames = new Set<string>(NATIVE_TOOL_NAMES);
 	let mcpTools: ToolDefinitionLike[] = [];
 	let mcpRegisteredCount = 0;
@@ -753,14 +804,21 @@ export async function createEmmySession(
 	// (adapter.registerTool body is a no-op by design, per D-01 no-split-brain).
 	// Plan 03-06: plumb the allowlist + violation hook so stub-piFactory tests
 	// that exercise the legacy path see the same enforcement surface.
+	// Plan 03.1-02: plumb recentSearchUrls + web_search wiring identically.
+	const legacyNativeToolOpts: Parameters<typeof registerNativeTools>[1] = {
+		cwd: opts.cwd,
+		profileRef: opts.profile.ref,
+		webFetchAllowlist,
+		webFetchOnViolation,
+		recentSearchUrls,
+	};
+	if (webSearchConfig) legacyNativeToolOpts.webSearchConfig = webSearchConfig;
+	if (webSearchEnabled) legacyNativeToolOpts.webSearchEnabled = true;
+	legacyNativeToolOpts.webSearchOnSuccess = webSearchOnSuccess;
+	legacyNativeToolOpts.webSearchOnFallback = webSearchOnFallback;
 	registerNativeTools(
 		pi as unknown as { registerTool: (spec: unknown) => void } as Parameters<typeof registerNativeTools>[0],
-		{
-			cwd: opts.cwd,
-			profileRef: opts.profile.ref,
-			webFetchAllowlist,
-			webFetchOnViolation,
-		},
+		legacyNativeToolOpts,
 	);
 
 	// For stub-piFactory tests that do NOT exercise buildMcpToolDefs (Phase 2's

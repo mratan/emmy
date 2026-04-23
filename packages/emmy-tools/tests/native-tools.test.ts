@@ -55,18 +55,51 @@ afterEach(() => {
 
 // --- Surface registration -------------------------------------------------
 describe("registerNativeTools — surface", () => {
-  test("NATIVE_TOOL_NAMES is exactly the 8-tool floor (CLAUDE.md)", () => {
+  test("NATIVE_TOOL_NAMES is the 8-tool floor + web_search (Plan 03.1-02 D-34)", () => {
+    // CLAUDE.md floor: 8 tools. Plan 03.1-02 adds web_search as a profile-
+    // gated 9th name — registered only when the profile's tools.web_search
+    // block is present AND enabled AND neither kill-switch engages.
     expect([...NATIVE_TOOL_NAMES].sort()).toEqual(
-      ["bash", "edit", "find", "grep", "ls", "read", "web_fetch", "write"].sort(),
+      ["bash", "edit", "find", "grep", "ls", "read", "web_fetch", "web_search", "write"].sort(),
     );
-    expect(NATIVE_TOOL_NAMES.length).toBe(8);
+    expect(NATIVE_TOOL_NAMES.length).toBe(9);
   });
 
-  test("exactly 8 tools register; names equal NATIVE_TOOL_NAMES (order-agnostic)", () => {
+  test("8 base tools register without profile opts (web_search is profile-gated)", () => {
     const { pi, registered } = makeStubPi();
+    // No webSearchConfig/webSearchEnabled → web_search is NOT registered.
     registerNativeTools(pi, { cwd: tmp, profileRef: PROFILE_REF });
     expect(registered.length).toBe(8);
-    expect(new Set(registered.map((t) => t.name))).toEqual(new Set(NATIVE_TOOL_NAMES));
+    // The 8 base tools = NATIVE_TOOL_NAMES minus web_search.
+    const baseSet = new Set(NATIVE_TOOL_NAMES.filter((n) => n !== "web_search"));
+    expect(new Set(registered.map((t) => t.name))).toEqual(baseSet);
+  });
+
+  test("web_search registers when profile opts enable it (Plan 03.1-02 D-34)", () => {
+    const { pi, registered } = makeStubPi();
+    // Ensure no kill-switch leaks from prior tests.
+    const savedWebSearch = process.env.EMMY_WEB_SEARCH;
+    const savedTelemetry = process.env.EMMY_TELEMETRY;
+    delete process.env.EMMY_WEB_SEARCH;
+    delete process.env.EMMY_TELEMETRY;
+    try {
+      registerNativeTools(pi, {
+        cwd: tmp,
+        profileRef: PROFILE_REF,
+        webSearchEnabled: true,
+        webSearchConfig: {
+          baseUrl: "http://127.0.0.1:8888",
+          maxResultsDefault: 10,
+          rateLimitPerTurn: 10,
+          timeoutMs: 10000,
+        },
+      });
+      expect(registered.length).toBe(9);
+      expect(new Set(registered.map((t) => t.name))).toEqual(new Set(NATIVE_TOOL_NAMES));
+    } finally {
+      if (savedWebSearch !== undefined) process.env.EMMY_WEB_SEARCH = savedWebSearch;
+      if (savedTelemetry !== undefined) process.env.EMMY_TELEMETRY = savedTelemetry;
+    }
   });
 
   test("each tool has a non-empty string description + JSON-schema-shaped parameters", () => {

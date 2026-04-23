@@ -1,19 +1,24 @@
 // packages/emmy-tools/src/web-fetch-allowlist.ts
 //
 // Plan 03-06 Task 2 (GREEN) — web_fetch runtime enforcement hook (D-27).
+// Plan 03.1-02 Task 2 (GREEN) — returned-URL bypass (D-35).
 //
-// Tiny function + named error. The hook checks `url` against the allowlist
-// via @emmy/telemetry's auditWebFetchUrl (hostname-exact, loopback-permits)
-// and, on miss:
-//   1. Fires emitEvent("tool.web_fetch.violation", ...) into the dual sink.
-//   2. Invokes the optional onViolation callback (session.ts wires this to
-//      updateOfflineBadge → red badge flip per D-27).
-//   3. Throws WebFetchAllowlistError — the caller (web_fetch wrapper) maps
-//      it to a ToolError-shaped return value so pi's agent loop CONTINUES
-//      (D-28 warn-and-continue; session does NOT terminate on allowlist miss).
+// Runtime semantics summary:
+//   1. If the URL is EXACTLY in the recent-search-URL store (bypass), allow.
+//   2. Else, defer to auditWebFetchUrl (loopback OR hostname-exact allowlist).
+//   3. Else, emit tool.web_fetch.violation + call onViolation + throw
+//      WebFetchAllowlistError (the caller maps to a ToolError-shaped return
+//      so pi's agent loop continues per D-28).
 //
-// Shape parallels mcp-poison-check.assertNoPoison: pure classifier + named
-// error (03-PATTERNS role-match analog).
+// D-35 bypass semantics:
+//   - EXACT URL match, NOT hostname-substring (T-03.1-02-02 SSRF guard).
+//   - Store is populated ONLY by the web_search module's success path
+//     (recordSearchUrl is the write API). An agent can't synthesize a bypass
+//     entry by crafting a URL — it must have gone through SearxNG first.
+//   - TTL'd via prune(nowMs); store.has() self-prunes before checking.
+//   - Default in-memory store lazy-initialized on first recordSearchUrl call
+//     OR getOrCreateDefaultStore call. Test-only __resetSearchStoreForTests
+//     resets it between tests.
 
 import { auditWebFetchUrl, emitEvent } from "@emmy/telemetry";
 
@@ -23,10 +28,73 @@ export class WebFetchAllowlistError extends Error {
 		public readonly hostname: string,
 	) {
 		super(
-			`web_fetch blocked: host '${hostname}' not in allowlist (URL: ${url}) — add '${hostname}' to profile.harness.tools.web_fetch.allowlist to permit`,
+			`web_fetch blocked: host '${hostname}' not in allowlist (URL: ${url}) — add '${hostname}' to profile.harness.tools.web_fetch.allowlist to permit, or use web_search first so the URL enters the recent-search bypass window`,
 		);
 		this.name = "WebFetchAllowlistError";
 	}
+}
+
+/**
+ * In-memory bypass store abstraction. Callers inject a store via
+ * EnforcementContext.recentSearchUrls. The module also hosts a default
+ * singleton `_defaultStore` that web-search.ts writes into via
+ * recordSearchUrl; session.ts reads it into the EnforcementContext.
+ */
+export interface RecentSearchUrlStore {
+	/** Returns true iff `url` is currently within TTL. Side-effect: self-prunes. */
+	has(url: string): boolean;
+	/** Record `url` with current time as the recorded-at timestamp. */
+	record(url: string): void;
+	/** Evict entries older than (nowMs - ttlMs). Caller drives cadence; has()
+	 *  calls this with Date.now() on every invocation. */
+	prune(nowMs: number): void;
+}
+
+class DefaultRecentSearchUrlStore implements RecentSearchUrlStore {
+	private readonly entries = new Map<string, number>(); // url → recordedAtMs
+	constructor(private readonly ttlMs: number) {}
+	has(url: string): boolean {
+		this.prune(Date.now());
+		return this.entries.has(url);
+	}
+	record(url: string): void {
+		this.entries.set(url, Date.now());
+	}
+	prune(nowMs: number): void {
+		for (const [u, recordedAt] of this.entries) {
+			if (nowMs - recordedAt > this.ttlMs) this.entries.delete(u);
+		}
+	}
+}
+
+let _defaultStore: DefaultRecentSearchUrlStore | null = null;
+const DEFAULT_TTL_MS = 300000; // D-35 default — 5 min
+
+export function getOrCreateDefaultStore(ttlMs: number = DEFAULT_TTL_MS): RecentSearchUrlStore {
+	if (_defaultStore === null) {
+		_defaultStore = new DefaultRecentSearchUrlStore(ttlMs);
+	}
+	return _defaultStore;
+}
+
+/**
+ * Record a URL returned by a successful web_search call. Idempotent;
+ * re-records reset the TTL timestamp.
+ *
+ * If no default store exists yet, one is created with DEFAULT_TTL_MS. For
+ * production this is fine because session.ts's enforcement context reads
+ * back via getOrCreateDefaultStore with the profile-configured TTL. Tests
+ * that need a custom TTL should call getOrCreateDefaultStore FIRST, then
+ * recordSearchUrl.
+ */
+export function recordSearchUrl(url: string): void {
+	const store = getOrCreateDefaultStore();
+	store.record(url);
+}
+
+/** Test-only: reset the default store so inter-test state doesn't leak. */
+export function __resetSearchStoreForTests(): void {
+	_defaultStore = null;
 }
 
 export interface EnforcementContext {
@@ -37,22 +105,32 @@ export interface EnforcementContext {
 	/** Optional callback fired when a violation is detected (session.ts wires
 	 *  this to updateOfflineBadge for the red flip per D-27). */
 	onViolation?: (details: { url: string; hostname: string }) => void;
+	/** Plan 03.1-02 D-35 — recent search URL bypass store. When present, the
+	 *  EXACT URL is checked against the store BEFORE the allowlist. Populated
+	 *  by web-search module's success path via recordSearchUrl. */
+	recentSearchUrls?: RecentSearchUrlStore;
 }
 
 /**
- * Enforce the web_fetch allowlist at call time. No-op on pass; throws
- * WebFetchAllowlistError on miss AFTER firing the violation event + callback.
+ * Enforce the web_fetch allowlist at call time.
  *
- * Callers (web_fetch wrapper) catch the error and convert it to a
- * ToolError-shaped return object so pi's agent loop surfaces the error text
- * without aborting the session (D-28 warn-and-continue).
+ * Order of checks (D-35 + Plan 03-06 combined):
+ *   1. If `recentSearchUrls` store contains the exact URL → allow (bypass).
+ *   2. Else if loopback or hostname in allowlist → allow.
+ *   3. Else → emit violation + fire onViolation + throw.
+ *
+ * No-op on pass; throws WebFetchAllowlistError on miss.
  */
 export function enforceWebFetchAllowlist(url: string, ctx: EnforcementContext): void {
+	// D-35 bypass FIRST — cheaper + wins over allowlist when present.
+	if (ctx.recentSearchUrls?.has(url)) return;
+
+	// Plan 03-06 unchanged path.
 	if (auditWebFetchUrl(url, ctx.allowlist)) return;
+
 	// auditWebFetchUrl already parsed the URL (it would have thrown on
 	// malformed input); re-parse here for the authoritative hostname used
-	// in the event + error message. Parse failure would have been surfaced
-	// by auditWebFetchUrl; this branch never reaches a try/catch.
+	// in the event + error message.
 	const hostname = new URL(url).hostname;
 	emitEvent({
 		event: "tool.web_fetch.violation",

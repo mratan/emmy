@@ -374,4 +374,68 @@ Pi's built-in still fires when the user types `/compact` and dispatches to `sess
 
 **Follow-up (defer to 03.1-03 cleanup):** remove emmy's `registerCompactCommand` call from `pi-emmy-extension.ts` so the yellow warning goes away. Pi's built-in is sufficient for manual triggers; the profile-prompt discipline is preserved on the hot path (auto-compaction).
 
+## Phase 3.1 — D-33..D-37 Provenance (Plan 03.1-02)
+
+### D-33 — SearxNG topology
+
+| Field | Value | Source |
+|-------|-------|--------|
+| `tools.web_search.base_url` | `http://127.0.0.1:8888` | D-33 user lock — loopback-only binding from pi-emmy's POV. SearxNG's OWN outbound (to google/ddg/brave/bing) is explicit in the refined thesis (T-03.1-02-04). |
+| searxng image digest | `sha256:37c616a774b90fb5df9239eb143f1b11866ddf7b830cd1ebcca6ba11b38cc2bf` | D-09 discipline — `docker pull searxng/searxng:latest && docker inspect --format '{{index .RepoDigests 0}}'` captured 2026-04-22. |
+| redis image digest | `sha256:0c87e07e20a8157992ba7de345b55cfaf6853210b3423c92d1a365fe603d15e0` | Reused verbatim from Phase 3 Plan 03-02 Langfuse stack — same image cache byte-identical. |
+| engines preference | google > duckduckgo > brave > bing | D-33 user lock — SearxNG auto-rotates on rate-limit/timeout. |
+
+### D-34 — web_search tool
+
+| Field | Value | Source |
+|-------|-------|--------|
+| `tools.web_search.enabled` | `true` | D-34 — emmy is a daily-driver research tool; enabled by default on v3.1. Ops can flip `EMMY_WEB_SEARCH=off` to opt out per-session. |
+| `tools.web_search.max_results_default` | `10` | D-34 — empirical default from SearxNG docs; agent can override per-call via `max_results` arg (range 1..50 per JSON schema). |
+| `tools.web_search.rate_limit_per_turn` | `10` | T-03.1-02-03 — DoS guard; 10 searches per agent turn is ample for any research use case without enabling runaway agent storms. Counter resets at `turn_end`. |
+| `tools.web_search.timeout_ms` | `10000` | D-34 — keeps the agent loop responsive; SearxNG typically answers in <1s with all engines healthy. |
+
+### D-35 — web_fetch returned-URL bypass
+
+| Field | Value | Source |
+|-------|-------|--------|
+| `tools.web_fetch.search_bypass_ttl_ms` | `300000` (5 min) | D-35 — balances "agent forgets URL faster than it can follow up" (too short) against "stale search results accumulate bypass" (too long). 5 min matches human reading time. |
+| bypass semantics | exact URL match | T-03.1-02-02 — SSRF mitigation. Hostname-substring match would let an agent synthesize a bypass URL from a crafted string; exact match means the URL must have been RECORDED via `web_search`'s success path (no way to poison the store from outside the tool boundary). |
+| store | in-memory singleton, TTL-pruned | Plan 03.1-02 `packages/emmy-tools/src/web-fetch-allowlist.ts`. `getOrCreateDefaultStore(ttlMs)` lazily initializes. |
+
+### D-36 — Three-state badge
+
+| State | Text | ANSI | Trigger |
+|-------|------|------|---------|
+| green | `OFFLINE OK` | `\x1b[32m` | Boot banner default + SearxNG down/disabled + first-green on fallback. |
+| yellow | `LOCAL LLM · WEB` | `\x1b[33m` | On first successful `web_search` call. `flipToYellow("searxng responded healthy")` in `packages/emmy-ux/src/session.ts`. |
+| red (reserved) | `CLOUD INFERENCE` | `\x1b[31m` | Reserved for non-loopback inference detection (future Phase 4/6 use). Today: never fires from current code. Legacy `NETWORK USED` still renders for the Plan 03-06 web_fetch-violation path. |
+
+### D-37 — v3.1 hash transition
+
+| Event | Hash | When |
+|-------|------|------|
+| Post-Plan 03.1-01 close | `sha256:fcdecb2355688167afda98f1310d5e06e2b2c039927d5dda52271fb6ad3fee5f` | initial v3.1 clone + D-29 serving tune (Plan 03.1-01 GREEN). **NOTE:** this hash went stale immediately after the 03.1-01 walkthrough-evidence commit d86e9b6 updated PROFILE_NOTES.md without recomputing — discovered at 03.1-02 execute time and corrected here. |
+| Post-Plan 03.1-02 Task 2 | (recomputed at plan close via `uv run emmy profile hash --write`) | added `tools.web_search` block + `tools.web_fetch.search_bypass_ttl_ms` + new tool_schemas/web_search.schema.json + §D-33..D-37 provenance + §Validation Runs Plan 03.1-02 entry. Final hash baked into profile.yaml at plan close. |
+
+### Validation Runs — Phase 3.1 Plan 03.1-02
+
+Plan 03.1-02 operator-walkthrough evidence is captured during Task 3 (the
+`checkpoint:human-verify` step). The walkthrough driver `scripts/phase3_1_02_walkthrough.sh`
+produces `runs/phase3.1-02/walkthrough.md`; the final entry is appended to
+the frontmatter `validation_runs:` list above at plan close. Until that
+happens, the expected entry shape is:
+
+```yaml
+- run_id: phase3.1-02-walkthrough
+  date: <YYYY-MM-DD>
+  hash: <v3.1 hash at walkthrough time>
+  purpose: "Plan 03.1-02 operator walkthrough — D-33..D-37 SearxNG + web_search + bypass + 3-state badge; verdict p3.1-02 searxng green"
+  searxng_stack_healthy: true
+  web_search_returns_results: true
+  web_fetch_bypass_exact_url_match: true
+  badge_3_state_transitions: true
+  kill_switch_honored: true
+```
+
+The hash transitioned because harness.yaml gained two new fields AND this PROFILE_NOTES.md gained §D-33..D-37. v3 remains byte-identical at `sha256:2beb99c7...d4d3718`; v1/v2 unchanged.
 

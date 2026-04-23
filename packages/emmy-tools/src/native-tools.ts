@@ -33,6 +33,7 @@ import { ToolsError } from "./errors";
 import { readWithHashes, renderHashedLines } from "./read-with-hashes";
 import { editHashline } from "./edit-hashline";
 import { webFetch, webFetchWithAllowlist, NETWORK_REQUIRED_TAG } from "./web-fetch";
+import { registerWebSearchTool } from "./web-search";
 import { toolSpecToDefinition, type ToolDefinitionLike } from "./tool-definition-adapter";
 
 export const NATIVE_TOOL_NAMES = Object.freeze([
@@ -44,6 +45,7 @@ export const NATIVE_TOOL_NAMES = Object.freeze([
   "find",
   "ls",
   "web_fetch",
+  "web_search", // Plan 03.1-02 D-34 — only registered when profile enables + kill-switches off
 ] as const);
 
 const BASH_DEFAULT_DENY: RegExp[] = [
@@ -366,6 +368,9 @@ export function registerNativeTools(
           allowlist: webFetchAllowlist,
           profileRef,
           ...(webFetchOnViolation ? { onViolation: webFetchOnViolation } : {}),
+          // Plan 03.1-02 D-35 — recent-search URL bypass store (optional).
+          // When absent, the enforcement reduces to Plan 03-06 semantics.
+          ...(opts.recentSearchUrls ? { recentSearchUrls: opts.recentSearchUrls } : {}),
         };
         return webFetchWithAllowlist(
           String(args.url),
@@ -374,6 +379,43 @@ export function registerNativeTools(
         );
       }),
   });
+
+  // ---- web_search (Plan 03.1-02 D-34) --------------------------------------
+  // Only registered when the profile enables it AND neither kill-switch
+  // (EMMY_WEB_SEARCH=off, EMMY_TELEMETRY=off) is engaged. registerWebSearchTool
+  // returns null when any of these fail; we just skip registration in that case.
+  if (opts.webSearchConfig && opts.webSearchEnabled) {
+    const regOpts: Parameters<typeof registerWebSearchTool>[0] = {
+      enabled: opts.webSearchEnabled,
+      config: opts.webSearchConfig,
+    };
+    if (opts.webSearchOnSuccess) regOpts.onSuccess = opts.webSearchOnSuccess;
+    const ws = registerWebSearchTool(regOpts);
+    if (ws !== null) {
+      pi.registerTool({
+        name: ws.name,
+        description: ws.description,
+        parameters: ws.parameters,
+        invoke: async (args) =>
+          invoke("web_search", async () => {
+            const out = await ws.invoke(args);
+            // On failure (ToolError-shaped) fire the fallback hook; session.ts
+            // wires this to flipToGreen so the badge reflects SearxNG-out-of-
+            // loop state. Success path triggers onSuccess from within
+            // registerWebSearchTool via its own onSuccess wiring above.
+            if (
+              out &&
+              typeof out === "object" &&
+              (out as { isError?: boolean }).isError === true
+            ) {
+              if (opts.webSearchOnFallback)
+                opts.webSearchOnFallback("web_search returned ToolError");
+            }
+            return out;
+          }),
+      });
+    }
+  }
 }
 
 function truncateHeadTail(text: string, linesPerSide: number): string {

@@ -335,9 +335,11 @@ describe("buildRealPiRuntimeTui — runtime.runTui wired via createAgentSessionR
 		expect(created.sessionManager).toBeDefined();
 		expect(created.model).toBeDefined();
 		expect(Array.isArray(created.customTools)).toBe(true);
-		// 8 native tools at minimum (no MCP config in this fixture).
+		// 8 native tools at minimum (no MCP config in this fixture; profile
+		// fixture has no tools.web_search block so the 9th name in
+		// NATIVE_TOOL_NAMES is gated off — Plan 03.1-02 profile-gated web_search).
 		const toolNames = created.customTools.map((t) => t.name).sort();
-		const expected = [...NATIVE_TOOL_NAMES].sort();
+		const expected = [...NATIVE_TOOL_NAMES].filter((n) => n !== "web_search").sort();
 		expect(toolNames).toEqual(expected);
 	});
 

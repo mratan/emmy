@@ -57,11 +57,52 @@ export interface EmmyToolRegistration {
  * Result of the boot-time audit. `offline_ok: true` means all declared tool
  * hosts are permitted (loopback OR allowlisted); `offline_ok: false` surfaces
  * the FIRST violating tool+host pair (order-stable short-circuit).
+ *
+ * Plan 03.1-02 D-36 adds `badge_state` — the authoritative 3-state enum the
+ * renderer consults. When absent (legacy call-sites), the renderer derives
+ * green/red from `offline_ok`. When present, `badge_state` wins:
+ *   - "green"  → OFFLINE OK        (SearxNG down/disabled)
+ *   - "yellow" → LOCAL LLM · WEB   (SearxNG up, LLM still local)
+ *   - "red"    → CLOUD INFERENCE   (reserved; non-loopback inference detected)
+ *
+ * `reason` is a human-readable annotation captured at transition time for
+ * observability + operator-facing breadcrumbs.
  */
 export interface OfflineAuditResult {
 	offline_ok: boolean;
 	violating_tool: string | null;
 	violating_host: string | null;
+	/** Plan 03.1-02 D-36 — authoritative badge color state. Optional for
+	 *  backward-compat; renderer derives from offline_ok when absent. */
+	badge_state?: "green" | "yellow" | "red";
+	/** Human-readable transition reason (e.g. "searxng responded healthy"). */
+	reason?: string;
+}
+
+/**
+ * Plan 03.1-02 D-33/D-36 — SearxNG loopback port. Belongs with LOOPBACK_HOSTS
+ * semantics so the offline audit can classify SearxNG's 127.0.0.1:8888
+ * outbound as benign egress (distinct from NETWORK_REQUIRED).
+ */
+export const SEARXNG_LOOPBACK_PORT = 8888;
+
+/**
+ * Classify an outbound destination into a 3-state egress category.
+ *   - "loopback"       → 127.0.0.1 / localhost / ::1 / loopback
+ *   - "searxng-benign" → loopback + port 8888 (emmy's web-search tool target)
+ *   - "external"       → anything else (subject to allowlist)
+ *
+ * Used by the boot audit's explanatory hints; not a gate on its own.
+ */
+export function classifyEgressHost(
+	hostname: string,
+	port?: number,
+): "loopback" | "searxng-benign" | "external" {
+	if (LOOPBACK_HOSTS.has(hostname)) {
+		if (port === SEARXNG_LOOPBACK_PORT) return "searxng-benign";
+		return "loopback";
+	}
+	return "external";
 }
 
 /**
