@@ -1,0 +1,90 @@
+emmy: starting profile=profiles/gemma-4-26b-a4b-it/v2 port=8002 airgap=0 run_id=20260423T201355Z-d8fa23
+emmy: image ref = sha256:db59febc6c476c9c93701cc9f54917533cee774d4e4bb27eff6fafeae37509f8
+emmy: container started; running smoke test
+smoke ok: tok/s=37.66 tokens_out=100
+emmy-serve ready — profile profiles/gemma-4-26b-a4b-it/v2 on http://127.0.0.1:8002 (cold-start 406s, 37.66 tok/s)
+emmy-serve
+emmy-serve
+emmy: starting profile=profiles/gemma-4-26b-a4b-it/v2 port=8002 airgap=0 run_id=20260423T203316Z-5071ac
+emmy: image ref = sha256:db59febc6c476c9c93701cc9f54917533cee774d4e4bb27eff6fafeae37509f8
+emmy: container started; running smoke test
+smoke ok: tok/s=37.89 tokens_out=100
+emmy-serve ready — profile profiles/gemma-4-26b-a4b-it/v2 on http://127.0.0.1:8002 (cold-start 414s, 37.89 tok/s)
+emmy-serve
+emmy-serve
+emmy: starting profile=profiles/gemma-4-26b-a4b-it/v2 port=8002 airgap=0 run_id=20260423T205101Z-fb60b3
+emmy: image ref = sha256:db59febc6c476c9c93701cc9f54917533cee774d4e4bb27eff6fafeae37509f8
+emmy: container started; running smoke test
+smoke ok: tok/s=37.00 tokens_out=100
+emmy-serve ready — profile profiles/gemma-4-26b-a4b-it/v2 on http://127.0.0.1:8002 (cold-start 414s, 37.00 tok/s)
+emmy-serve
+emmy-serve
+emmy: starting profile=profiles/gemma-4-26b-a4b-it/v2 port=8002 airgap=0 run_id=20260423T210900Z-4dcc95
+emmy: image ref = sha256:db59febc6c476c9c93701cc9f54917533cee774d4e4bb27eff6fafeae37509f8
+emmy: container started; running smoke test
+smoke ok: tok/s=37.40 tokens_out=100
+emmy-serve ready — profile profiles/gemma-4-26b-a4b-it/v2 on http://127.0.0.1:8002 (cold-start 423s, 37.40 tok/s)
+emmy-serve
+emmy-serve
+emmy: starting profile=profiles/gemma-4-26b-a4b-it/v2 port=8002 airgap=0 run_id=20260423T212849Z-cd4120
+emmy: image ref = sha256:db59febc6c476c9c93701cc9f54917533cee774d4e4bb27eff6fafeae37509f8
+emmy: container started; running smoke test
+smoke ok: tok/s=37.80 tokens_out=100
+emmy-serve ready — profile profiles/gemma-4-26b-a4b-it/v2 on http://127.0.0.1:8002 (cold-start 435s, 37.80 tok/s)
+emmy-serve
+emmy-serve
+emmy: starting profile=profiles/gemma-4-26b-a4b-it/v2 port=8002 airgap=0 run_id=20260423T214656Z-1eecd6
+emmy: image ref = sha256:db59febc6c476c9c93701cc9f54917533cee774d4e4bb27eff6fafeae37509f8
+emmy: container started; running smoke test
+smoke ok: tok/s=36.78 tokens_out=100
+emmy-serve ready — profile profiles/gemma-4-26b-a4b-it/v2 on http://127.0.0.1:8002 (cold-start 456s, 36.78 tok/s)
+emmy-serve
+emmy-serve
+emmy: starting profile=profiles/gemma-4-26b-a4b-it/v2 port=8002 airgap=0 run_id=20260423T220543Z-8d8389
+emmy: image ref = sha256:db59febc6c476c9c93701cc9f54917533cee774d4e4bb27eff6fafeae37509f8
+emmy: container started; running smoke test
+smoke ok: tok/s=35.56 tokens_out=100
+emmy-serve ready — profile profiles/gemma-4-26b-a4b-it/v2 on http://127.0.0.1:8002 (cold-start 470s, 35.56 tok/s)
+emmy-serve
+emmy-serve
+emmy: starting profile=profiles/gemma-4-26b-a4b-it/v2 port=8002 airgap=0 run_id=20260423T222444Z-a1c720
+emmy: image ref = sha256:db59febc6c476c9c93701cc9f54917533cee774d4e4bb27eff6fafeae37509f8
+emmy: container started; running smoke test
+smoke ok: tok/s=36.80 tokens_out=100
+emmy-serve ready — profile profiles/gemma-4-26b-a4b-it/v2 on http://127.0.0.1:8002 (cold-start 430s, 36.80 tok/s)
+emmy-serve
+emmy-serve
+emmy: starting profile=profiles/gemma-4-26b-a4b-it/v2 port=8002 airgap=0 run_id=20260423T224221Z-9ee6b2
+emmy: image ref = sha256:db59febc6c476c9c93701cc9f54917533cee774d4e4bb27eff6fafeae37509f8
+emmy: container started; running smoke test
+smoke ok: tok/s=35.87 tokens_out=100
+emmy-serve ready — profile profiles/gemma-4-26b-a4b-it/v2 on http://127.0.0.1:8002 (cold-start 458s, 35.87 tok/s)
+emmy-serve
+emmy-serve
+emmy: starting profile=profiles/gemma-4-26b-a4b-it/v2 port=8002 airgap=0 run_id=20260423T230301Z-f47b11
+emmy: image ref = sha256:db59febc6c476c9c93701cc9f54917533cee774d4e4bb27eff6fafeae37509f8
+emmy: container started; running smoke test
+BOOT REJECTED (wait_for_vllm): /v1/models did not respond in 900s; last error: [Errno 111] Connection refused
+See: runs/boot-failures/20260423T231803Z_b7e543-boot-failure
+BOOT REJECTED — see runs/boot-failures/
+emmy-serve
+emmy-serve
+emmy: starting profile=profiles/gemma-4-26b-a4b-it/v2 port=8002 airgap=0 run_id=20260423T231804Z-1598c9
+emmy: image ref = sha256:db59febc6c476c9c93701cc9f54917533cee774d4e4bb27eff6fafeae37509f8
+emmy: container started; running smoke test
+BOOT REJECTED (wait_for_vllm): /v1/models did not respond in 900s; last error: [Errno 111] Connection refused
+See: runs/boot-failures/20260423T233305Z_cf18af-boot-failure
+BOOT REJECTED — see runs/boot-failures/
+emmy-serve
+emmy-serve
+emmy: starting profile=profiles/gemma-4-26b-a4b-it/v2 port=8002 airgap=0 run_id=20260423T233305Z-ac6f9a
+emmy: image ref = sha256:db59febc6c476c9c93701cc9f54917533cee774d4e4bb27eff6fafeae37509f8
+emmy: container started; running smoke test
+BOOT REJECTED (wait_for_vllm): /v1/models did not respond in 900s; last error: [Errno 111] Connection refused
+See: runs/boot-failures/20260423T234806Z_3ddec3-boot-failure
+BOOT REJECTED — see runs/boot-failures/
+emmy-serve
+emmy-serve
+sha256:ccbf0794b8f31855cfd843471d5aff6d80f15307280767eb097b28aec72b180f
+Finder complete: gpu_memory_utilization = 0.86 (ok_value=0.91, preempted_at=0.915, iters=11)
+  runs: runs/20260423T201355Z_847870-kv-finder

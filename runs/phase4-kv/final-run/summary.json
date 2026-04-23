@@ -1,0 +1,15 @@
+{
+  "final_value": 0.86,
+  "finished": "2026-04-23T23:48:07Z",
+  "first_preemption_at": 0.915,
+  "hardware_id": "spark-ff85",
+  "highest_clean_value": 0.91,
+  "initial_value": 0.75,
+  "iterations": 11,
+  "load_driver": "kv_finder_subset_v1",
+  "profile_id": "gemma-4-26b-a4b-it",
+  "profile_version": "v2",
+  "safety_margin_pct": 5.0,
+  "started": "2026-04-23T20:13:55Z",
+  "total_duration_s": 12851.8
+}

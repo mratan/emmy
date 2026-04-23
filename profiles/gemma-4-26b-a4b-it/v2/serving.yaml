@@ -32,7 +32,7 @@ engine:
 
   # --- context + memory ---
   max_model_len: 131072                            # 128K; 04-RESEARCH.md §2; matches Qwen v3.1
-  gpu_memory_utilization: 0.55                     # STARTING seed per 04-RESEARCH.md §1 bullet 4; operator-gated KV finder (D-15) bisects UP in Plan 04-06
+  gpu_memory_utilization: 0.86                     # STARTING seed per 04-RESEARCH.md §1 bullet 4; operator-gated KV finder (D-15) bisects UP in Plan 04-06
   kv_cache_dtype: fp8                              # 04-RESEARCH.md §2 (Gemma 4 vLLM recipe)
   enable_prefix_caching: true                      # SERVE-07
   enable_chunked_prefill: true                     # SERVE-07

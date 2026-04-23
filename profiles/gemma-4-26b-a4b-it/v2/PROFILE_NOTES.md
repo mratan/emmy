@@ -104,3 +104,14 @@ Empty — populated by Plan 04-06 once the operator runs `scripts/find_kv_budget
 - `emmy profile swap` primitive — Plan 04-02.
 - `/profile` slash command — Plan 04-03.
 - Boot-time smoke on DGX Spark (SP_OK + tool-call parse + 100-tok generation) — operator-gated; Plan 04-06 verifies `scripts/smoke_test.py --profile profiles/gemma-4-26b-a4b-it/v1/` exits 0 with this profile.
+
+### KV-finder result (run 20260423T201355Z_847870)
+
+| Measurement | Value |
+|---|---|
+| `gpu_memory_utilization` (final) | 0.86 |
+| First-preemption value | 0.915 |
+| Highest clean value | 0.91 |
+| Iterations | 11 |
+| Hardware | spark-ff85 |
+| Run artifact | `runs/20260423T201355Z_847870-kv-finder/` |

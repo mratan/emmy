@@ -392,11 +392,19 @@ def run_finder(
     final_val = round(max(0.50, state.ok_value - safety_margin_pct / 100), 3)
     _rewrite_gpu_mem_util(serving_path, final_val)
 
-    # Recompute profile.yaml.hash once, after the final write. Best-effort:
+    # Append PROFILE_NOTES block FIRST, then recompute hash so the manifest
+    # hash covers both the final serving.yaml and the appended notes block.
+    # Prior order (hash-before-append) left every finder run with a stale
+    # manifest hash that failed `emmy profile validate` until manually
+    # re-hashed — observed end-to-end on Phase 4 Gemma 4 v2 bisection
+    # (2026-04-23).
+    _append_profile_notes(profile_path, final_val, state, run_id)
+
+    # Recompute profile.yaml.hash once, after both writes. Best-effort:
     # if ``emmy profile hash --write`` fails (e.g. schema still rejects the
     # bundle because some OTHER field was edited out-of-band), the finder
-    # still writes its summary + PROFILE_NOTES.md — hash drift is the CI
-    # gate's problem, not the finder's.
+    # still writes its summary — hash drift is the CI gate's problem, not
+    # the finder's.
     try:
         subprocess.run(
             ["uv", "run", "emmy", "profile", "hash", str(profile_path), "--write"],
@@ -405,8 +413,6 @@ def run_finder(
         )
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired, FileNotFoundError):
         pass
-
-    _append_profile_notes(profile_path, final_val, state, run_id)
 
     summary = {
         "profile_id": manifest.profile.id,
