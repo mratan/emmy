@@ -182,7 +182,7 @@ def _restart_vllm(profile_path: Path) -> bool:
     Boot failure (non-zero exit from start_emmy.sh) is a common outcome during
     bisection: as gpu_memory_utilization climbs, model-weight load contends
     with KV-cache reservation, and thermal-throttled cold-start can creep past
-    the 300s wait_for_vllm ceiling. Semantically this is a "this util is too
+    the 900s wait_for_vllm ceiling. Semantically this is a "this util is too
     high" signal — functionally equivalent to a preemption failure in that
     the bisection must step DOWN, not abort.
 
@@ -195,7 +195,7 @@ def _restart_vllm(profile_path: Path) -> bool:
     result = subprocess.run(
         ["./scripts/start_emmy.sh", "--profile", str(profile_path)],
         check=False,
-        timeout=420,
+        timeout=1200,
     )
     return result.returncode == 0
 

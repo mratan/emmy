@@ -1,0 +1,1 @@
+{"dmesg_matches":[],"duration_s":0.0,"failure":"boot_failure","iter":0,"metrics":{"n_requests":0,"p50_latency_ms":0.0,"p99_latency_ms":0.0,"preemptions_delta":0,"swapped_delta":0,"tokens_generated":0},"ts":"2026-04-23T20:08:59Z","value":0.75}

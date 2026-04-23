@@ -1,0 +1,4 @@
+{
+  "check": "wait_for_vllm",
+  "reason": "/v1/models did not respond in 300s; last error: [Errno 104] Connection reset by peer"
+}

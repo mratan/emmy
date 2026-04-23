@@ -2,7 +2,7 @@
 """Phase 1 smoke-test orchestrator. Invoked by scripts/start_emmy.sh after docker run.
 
 Pipeline:
-    1. wait_for_vllm — /v1/models 200 OK (300s timeout)
+    1. wait_for_vllm — /v1/models 200 OK (900s timeout; matches swap orchestrator)
     2. run_sp_ok       — D-07 SP_OK echo canary
     3. run_tool_call   — D-08 one-tool read_file parse canary
     4. run_generate    — 100-token decode smoke (prints tok/s for ready banner)
@@ -88,7 +88,7 @@ def main(argv: list[str] | None = None) -> int:
 
     # --- 1. wait for /v1/models ---
     try:
-        wait_for_vllm(args.base_url, timeout_s=300, interval_s=0.5)
+        wait_for_vllm(args.base_url, timeout_s=900, interval_s=0.5)
     except TimeoutError as e:
         return _fail("wait_for_vllm", str(e), "", "")
 
