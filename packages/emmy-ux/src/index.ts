@@ -36,6 +36,14 @@ export {
 	type TurnStartCompactionCtx,
 } from "./pi-emmy-extension";
 
+// Plan 03.1-01 Task 2 (D-31, D-32): /compact and /clear slash commands
+// registered via pi.registerCommand. Exported for external reuse + tests.
+export {
+	buildCompactInstructions,
+	registerCompactCommand,
+	registerClearCommand,
+} from "./slash-commands";
+
 // Plan 03-04 (UX-02): TUI footer components.
 //   - formatFooter: pure renderer producing `GPU N% • KV N% • spec accept - • tok/s N`
 //   - startFooterPoller: 1 Hz metrics poller + setStatus dispatcher

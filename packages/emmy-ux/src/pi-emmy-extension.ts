@@ -35,6 +35,9 @@
 //   (e) [Plan 03-05] input event hook registration — no-op stub here; future
 //       plan fills the body.
 
+import { existsSync, readFileSync } from "node:fs";
+import { join as joinPath } from "node:path";
+
 import type {
 	ExtensionAPI,
 	ExtensionFactory,
@@ -71,6 +74,10 @@ import {
 	type FooterPollerHandle,
 } from "./metrics-poller";
 import { bindBadge } from "./offline-badge";
+import {
+	registerClearCommand,
+	registerCompactCommand,
+} from "./slash-commands";
 
 export interface EmmyExtensionOptions {
 	profile: ProfileSnapshot;
@@ -160,6 +167,28 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 	// same turn_id → upsert replaces) while ensuring distinct user messages
 	// produce distinct turn_ids (no collapse).
 	let emmyTurnCounter = 0;
+
+	// Plan 03.1-01 Task 2 (D-31) — read the profile-defined compaction prompt
+	// once at factory-construction time. The /compact handler uses this as the
+	// base customInstructions (user-supplied args are appended per D-31's
+	// addendum semantics). If the file is missing we pass null — D-16 fallback
+	// semantics route through to pi's built-in SUMMARIZATION_SYSTEM_PROMPT
+	// when the user runs /compact with no args.
+	let compactPromptText: string | null = null;
+	try {
+		const harness = profile.harness as unknown as {
+			context?: { compaction?: { summarization_prompt_path?: string } };
+		};
+		const relPath = harness.context?.compaction?.summarization_prompt_path;
+		if (typeof relPath === "string" && relPath.length > 0) {
+			const fullPath = joinPath(profile.ref.path, relPath);
+			if (existsSync(fullPath)) {
+				compactPromptText = readFileSync(fullPath, "utf8");
+			}
+		}
+	} catch {
+		compactPromptText = null;
+	}
 
 	return (pi: ExtensionAPI): void => {
 		// Plan 03-04 UX-02: start the 1 Hz footer poller on session_start and
@@ -338,6 +367,14 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 				},
 			});
 		}
+
+		// Plan 03.1-01 Task 2 — register /compact and /clear slash commands
+		// (D-31, D-32). These are UX primitives, NOT telemetry, so they
+		// register regardless of the telemetryEnabled gate. /compact is a
+		// manual escape valve at any context level; /clear resets the
+		// session from an over-full state (interactive-only).
+		registerCompactCommand(pi, { compactPromptText });
+		registerClearCommand(pi);
 
 		// Plan 03-03 — turn_start handler invokes emmyCompactionTrigger per
 		// D-11 turn-boundary atomicity (Pitfall #3). Plan 03.1-01 (D-30)
