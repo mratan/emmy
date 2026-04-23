@@ -14,8 +14,8 @@ progress:
 
 # State: Emmy
 
-**Last updated:** 2026-04-22
-**Updated by:** executor (Phase 3 CLOSED — Plan 03-07 complete; v3 profile hash `sha256:2beb99c7...d4d3718` certified; 8 Phase-3 REQ-IDs flipped + 5 Phase-2 Done† promoted; CLOSEOUT.md written; 5/5 Phase-3 SCs green)
+**Last updated:** 2026-04-23
+**Updated by:** executor (Phase 4 CLOSED — Plans 04-01..04-06 complete; Gemma 4 26B A4B MoE v1 shipped + Python swap primitive + TS `/profile` slash command + routes.yaml + 3 Qwen v3.1 sibling variants + OTel variant/role stamping + D-19 no-model-conditionals audit; 5 REQ-IDs flipped — SERVE-03 + PROFILE-07 Done, PROFILE-08 + HARNESS-08 + UX-04 Done†; 5/5 SCs green; Gemma 4 v1 hash `sha256:6d2884fb...384450`; cumulative 43/68 REQ-IDs Done)
 
 ---
 
@@ -23,7 +23,7 @@ progress:
 
 **Project:** Emmy — fully-local coding agent on NVIDIA DGX Spark
 **Core Value:** A local coding agent good enough to be the author's daily driver, structured rigorously enough to be a public research artifact others can reproduce — with no cloud dependency anywhere in the loop.
-**Current Focus:** Phase 04 — gemma-4-profile-profile-system-maturity
+**Current Focus:** Phase 05 — eval-harness + reproducible benchmark suite (Phase 4 CLOSED 2026-04-23)
 
 **Authoritative documents:**
 
@@ -45,15 +45,17 @@ Plan: Not started
 **Phase 1:** Serving Foundation + Profile Schema — closed 2026-04-21 with 3 documented deferrals; see `.planning/phases/01-serving-foundation-profile-schema/01-CLOSEOUT.md`
 **Phase 2:** Pi-Harness MVP — Daily-Driver Baseline — closed 2026-04-21 with SC-1 green + SC-2/3/4/5 pass; 5 Phase-3 wire-through deferrals; see `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-CLOSEOUT.md`
 **Phase 3:** Observability + Agent-Loop Hardening + Lived-Experience — closed 2026-04-22 with SC-1 phase3 green + SC-2/3/4/5 pass; v3 profile hash `sha256:2beb99c7...d4d3718`; 8 Phase-3 REQ-IDs + 5 Phase-2 Done† promoted to Done (13 total flipped; cumulative 36); 5 operator-gated evidence items deferred (not blockers); see `.planning/phases/03-observability-agent-loop-hardening-lived-experience/03-CLOSEOUT.md`
-**Next:** `/gsd-plan-phase 4` — Gemma 4 26B A4B MoE profile + profile system maturity (`/profile` atomic swap + within-model planner/editor/critic routing).
+**Phase 4:** Gemma 4 Profile + Profile System Maturity — closed 2026-04-23 with SC-2 + SC-5 automated-green + SC-1/SC-3/SC-4 wire-proven end-to-end (4 operator-gated live-rig evidence items deferred per Phase 1 D-15 precedent); Gemma 4 v1 hash `sha256:6d2884fb...384450` + 3 Qwen v3.1 sibling variants (default/reason/precise, byte-identical engine sections) + `profiles/routes.yaml`; 5 REQ-IDs flipped (SERVE-03 + PROFILE-07 Done; PROFILE-08 + HARNESS-08 + UX-04 Done†); 188 pytest + 520 bun + 5/5 typecheck + 8/8 profile validates at close; see `.planning/phases/04-gemma-4-profile-profile-system-maturity/04-CLOSEOUT.md`
+**Next:** `/gsd-plan-phase 5` — Eval harness + reproducible benchmark suite (terminal-bench 2.0 primary + SWE-bench Verified milestone + LiveCodeBench rolling + prior Phase 1 prompts for continuity; eval imports harness via public SDK; ≥3 samples + std + provenance + executable-paired-with-judge).
 **Phase 2 Progress:** 100% (9/9 plans landed; Phase-2-close certified v2 hash `sha256:24be3eea...85d8b`)
 **Phase 3 Progress:** 100% (7/7 plans landed; v3 profile hash `sha256:2beb99c773a0e425a3e485459964740640c5f3addbea186738402cf66d4d3718` certified at close 2026-04-22; 8 Phase-3 REQ-IDs + 5 Phase-2 Done† → Done)
+**Phase 4 Progress:** 100% (6/6 plans landed; 26 commits across 4 waves; Gemma 4 v1 + 3 Qwen sibling variants + routes.yaml shipped; D-19 no-model-conditionals audit green in both Python and TS; 4 operator-gated evidence items carry forward with resume signals `p4 kv green` / `p4 thermal floors recorded` → `p4 thermal green` / `sc1 phase4 green` / `sc3 phase4 green` + `sc4 phase4 green`)
 
 **Daily-driver bar: REACHED (end of Phase 2) — 2026-04-21.** SC-1 walkthrough verdict `sc1 green`; author ran pi-emmy against a clean repo, agent completed multi-file task on Qwen3.6 via local vLLM endpoint, no cloud call.
 
 ```
-Phases: [✓][✓][✓][▢][▢][▢][▢]   3/7 phases complete
-Current: Phase 3 CLOSED 2026-04-22 — v3 profile bumped + schema patched + air-gap CI extended + 13 REQ-IDs flipped; ready for Phase 4 (Gemma 4 MoE + profile system maturity)
+Phases: [✓][✓][✓][✓][▢][▢][▢]   4/7 phases complete
+Current: Phase 4 CLOSED 2026-04-23 — Gemma 4 v1 + /profile atomic swap + routes.yaml + 3 Qwen sibling variants + OTel variant/role stamping; 5 REQ-IDs flipped (43/68 cumulative); ready for Phase 5 (eval harness + reproducible benchmark suite)
 ```
 
 **Daily-driver bar:** end of Phase 2 — **REACHED**

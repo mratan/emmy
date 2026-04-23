@@ -24,14 +24,14 @@ A local coding agent good enough to be the author's daily driver, structured rig
 
 <!-- Current scope. Building toward these. Hypotheses until shipped. -->
 
-- [ ] **Gemma 4 26B A4B MoE profile** — second first-class model proves the profile abstraction (Phase 4)
+- [x] **Gemma 4 26B A4B MoE profile** — second first-class model proves the profile abstraction. Validated in Phase 4: Gemma 4 v1 bundle ships alongside Qwen3.6 on same NGC container digest; schema extended with optional `reasoning_parser` + `max_num_seqs`; `/profile` atomic swap primitive (Python `emmy_serve/swap/` + TS slash-command); within-model role routing via `profiles/routes.yaml` + 3 Qwen v3.1 sibling variants (default/reason/precise); D-19 no-model-conditionals audit enforces SC-2 on every CI pass. **Closed 2026-04-23** with 4 operator-gated live-rig evidence deferrals (KV bisection + 2-hour thermal + SC-1/3/4 walkthroughs, all with resume signals).
 - [ ] **Coding-tuned sampling defaults** — per-tool defaults shipped in Phase 2 (profile harness.yaml `tools.per_tool_sampling`); Phase 5 validates against benchmark suite
 - [ ] **Grammar-constrained tool output** — XGrammar reactive retry library shipped in Phase 2 (`@emmy/provider` + lark grammar + 8 tool schemas); Phase 3 wires through pi's `streamSimple` hook so retries fire on the live wire path (currently library-available but never exercised — SC-3 evidence showed 0 retries needed, 100/100 parse rate)
 - [ ] **Long-context optimization** — KV budget + prefix caching + chunked prefill validated in Phase 1; smart context management / per-profile compaction is Phase 3
 - [ ] **Speculative decoding** — Phase 6 (Qwen3-MTP + EAGLE-3 for Gemma; paired spec-on/spec-off benchmark gate)
 - [ ] **Observability + lived-experience telemetry** — Langfuse v3 + OTel GenAI semconv + Alt+Up/Down feedback (Phase 3)
 - [ ] **Reproducible benchmark suite extending Phase 1 prompts** — terminal-bench 2.0 + prior-repo prompts + SWE-bench Verified + LiveCodeBench (Phase 5)
-- [ ] **Multi-model routing within a model (planner/editor/critic)** — Phase 4 after Gemma 4 proves the abstraction
+- [x] **Multi-model routing within a model (planner/editor/critic)** — shipped in Phase 4: `profiles/routes.yaml` + 3 Qwen v3.1 sibling variants with byte-identical engine sections (no vLLM restart on variant swap) + `before_provider_request` hook applies variant-specific sampling/prompts/chat_template_kwargs + OTel spans carry `emmy.profile.variant` + `emmy.role` attributes. Live multi-turn walkthrough is operator-gated (SC-3, resume signal `sc3 phase4 green`). **Closed 2026-04-23** (Done†).
 
 ### Out of Scope
 
