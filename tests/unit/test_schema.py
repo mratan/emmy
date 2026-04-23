@@ -7,6 +7,10 @@ at collection time so `uv run pytest tests/unit` exits 0.
 Phase 3 Plan 03-07 extends with CompactionConfig + WebFetchConfig regression
 tests (D-11..D-17 + D-26..D-28). v1 and v2 must continue to validate without
 the new blocks (backward-compat via Optional); v3 validates with them.
+
+Phase 4 Plan 04-01 adds ``test_all_shipped_profiles_validate`` — a backward-compat
+guard that walks every bundle under ``profiles/*/v*/`` and validates each via
+``loader.load_profile``. Any new profile bundle added to the repo is auto-covered.
 """
 from __future__ import annotations
 from pathlib import Path
@@ -14,6 +18,51 @@ import pytest
 
 schema = pytest.importorskip("emmy_serve.profile.schema")
 loader = pytest.importorskip("emmy_serve.profile.loader")
+
+REPO_ROOT = Path(__file__).parent.parent.parent
+
+
+def _discover_shipped_bundles() -> list[Path]:
+    """Walk profiles/*/v*/ returning every directory that looks like a bundle.
+
+    A directory qualifies as a bundle when it contains all three required
+    files: profile.yaml + serving.yaml + harness.yaml. routes.yaml (Plan 04-04)
+    lives at profiles/routes.yaml (not a directory) and is skipped.
+    """
+    profiles_root = REPO_ROOT / "profiles"
+    if not profiles_root.is_dir():
+        return []
+    out: list[Path] = []
+    for family_dir in sorted(profiles_root.iterdir()):
+        if not family_dir.is_dir():
+            continue
+        for version_dir in sorted(family_dir.iterdir()):
+            if not version_dir.is_dir():
+                continue
+            if all(
+                (version_dir / f).exists()
+                for f in ("profile.yaml", "serving.yaml", "harness.yaml")
+            ):
+                out.append(version_dir)
+    return out
+
+
+def test_all_shipped_profiles_validate():
+    """Phase 4 backward-compat guard: every shipped profile bundle validates.
+
+    Asserts that every bundle under ``profiles/<family>/<version>/`` loads
+    cleanly via ``loader.load_profile``. Adding a new profile auto-extends
+    this test. If this test fails, a schema change broke a prior profile.
+    """
+    bundles = _discover_shipped_bundles()
+    assert bundles, "no shipped profile bundles discovered under profiles/"
+    failures: list[str] = []
+    for b in bundles:
+        try:
+            loader.load_profile(b)
+        except Exception as e:  # pragma: no cover — asserted below
+            failures.append(f"{b.relative_to(REPO_ROOT)}: {e}")
+    assert not failures, "shipped profiles failed to validate:\n  " + "\n  ".join(failures)
 
 
 def test_serving_yaml_valid(profile_path: Path):

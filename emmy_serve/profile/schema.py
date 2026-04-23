@@ -60,6 +60,12 @@ class EngineConfig(BaseModel):
     enable_prefix_caching: bool = True
     enable_chunked_prefill: bool = True
     max_num_batched_tokens: int = Field(gt=0)
+    # Phase 4 — max_num_seqs (vLLM concurrent-sequence cap). Optional because
+    # Qwen v1/v2/v3/v3.1 profiles don't ship it (vLLM default = 256 applies).
+    # Gemma 4 v1 pins it to 4 per NVIDIA Day-1 DGX Spark recipe and as a
+    # defensive knob against vLLM Gemma4ToolParser bug #39392 (pad-token leak
+    # under concurrent batch). See 04-RESEARCH.md §2 + PROFILE_NOTES.md.
+    max_num_seqs: Optional[int] = Field(default=None, gt=0)
 
     # --- loader ---
     load_format: Literal["auto", "fastsafetensors", "safetensors"] = "fastsafetensors"
@@ -69,6 +75,11 @@ class EngineConfig(BaseModel):
 
     # --- tool-call parser ---
     tool_call_parser: Optional[str] = None
+    # Phase 4 D-17 — reasoning_parser is an optional vLLM flag separate from
+    # tool_call_parser. Gemma 4 sets it to "gemma4" so the engine strips
+    # reasoning tokens from the SSE stream; Qwen profiles leave it unset and
+    # validate identically (backward-compat: Optional default None).
+    reasoning_parser: Optional[str] = None
     enable_auto_tool_choice: bool = True
 
     # --- attention + backends ---
