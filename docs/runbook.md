@@ -212,10 +212,125 @@ uv run emmy profile validate profiles/qwen3.6-35b-a3b/v3.1  # every profile vers
 
 ---
 
+## Swapping profiles (`/profile`)
+
+Phase 4 shipped atomic `/profile <name>[@<variant>]` as a pi-emmy slash command. The swap tears down the running vLLM container, brings up a new one against the target profile, and rewires harness-side state (profile cache + OTel stamp processor + web_fetch allowlist) — all without leaving pi-emmy or losing the session transcript.
+
+### The four-phase progress contract (D-02 LOCKED)
+
+During a swap the pi-emmy status row (bottom of TUI) cycles through these four strings **verbatim** — if you see different labels, file against Plan 04-02 / 04-03:
+
+1. `stopping vLLM` (~5 s — existing container torn down)
+2. `loading weights 0%` → `loading weights 50%` → `loading weights 90%` (~90–160 s for a 26–35B MoE on DGX Spark)
+3. `warmup` (~10 s — SP_OK canary + minimal generation smoke)
+4. `ready` (swap complete; next turn lands on the new profile)
+
+Behind the scenes the Python primitive (`uv run python -m emmy_serve.swap.orchestrator --from … --to … --port 8002`) emits one JSON-per-line progress record to stdout; the TS `profile-swap-runner` parses each line and calls `ctx.ui.setStatus("emmy.swap", renderProgress(phase, pct?))`. On `ready` the harness reloads the new profile + hot-swaps the OTel stamp processor (D-23) and the status row clears.
+
+### What happens if a swap fires mid-turn
+
+pi-emmy rejects `/profile` with verbatim message **"swap deferred — request in flight, finish or Ctrl+C first"** (D-06 guard). Either wait for the turn to finish, or Ctrl+C the in-flight generation, then re-issue the `/profile` command.
+
+### Exit codes + what they mean
+
+| Exit | Meaning | User sees |
+|---|---|---|
+| 0 | Swap succeeded end-to-end | `swapped to <new-profile>` |
+| 5 | Pre-flight failed — **prior engine still running** (D-05 validate-first-then-stop) | `swap pre-flight failed (prior model still serving)` — your current profile is unchanged; typical cause is a bad `container_image_digest`, missing weights, or schema violation in the target bundle |
+| 6 | Post-stop failure **with rollback** — prior engine restored | `swap failed; rollback succeeded` OR `swap failed; rollback FAILED — manual recovery required in runs/boot-failures/…` (read the envelope `rollback_succeeded` field) |
+| other non-zero | Unexpected error | `swap failed; see runs/boot-failures/<iso>-…/` — diagnostic bundle captured |
+
+Diagnostic bundles at `runs/boot-failures/<iso>-swap-{preflight,postboot,rollback}-failure/` contain (a) the relevant section of `docker logs`, (b) `profile validate` + `profile hash` output, (c) the rendered `docker run` argv, (d) a `reason.md` narrative.
+
+### Common error messages
+
+| Message | Typical cause | Fix |
+|---|---|---|
+| `swap pre-flight failed (hash mismatch)` | Target bundle was edited in place without recomputing the content hash | `uv run emmy profile hash <bundle> --write` then retry |
+| `swap pre-flight failed (image digest not found locally)` | Target bundle's `container_image_digest` not in local docker | `docker pull nvcr.io/nvidia/vllm:26.03.post1-py3` (or whatever the bundle pins) |
+| `swap pre-flight failed (schema validation failed)` | Target bundle has a schema-invalid field (typo, forbidden extra key) | `uv run emmy profile validate <bundle>` → fix the reported error |
+| `swap failed; rollback succeeded — see runs/boot-failures/<iso>-swap-postboot-failure/` | New profile's `max_model_len` exceeds KV budget, or HF weights missing post-stop, or similar | Read the diagnostic bundle; common fixes: `max_model_len` too high → reduce; missing HF weights → `huggingface-cli download …` |
+| Gemma 4 tool call parse failures on >50% of turns | vLLM upstream bug #39392 or #39468 (pad-token leak / format corruption) | Reactive XGrammar retry (`tools.grammar.mode: reactive`) is the designed backstop; if firing rate >50%, set `engine.max_num_seqs: 1` in the Gemma 4 bundle and re-certify hash |
+
+### Verify a swap actually landed
+
+- **pi-emmy footer** (Phase 3 UX-02): after `ready`, the footer model-name field flips to the new profile
+- **Langfuse trace** (Phase 3 HARNESS-09): the next turn's chat-request span carries `emmy.profile.id` + `emmy.profile.version` matching the new profile
+- **Runtime API** (Phase 1 D-04): `curl -s http://127.0.0.1:8002/v1/models | jq -r '.data[].id'` returns the new model
+
+---
+
+## Within-model role routing (`routes.yaml`)
+
+Phase 4 Plan 04-04 shipped per-turn role-based variant selection: a single loaded model (e.g. Qwen 3.6-35B-A3B) serves multiple variants that differ only in sampling / prompts / grammar (`harness.yaml` fields), not in engine config. The harness classifies each turn's role on-the-fly and applies the matching variant's overrides.
+
+### routes.yaml schema (LiteLLM-shape)
+
+Location: **`profiles/routes.yaml`** (top-level, not per-profile). Absence = default-only mode (harness falls back to the boot-time profile for every turn).
+
+```yaml
+default: qwen3.6-35b-a3b@v3.1-default
+
+roles:
+  plan:   qwen3.6-35b-a3b@v3.1-reason
+  edit:   qwen3.6-35b-a3b@v3.1-precise
+  critic: qwen3.6-35b-a3b@v3.1-default
+```
+
+- `default:` — the `<profile>@<variant>` route used when the classifier returns "default"
+- `roles:` — flat map; `plan`, `edit`, `critic` at minimum. Missing roles silently fall back to `default`.
+- Variant resolver picks `v3.1-reason > v3.1-* > first variant` in that preference order (Plan 04-03).
+
+### How the classifier picks a role
+
+Per-turn, in `before_provider_request` (pi 0.68 hook), the harness runs this decision tree (Plan 04-04 commit `7cb2d7b`):
+
+1. **Explicit payload override** — `payload.emmy.role` set by test harness or replay → wins verbatim
+2. **User-message-text regex** — the last user message starts with one of:
+   - `plan:` / `think about` / `architect` / `design` / `strategy` / `outline` → role `plan`
+   - `edit` / `write` / `modify` / `rename` / `refactor` / `fix` → role `edit`
+   - `review` / `critique` / `audit` / `check` / `verify` → role `critic`
+3. **Tools-hint refinement** — on iteration 2+ of a turn, if `payload.tools[]` contains a function named `edit` or `write` → role `edit` (refines an earlier "default")
+4. **Fallback** — role `default`
+
+One turn can carry spans with different `emmy.role` values across iterations (classifier re-fires on each iteration). Scoring convention: a turn is "correctly routed" iff its FINAL chat-request span (the one that produced the tool call that ran) carries the expected role.
+
+### Inspect what role/variant fired on each turn
+
+```bash
+# Option 1 — JSONL sink (always on, Phase 3 D-10):
+grep -E 'emmy\.profile\.variant|emmy\.role' ~/.emmy/telemetry/*.jsonl | tail -20
+
+# Option 2 — Langfuse UI (if provisioned):
+# Open http://127.0.0.1:3000 → drill into the session → inspect chat-request span attrs:
+#   emmy.profile.id         = "qwen3.6-35b-a3b"
+#   emmy.profile.version    = "v3.1-default"   (the base profile on which /profile was set)
+#   emmy.profile.variant    = "v3.1-reason"    (the variant that actually answered this turn)
+#   emmy.profile.variant_hash = sha256:705dcb60...   (per 04-04-SUMMARY.md)
+#   emmy.role               = "plan"
+```
+
+### Temporarily disable role routing
+
+Rename or delete `profiles/routes.yaml`. The harness silently falls back to default-only mode (absence is valid per D-08). Restart pi-emmy to re-read.
+
+### Known variant hashes (Phase 4 close)
+
+| Variant | Content hash | Sampling override | chat_template_kwargs |
+|---|---|---|---|
+| `v3.1-default` | `sha256:6ff80f620720563652f192d42da47418ecb2bfd96d3eacd6166252c35d65a4cf` | temperature=0.2 (Qwen team coding default) | enable_thinking=false |
+| `v3.1-reason` | `sha256:705dcb60bcfc1236d70298c967a20ad3eebbc143a48d0770ae1e2364c3e4836f` | temperature=0.6 (Qwen reasoning guidance) | enable_thinking=true |
+| `v3.1-precise` | `sha256:f16edde8cfe273ad9e9f3dd7a2ab3b03a7060a2acbb61e632585ed5ca19a95b2` | temperature=0.0 + every tool 0.0 (hash-anchored edits) | enable_thinking=false |
+
+`serving.yaml` is byte-identical across all three variants (CI-enforced by `tests/unit/test_variant_engine_byte_identity.py`). Switching variants does NOT trigger a vLLM restart — it's a pure harness-state change on the next turn.
+
+---
+
 ## Reference: where phase deferrals live
 
 - Phase 1 operator-gated items → `.planning/phases/01-serving-foundation-profile-schema/01-CLOSEOUT.md § Deferrals`
 - Phase 3 operator-gated items → `.planning/phases/03-observability-agent-loop-hardening-lived-experience/03-HUMAN-UAT.md`
 - Phase 3.1 close + carry-forward → `.planning/phases/03.1-operational-polish-minimal-ram-profile-live-auto-compaction-/03.1-CLOSEOUT.md`
+- **Phase 4 operator-gated items → `.planning/phases/04-gemma-4-profile-profile-system-maturity/04-CLOSEOUT.md § Carry-forward / deferrals`** (KV bisection + thermal replay + SC-1 / SC-3 / SC-4 walkthroughs; scaffolds at `runs/phase4-{kv,thermal,sc1,sc3,sc4}/PENDING.md`)
 
 `/gsd-audit-uat` surfaces all currently-open UAT items across phases.
