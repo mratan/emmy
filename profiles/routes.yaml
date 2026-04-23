@@ -1,0 +1,28 @@
+# Emmy routes.yaml — within-model role routing (Phase 4 D-08, D-09)
+# LiteLLM-shaped. Read by @emmy/ux/routes-loader.ts at session start + on /profile swap.
+# See .planning/phases/04-gemma-4-profile-profile-system-maturity/04-RESEARCH.md §4.1 for
+# the authoritative spec and .../04-CONTEXT.md D-08..D-12 for the locked decisions.
+#
+# Semantics:
+#   - `default:` is applied to any turn whose role heuristic returns "default".
+#   - `roles.<name>` is applied when the harness before_provider_request hook
+#     classifies the turn as <name>. Role selection is TOOL-NAME or MESSAGE-REGEX
+#     based — NEVER model-name based (D-19 "no model-name conditionals").
+#   - Phase 4 ships Qwen variants only (D-08 default). Engine byte-identity is
+#     enforced across sibling variants (tests/unit/test_variant_engine_byte_identity.py),
+#     so switching between variants does NOT restart the vLLM engine — only
+#     harness-side state (sampling, chat_template_kwargs, prompts) mutates per turn.
+
+default: qwen3.6-35b-a3b@v3.1-default
+
+roles:
+  plan:   qwen3.6-35b-a3b@v3.1-reason
+  edit:   qwen3.6-35b-a3b@v3.1-precise
+  critic: qwen3.6-35b-a3b@v3.1-default
+
+# Gemma 4 variants — Phase 5+ (deferred; Phase 4 SC-3 lands Qwen only per D-08).
+# When Gemma 4 siblings are authored, uncomment and update. Cross-model routing
+# (multiple models co-loaded) is HARNESS-08 v2 territory and NOT shipped in
+# Phase 4 — Spark's 128 GB UMA forbids dual-load by default.
+#
+# gemma-4-26b-a4b-it-default: gemma-4-26b-a4b-it@v1

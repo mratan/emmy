@@ -1,0 +1,86 @@
+# profiles/qwen3.6-35b-a3b/v3.1-precise/harness.yaml
+# Phase 4 — precise role variant of v3.1 (HARNESS-08). Engine byte-identical
+# to v3.1 base (D-10); harness diverges in sampling_defaults.temperature (0.0 —
+# greedy, deterministic), all per_tool_sampling temperatures at 0.0, and
+# chat_template_kwargs {enable_thinking: false}. Intended for the `edit` role
+# (hash-anchored edits; TOOLS-03 locked Phase 2 determinism discipline).
+# See PROFILE_NOTES.md §"Variant Rationale (Phase 4 HARNESS-08)".
+
+# --- variant-level sampling (Phase 4 HARNESS-08 — read by before_provider_request) ---
+sampling_defaults:
+  temperature: 0.0                               # greedy decoding; deterministic output (CLAUDE.md Hash-anchored edits + TOOLS-03)
+  top_p: 1.0                                     # unrestricted top_p — has no effect when temperature=0 but documented explicitly
+  top_k: 40                                      # base v3.1 parity (inert when temperature=0)
+  max_tokens: 8192                               # base v3.1 parity
+chat_template_kwargs:
+  enable_thinking: false                         # precise variant: no reasoning turns — deterministic tool emission
+
+prompts:
+  system: prompts/system.md                    # SP_OK canary uses this (Phase 1 D-07)
+  edit_format: prompts/edit_format.md          # Hashline per-line hash-anchored (D-05..D-09)
+  tool_descriptions: prompts/tool_descriptions.md  # 8 native tools; <2000 char budget per HARNESS-06
+  use_system_role: true                         # Qwen honors system role; see Pitfall #6 / D-07
+  prepend_system_text: ""                       # CONTEXT-04 layering done at runtime in @emmy/ux
+
+context:
+  max_input_tokens: 114688                       # = max_model_len(131072) - output_reserve(16384). See PROFILE_NOTES.md.
+  include_repo_map: false                        # Phase 3 (Aider-style ranked symbol map)
+  repo_map_max_tokens: 0                         # Phase 3
+  default_pruning: head_tail                     # Legacy; superseded by compaction block below when configured
+  compaction:
+    # D-11..D-17 — per-profile compaction policy. See PROFILE_NOTES.md §Phase 3.
+    soft_threshold_pct: 0.75                    # D-11 — crosses at ~86K of 114K; industry default (Claude Code / Cursor / Cline)
+    preserve_recent_turns: 5                    # D-14 — pi 0.68 DEFAULT_COMPACTION_SETTINGS.keepRecentTokens=20000 ≈ 5 turns at 4K avg
+    summarization_prompt_path: prompts/compact.md  # D-13 — emmy-authored; layers on pi's SUMMARIZATION_SYSTEM_PROMPT
+    preserve_tool_results: error_only           # D-14 / D-15 — Pitfall #15 guardrail: stacktraces are the actual error signal
+
+tools:
+  format: openai                                 # qwen3_coder parser emits OpenAI tool_calls
+  schemas: tool_schemas/                         # 8 JSON files mirror registerNativeTools
+  grammar:
+    # D-11 LOCK: nested {path, mode} shape (B3/C3 fix). NOT a flattened string.
+    path: grammars/tool_call.lark                # XGrammar Lark; reactive backstop only
+    mode: reactive                               # D-11 production path; "disabled" reserved for Plan 08 SC-3 no-grammar baseline (D-14)
+  per_tool_sampling:
+    edit: { temperature: 0.0 }                   # Qwen team recommendation — deterministic structured output
+    bash: { temperature: 0.0 }                   # Qwen team recommendation — deterministic command emission
+    read: { temperature: 0.0 }                   # Emmy decision — file reads are deterministic
+    write: { temperature: 0.0 }                  # precise variant — every tool deterministic
+    grep: { temperature: 0.0 }                   # precise variant — every tool deterministic
+    find: { temperature: 0.0 }                   # precise variant — every tool deterministic
+    ls: { temperature: 0.0 }                     # precise variant — every tool deterministic
+    web_fetch: { temperature: 0.0 }              # precise variant — every tool deterministic
+    web_search: { temperature: 0.0 }             # precise variant — every tool deterministic
+  web_fetch:
+    # D-26 — default-deny allowlist; hostname-EXACT matching enforced at runtime
+    # per Plan 03-06 (auditWebFetchUrl). CLAUDE.md "documentation reading allowed".
+    allowlist:
+      - docs.python.org
+      - developer.mozilla.org
+      - docs.vllm.ai
+      - huggingface.co
+      - docs.langfuse.com
+    # Plan 03.1-02 D-35 — returned-URL bypass TTL (ms). URLs returned by a
+    # recent web_search call are fetchable without allowlist entry for this
+    # many ms. Exact URL match (NOT hostname substring) per T-03.1-02-02.
+    # 0 disables the bypass entirely.
+    search_bypass_ttl_ms: 300000
+  web_search:
+    # Plan 03.1-02 D-34 — SearxNG-backed web_search tool. base_url is loopback-
+    # only; tool is NOT registered when enabled=false OR EMMY_WEB_SEARCH=off
+    # OR EMMY_TELEMETRY=off. Rate-limited per-turn (T-03.1-02-03).
+    enabled: true
+    base_url: http://127.0.0.1:8888
+    max_results_default: 10
+    rate_limit_per_turn: 10
+    timeout_ms: 10000
+
+agent_loop:
+  max_iterations: 25                             # Unchanged from v1; revisit at Phase 5 eval
+  retry_on_unparseable_tool_call: 2              # Paired with SC-3 parse-rate gate (Plan 08); D-11 reactive retry budget
+  retry_on_empty_response: 1                     # Pitfall #6 — one retry before surfacing as SP-delivery suspicion
+  self_correction: enabled                       # ReAct self-correction on parseable tool errors
+
+advanced_settings_whitelist:
+  - reasoning_effort                             # Aider allowlist pattern; per-call without engine restart
+  - thinking_budget                              # Aider allowlist pattern

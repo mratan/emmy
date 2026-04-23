@@ -304,6 +304,29 @@ class AgentLoopConfig(BaseModel):
     self_correction: Literal["enabled", "disabled"]
 
 
+class VariantSamplingDefaults(BaseModel):
+    """Phase 4 HARNESS-08 — variant-level sampling_defaults.
+
+    Sibling variants under the same profile share a byte-identical serving.yaml
+    (engine byte-identity invariant, CI-enforced in
+    tests/unit/test_variant_engine_byte_identity.py). Per-turn sampling
+    overrides therefore live in harness.yaml and are applied by
+    packages/emmy-provider/src/before-request-hook.ts at wire time.
+
+    All fields are OPTIONAL because a variant may only diverge on a subset
+    (e.g. v3.1-default overrides nothing and v3.1-reason overrides only
+    temperature + top_p). Absent fields fall through to the base serving.yaml
+    sampling_defaults.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0)
+    top_p: Optional[float] = Field(default=None, gt=0.0, le=1.0)
+    top_k: Optional[int] = Field(default=None, gt=0)
+    max_tokens: Optional[int] = Field(default=None, gt=0)
+    repetition_penalty: Optional[float] = Field(default=None, gt=0.0)
+
+
 class HarnessConfig(BaseModel):
     """Root of harness.yaml — Phase-2 placeholder values allowed as long as they type-check."""
 
@@ -313,6 +336,19 @@ class HarnessConfig(BaseModel):
     tools: ToolsConfig
     agent_loop: AgentLoopConfig
     advanced_settings_whitelist: list[str] = []
+    # Phase 4 HARNESS-08 (D-10 variant harness divergence) — optional variant-
+    # level sampling_defaults. Applied per-turn by before_provider_request;
+    # sibling variants of the same profile share a byte-identical serving.yaml
+    # but may declare different harness-side sampling_defaults. v1/v2/v3/v3.1
+    # base bundles validate without this block (None).
+    sampling_defaults: Optional[VariantSamplingDefaults] = None
+    # Phase 4 HARNESS-08 — optional variant-level chat_template_kwargs (e.g.
+    # {"enable_thinking": true} on v3.1-reason). Merged into the outgoing chat
+    # request's chat_template_kwargs by before_provider_request. Values are
+    # free-form because upstream chat templates accept arbitrary keys; the
+    # "no-model-conditionals" D-19 audit ensures we don't branch on these
+    # values in code.
+    chat_template_kwargs: Optional[dict[str, Any]] = None
 
 
 # --- profile.yaml manifest (01-RESEARCH.md §4) --------------------------------

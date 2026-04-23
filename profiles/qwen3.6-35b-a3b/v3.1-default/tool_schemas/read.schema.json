@@ -1,0 +1,25 @@
+{
+  "type": "function",
+  "function": {
+    "name": "read",
+    "description": "Read a file; output tags each line with an 8-hex content hash for use by the edit tool. Accepts optional line_range [start,end] (1-based, inclusive).",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "Absolute filesystem path."
+        },
+        "line_range": {
+          "type": "array",
+          "items": { "type": "number" },
+          "minItems": 2,
+          "maxItems": 2,
+          "description": "Optional [start,end] line range, 1-based inclusive."
+        }
+      },
+      "required": ["path"],
+      "additionalProperties": false
+    }
+  }
+}

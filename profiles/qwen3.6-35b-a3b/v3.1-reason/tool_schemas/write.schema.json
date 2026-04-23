@@ -1,0 +1,16 @@
+{
+  "type": "function",
+  "function": {
+    "name": "write",
+    "description": "Overwrite a file with the given content. Atomic fsync (open→writeFile→fsync→close).",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": { "type": "string" },
+        "content": { "type": "string" }
+      },
+      "required": ["path", "content"],
+      "additionalProperties": false
+    }
+  }
+}
