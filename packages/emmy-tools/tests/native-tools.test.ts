@@ -259,6 +259,26 @@ describe("registerNativeTools — bash tool", () => {
     const bash = registered.find((t) => t.name === "bash")!;
     await expect(bash.invoke({ command: "npm publish emmy" })).rejects.toThrow(/denylist/);
   });
+
+  // Regression: `pkill -f <pattern>` must not SIGKILL its own host shell
+  // when <pattern> appears as a literal substring of the command text.
+  // Pre-fix `spawnSync("sh", ["-c", cmd])` put the script body in sh's
+  // argv, so /proc/<sh>/cmdline matched pkill's pattern. Observed against
+  // Gemma 4 on 2026-04-24 restarting a python http.server — every run
+  // returned {exit_code:-1, signal:"SIGKILL"} in 0.0s.
+  test("pkill -f with pattern matching the command text does not self-kill", async () => {
+    const { pi, registered } = makeStubPi();
+    registerNativeTools(pi, { cwd: tmp, profileRef: PROFILE_REF });
+    const bash = registered.find((t) => t.name === "bash")!;
+    // The script's pkill pattern appears literally later in the same script.
+    // Pre-fix this SIGKILL'd the hosting shell before `echo survived` ran.
+    const r = (await bash.invoke({
+      command:
+        "pkill -9 -f 'nonexistent_pattern_for_emmy_bashtool_selfkill_test' 2>/dev/null; echo survived",
+    })) as { stdout: string; exit_code: number; signal: string | null };
+    expect(r.stdout).toContain("survived");
+    expect(r.signal).toBeNull();
+  });
 });
 
 // --- grep / find / ls ----------------------------------------------------

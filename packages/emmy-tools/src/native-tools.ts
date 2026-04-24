@@ -233,11 +233,30 @@ export function registerNativeTools(
             );
           }
         }
-        const result = spawnSync("sh", ["-c", cmd], {
+        // spawnSync via `sh -c "<cmd>"` puts the full script body in sh's
+        // argv, which means `/proc/<sh-pid>/cmdline` contains the script
+        // text. That interacts catastrophically with `pkill -f <pattern>`
+        // calls from inside the script: pkill -f matches on the FULL
+        // cmdline, so whenever the user's command contains its own pkill
+        // pattern as a literal substring (e.g. `pkill -9 -f "python3 -m
+        // http.server"` followed by `nohup python3 -m http.server ...`),
+        // pkill matches the hosting shell itself and the script SIGKILLs
+        // its own interpreter before reaching the next statement.
+        //
+        // Observed 2026-04-24 when Gemma 4 generated a server-restart
+        // helper and every invocation returned
+        // `{stdout:"",stderr:"",exit_code:-1,signal:"SIGKILL"}` in 0.0s.
+        //
+        // Fix: feed the script via stdin. bash's argv becomes `bash -s`,
+        // cmdline no longer contains the script body, and pkill -f can
+        // only match processes whose OWN cmdline contains the pattern —
+        // which is the correct semantic.
+        const result = spawnSync("bash", ["-s"], {
           cwd: String(args.cwd ?? cwd),
           timeout: Number(args.timeout_ms ?? BASH_DEFAULT_TIMEOUT_MS),
           encoding: "utf8",
           maxBuffer: 10 * 1024 * 1024,
+          input: cmd,
         });
         const stdout = truncateHeadTail(result.stdout ?? "", BASH_TRUNC_LINES_PER_SIDE);
         const stderr = truncateHeadTail(result.stderr ?? "", BASH_TRUNC_LINES_PER_SIDE);
