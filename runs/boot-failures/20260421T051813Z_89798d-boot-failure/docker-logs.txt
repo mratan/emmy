@@ -1,0 +1,76 @@
+
+==========
+== vLLM ==
+==========
+
+NVIDIA Release 26.03.post1 (build 295860572)
+vLLM Version 0.17.1+bd67d66a
+Container image Copyright (c) 2025, NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+
+Various files include modifications (c) NVIDIA CORPORATION & AFFILIATES.  All rights reserved.
+
+GOVERNING TERMS: The software and materials are governed by the NVIDIA Software License Agreement
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-software-license-agreement/)
+and the Product-Specific Terms for NVIDIA AI Products
+(found at https://www.nvidia.com/en-us/agreements/enterprise-software/product-specific-terms-for-ai-products/).
+
+NOTE: CUDA Forward Compatibility mode ENABLED.
+  Using CUDA 13.2 driver version 595.45.04 with kernel driver version 580.95.05.
+  See https://docs.nvidia.com/deploy/cuda-compatibility/ for details.
+
+(APIServer pid=1) INFO 04-21 05:13:19 [utils.py:302] 
+(APIServer pid=1) INFO 04-21 05:13:19 [utils.py:302]        █     █     █▄   ▄█
+(APIServer pid=1) INFO 04-21 05:13:19 [utils.py:302]  ▄▄ ▄█ █     █     █ ▀▄▀ █  version 0.17.1+bd67d66a.nvinternal.26.03.post1.48207566
+(APIServer pid=1) INFO 04-21 05:13:19 [utils.py:302]   █▄█▀ █     █     █     █  model   /models/Qwen3.6-35B-A3B-FP8
+(APIServer pid=1) INFO 04-21 05:13:19 [utils.py:302]    ▀▀  ▀▀▀▀▀ ▀▀▀▀▀ ▀     ▀
+(APIServer pid=1) INFO 04-21 05:13:19 [utils.py:302] 
+(APIServer pid=1) INFO 04-21 05:13:19 [utils.py:238] non-default args: {'model_tag': '/models/Qwen3.6-35B-A3B-FP8', 'enable_auto_tool_choice': True, 'tool_call_parser': 'qwen3_coder', 'host': '0.0.0.0', 'model': '/models/Qwen3.6-35B-A3B-FP8', 'max_model_len': 131072, 'quantization': 'fp8', 'served_model_name': ['qwen3.6-35b-a3b'], 'load_format': 'fastsafetensors', 'attention_backend': 'triton', 'gpu_memory_utilization': 0.75, 'kv_cache_dtype': 'fp8', 'enable_prefix_caching': True, 'max_num_batched_tokens': 16384, 'enable_chunked_prefill': True}
+(APIServer pid=1) WARNING 04-21 05:13:19 [envs.py:1710] Unknown vLLM environment variable detected: VLLM_VERSION
+(APIServer pid=1) WARNING 04-21 05:13:19 [envs.py:1710] Unknown vLLM environment variable detected: VLLM_FLASH_ATTN_SRC_DIR
+(APIServer pid=1) WARNING 04-21 05:13:19 [envs.py:1710] Unknown vLLM environment variable detected: VLLM_LOAD_FORMAT
+(APIServer pid=1) INFO 04-21 05:13:23 [model.py:531] Resolved architecture: Qwen3_5MoeForConditionalGeneration
+(APIServer pid=1) INFO 04-21 05:13:23 [model.py:1554] Using max model len 131072
+(APIServer pid=1) INFO 04-21 05:13:23 [cache.py:223] Using fp8 data type to store kv cache. It reduces the GPU memory footprint and boosts the performance. Meanwhile, it may cause accuracy drop without a proper scaling factor.
+(APIServer pid=1) INFO 04-21 05:13:23 [scheduler.py:231] Chunked prefill is enabled with max_num_batched_tokens=16384.
+(APIServer pid=1) Traceback (most recent call last):
+(APIServer pid=1)   File "/usr/local/bin/vllm", line 6, in <module>
+(APIServer pid=1)     sys.exit(main())
+(APIServer pid=1)              ^^^^^^
+(APIServer pid=1)   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/cli/main.py", line 73, in main
+(APIServer pid=1)     args.dispatch_function(args)
+(APIServer pid=1)   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/cli/serve.py", line 112, in cmd
+(APIServer pid=1)     uvloop.run(run_server(args))
+(APIServer pid=1)   File "/usr/local/lib/python3.12/dist-packages/uvloop/__init__.py", line 96, in run
+(APIServer pid=1)     return __asyncio.run(
+(APIServer pid=1)            ^^^^^^^^^^^^^^
+(APIServer pid=1)   File "/usr/lib/python3.12/asyncio/runners.py", line 194, in run
+(APIServer pid=1)     return runner.run(main)
+(APIServer pid=1)            ^^^^^^^^^^^^^^^^
+(APIServer pid=1)   File "/usr/lib/python3.12/asyncio/runners.py", line 118, in run
+(APIServer pid=1)     return self._loop.run_until_complete(task)
+(APIServer pid=1)            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=1)   File "uvloop/loop.pyx", line 1518, in uvloop.loop.Loop.run_until_complete
+(APIServer pid=1)   File "/usr/local/lib/python3.12/dist-packages/uvloop/__init__.py", line 48, in wrapper
+(APIServer pid=1)     return await main
+(APIServer pid=1)            ^^^^^^^^^^
+(APIServer pid=1)   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/api_server.py", line 474, in run_server
+(APIServer pid=1)     await run_server_worker(listen_address, sock, args, **uvicorn_kwargs)
+(APIServer pid=1)   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/api_server.py", line 493, in run_server_worker
+(APIServer pid=1)     async with build_async_engine_client(
+(APIServer pid=1)   File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+(APIServer pid=1)     return await anext(self.gen)
+(APIServer pid=1)            ^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=1)   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/api_server.py", line 97, in build_async_engine_client
+(APIServer pid=1)     async with build_async_engine_client_from_engine_args(
+(APIServer pid=1)   File "/usr/lib/python3.12/contextlib.py", line 210, in __aenter__
+(APIServer pid=1)     return await anext(self.gen)
+(APIServer pid=1)            ^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=1)   File "/usr/local/lib/python3.12/dist-packages/vllm/entrypoints/openai/api_server.py", line 124, in build_async_engine_client_from_engine_args
+(APIServer pid=1)     vllm_config = engine_args.create_engine_config(usage_context=usage_context)
+(APIServer pid=1)                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=1)   File "/usr/local/lib/python3.12/dist-packages/vllm/engine/arg_utils.py", line 1814, in create_engine_config
+(APIServer pid=1)     attention_config.backend = AttentionBackendEnum[
+(APIServer pid=1)                                ^^^^^^^^^^^^^^^^^^^^^
+(APIServer pid=1)   File "/usr/local/lib/python3.12/dist-packages/vllm/v1/attention/backends/registry.py", line 28, in __getitem__
+(APIServer pid=1)     raise ValueError(
+(APIServer pid=1) ValueError: Unknown attention backend: 'TRITON'. Valid options are: FLASH_ATTN, FLASH_ATTN_DIFFKV, TRITON_ATTN, ROCM_ATTN, ROCM_AITER_MLA, ROCM_AITER_TRITON_MLA, ROCM_AITER_FA, ROCM_AITER_MLA_SPARSE, TORCH_SDPA, FLASHINFER, FLASHINFER_MLA, FLASHINFER_MLA_SPARSE, TRITON_MLA, CUTLASS_MLA, FLASHMLA, FLASHMLA_SPARSE, FLASH_ATTN_MLA, NO_ATTENTION, FLEX_ATTENTION, TREE_ATTN, ROCM_AITER_UNIFIED_ATTN, CPU_ATTN, CUSTOM

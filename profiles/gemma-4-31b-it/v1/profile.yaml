@@ -8,7 +8,7 @@ profile:
     \ to FP8; KV bisected + 2x2h thermal validated; bandwidth-bound (~6-10 tok/s expected,\
     \ NOT a gate)"
   created: '2026-04-24'
-  hash: sha256:cf1cc07d4aa93f9d51d90bee5405b13fe0efdd9b2bd8c295c8d87d2d5f45538b
+  hash: sha256:b62b0109448a4b290368cab5f079ba4a65b4288db939756df1ed0d30051093a0
   hash_algorithm: sha256
   hash_manifest_version: 1
   tags:

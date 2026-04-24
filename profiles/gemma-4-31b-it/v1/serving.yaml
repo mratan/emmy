@@ -17,7 +17,7 @@ engine:
 
   # --- context + memory ---
   max_model_len: 131072                            # 128K; byte-identical to v2
-  gpu_memory_utilization: 0.45                     # SEED ONLY — find_kv_budget.py is SOLE sanctioned writer to this field (CLAUDE.md Pitfall #1). More conservative than v2's 0.86 due to 31B BF16 weights ~61 GB of 128 GB UMA leaving less KV headroom. Task 7 overwrites; do NOT hand-edit.
+  gpu_memory_utilization: 0.86                     # SEED ONLY — find_kv_budget.py is SOLE sanctioned writer to this field (CLAUDE.md Pitfall #1). More conservative than v2's 0.86 due to 31B BF16 weights ~61 GB of 128 GB UMA leaving less KV headroom. Task 7 overwrites; do NOT hand-edit.
   kv_cache_dtype: fp8                              # 04-RESEARCH.md §2 (Gemma 4 vLLM recipe)
   enable_prefix_caching: true                      # SERVE-07
   enable_chunked_prefill: true                     # SERVE-07

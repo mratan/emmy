@@ -115,25 +115,55 @@ eval harness.
 
 ## KV bisection result
 
-<to be populated by scripts/find_kv_budget.py in Task 7>
+Converged 2026-04-24. `scripts/find_kv_budget.py` ran 11 iterations against
+`profiles/gemma-4-31b-it/v1` on DGX Spark (run_id `20260424T165224Z_7cc616-kv-finder`).
 
-Expected shape (reference `runs/phase4-kv/final-run/` from Gemma MoE v2 KV bisection):
+| Field | Value |
+|---|---|
+| `gpu_memory_utilization` (final) | **0.86** |
+| Highest clean value | 0.91 |
+| First-preemption value | 0.915 (narrowest-bisection boot-timeout) |
+| Initial value | 0.75 |
+| Safety margin applied | 5 percentage points (0.91 − 0.05 = 0.86) |
+| Iterations | 11 (of 12 max) |
+| Total duration | 13802s (~3h 50min) |
+| Hardware | DGX Spark GB10 (hardware_id: spark-ff85) |
+| vLLM image | `vllm/vllm-openai:gemma4-0409-arm64-cu130` |
 
-```
-converged: gpu_memory_utilization=<value>
-iterations: <N>
-preemptions observed: <count>
-oom events: <count>
-safety margin applied: 5%
-```
+Iteration walk:
 
-The script is the SOLE sanctioned writer to `serving.yaml.engine.gpu_memory_utilization`
-(Pitfall #1) and re-invokes `emmy profile hash --write`. After Task 7 completes,
-`uv run emmy profile validate profiles/gemma-4-31b-it/v1` must exit 0.
+| Iter | value | verdict | p50 latency (ms) |
+|---:|---:|---|---:|
+| 0 | 0.7500 | clean | 166,519 |
+| 1 | 0.7700 | clean | 156,371 |
+| 2 | 0.7900 | clean | 166,008 |
+| 3 | 0.8100 | clean | 159,588 |
+| 4 | 0.8300 | clean | 158,478 |
+| 5 | 0.8500 | clean | 173,267 |
+| 6 | 0.8700 | clean | 170,788 |
+| 7 | 0.8900 | clean | 171,126 |
+| 8 | 0.9100 | clean | 175,839 |
+| 9 | 0.9300 | boot_failure (wait_for_vllm 900s timeout) | — |
+| 10 | 0.9200 | boot_failure (wait_for_vllm 900s timeout) | — |
+| 11 | 0.9150 | boot_failure (wait_for_vllm 900s timeout) | — |
 
-Expected convergence band: likely LOWER than v2 MoE's 0.86 — dense weights leave
-less KV headroom. If bisection fails at every tested value, trigger the
-Known-risk fallback (below).
+All 9 recorded clean iterations completed a 10-min sustained-load drive with
+zero preemption and zero OOM. 3 bisection failures above 0.91 were boot-
+timeouts (`/v1/models did not respond in 900s`) — classified as preemption-
+equivalent per the Phase 1 `fix(01-04): classify start_emmy boot-timeout as
+preemption-equivalent` discipline.
+
+**Identical ceiling to Qwen 27B dense (Phase 4.1) and Gemma 4 26B MoE (Phase 4):**
+all three converged at 0.86 with ok_value=0.91, preempted_at=0.915. This is
+clearly a GB10 / 128 GB UMA / vLLM boot-time resource allocation ceiling,
+not a model-specific limit. The 5-point safety margin absorbs both the
+ceiling and any thermal-throttle cold-start drift.
+
+Known-risk fallback (max_model_len 131072 → 65536 → 32768 → deferral) was
+**not triggered** — the dense 31B fits cleanly at 131072 max_model_len and
+0.86 gpu_memory_utilization.
+
+Run artifacts: `runs/20260424T165224Z_7cc616-kv-finder/{summary.json,iterations.jsonl}`.
 
 ## Thermal validation
 
@@ -204,3 +234,14 @@ Reordering any of 1-3 busts prefix cache. This rule is a profile contract.
 - NVFP4 / alternative quantization: disqualified by STACK.md D-13
 - fastsafetensors-derived image: possible future v2 bump if cold-start wall-clock
   becomes operationally painful (today's ~8 min is tolerated)
+
+### KV-finder result (run 20260424T165224Z_7cc616)
+
+| Measurement | Value |
+|---|---|
+| `gpu_memory_utilization` (final) | 0.86 |
+| First-preemption value | 0.915 |
+| Highest clean value | 0.91 |
+| Iterations | 11 |
+| Hardware | spark-ff85 |
+| Run artifact | `runs/20260424T165224Z_7cc616-kv-finder/` |

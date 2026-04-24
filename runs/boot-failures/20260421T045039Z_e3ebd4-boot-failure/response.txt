@@ -1,0 +1,3 @@
+Thinking Process:
+1.  **Analyze User Input:** The user said "ping".
+2.  **Check Constraints:** The system prompt explicitly states
