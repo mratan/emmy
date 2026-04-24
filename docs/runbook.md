@@ -258,6 +258,27 @@ Diagnostic bundles at `runs/boot-failures/<iso>-swap-{preflight,postboot,rollbac
 - **Langfuse trace** (Phase 3 HARNESS-09): the next turn's chat-request span carries `emmy.profile.id` + `emmy.profile.version` matching the new profile
 - **Runtime API** (Phase 1 D-04): `curl -s http://127.0.0.1:8002/v1/models | jq -r '.data[].id'` returns the new model
 
+### First-time swap to Gemma 4
+
+Gemma 4 lives under `profiles/gemma-4-26b-a4b-it/`. **Always swap to `v2/` — not `v1/`.** `v1/` targets NGC `26.03.post1-py3` whose Transformers library pre-dates `Gemma4ForCausalLM`; engine boot fails at `KeyError: invalid tool call parser: gemma4` followed by `pydantic ValidationError: model type 'gemma4' not recognized`. Kept in-tree only as historical record; do not boot.
+
+`v2/` targets the upstream **`vllm/vllm-openai:gemma4-0409-arm64-cu130`** image (vLLM 0.19.1.dev6 + Transformers 5.5.0 + CUDA 13.0 + aarch64). Three things to know before the first swap:
+
+1. **Pull the image first** (one-time, ~8 GB):
+   ```bash
+   docker pull vllm/vllm-openai:gemma4-0409-arm64-cu130
+   ```
+   The digest is pinned in `profiles/gemma-4-26b-a4b-it/v2/serving.yaml` — no re-tagging needed. After the pull, `docker inspect vllm/vllm-openai:gemma4-0409-arm64-cu130 --format '{{.Id}}'` should match `sha256:db59febc6c47...`.
+
+2. **Cold boot is ~7 minutes**, not ~3. The upstream image doesn't bundle fastsafetensors (NGC's loader). Plain `safetensors` weight load is ~4× slower — this is the accepted tradeoff for Day-1 Gemma 4 support, and the probe timeout in `scripts/smoke_test.py` is 900 s (15 min ceiling). If you see `BOOT REJECTED (wait_for_vllm) /v1/models did not respond in 900s`, that's a real hang, not the slow loader.
+
+3. **Pull weights into `/models/gemma-4-26B-A4B-it`** (~52 GB BF16; vLLM runtime-quants to FP8 on boot):
+   ```bash
+   huggingface-cli download google/gemma-4-26B-A4B-it --local-dir /models/gemma-4-26B-A4B-it
+   ```
+
+Tuned defaults in `v2/`: `gpu_memory_utilization=0.86` (measured via 11-iteration KV bisection on spark-ff85), `max_model_len=131072`, `tool_call_parser=gemma4` (vLLM 0.19 native), `quantization=fp8` (runtime, not pre-quantized). Thermal floors (decode p50 35.9 tok/s, p1 33.3 tok/s, GPU clock p5 2405 MHz) are baked into `PROFILE_NOTES.md` frontmatter and re-checked on any `--assert-floors` replay.
+
 ---
 
 ## Within-model role routing (`routes.yaml`)

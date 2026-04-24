@@ -1,7 +1,7 @@
 # Emmy
 
 Fully-local coding agent on NVIDIA DGX Spark. Two architecturally separate parts:
-1. **Specialized vLLM serving** (`emmy-serve`) for Qwen 3.6 / Gemma 4 in an NVIDIA container — coding-tuned sampling, grammar-constrained tool output, long-context optimization.
+1. **Specialized vLLM serving** (`emmy-serve`) for Qwen 3.6 (daily driver) and Gemma 4 (alternate) in digest-pinned containers — coding-tuned sampling, grammar-constrained tool output, long-context optimization.
 2. **pi-mono based harness** (`pi-emmy`) exposing all eight customization surfaces opinionated harnesses hide.
 
 **Done bar:** daily-driver replacement for Claude Code AND research-grade reproducible artifact. **No cloud INFERENCE anywhere in the loop.** Local-first egress via a self-hosted SearxNG instance is the single authorized outbound component; everything else the harness talks to is loopback.
@@ -15,8 +15,12 @@ Fully-local coding agent on NVIDIA DGX Spark. Two architecturally separate parts
 - **Container runtime:** Docker with NVIDIA Container Toolkit; `docker compose v2`.
 - **Node/Bun:** Bun 1.3+ for the TS harness (`curl -fsSL https://bun.sh/install | bash`).
 - **Python:** 3.11+ via `uv` (`curl -LsSf https://astral.sh/uv/install.sh | sh`).
-- **Model weights:** Qwen3.6-35B-A3B-FP8 pulled from HuggingFace to `/models/Qwen3.6-35B-A3B-FP8` (≈35GB). Gemma 4 is Phase 4.
-- **vLLM container:** `nvcr.io/nvidia/vllm:26.03.post1-py3` (digest pinned in `profiles/*/serving.yaml` — never upstream PyPI).
+- **Model weights:**
+  - Qwen 3.6-35B-A3B-FP8 (daily driver) → `/models/Qwen3.6-35B-A3B-FP8` (≈35 GB).
+  - Gemma 4 26B-A4B-it (optional alternate model) → `/models/gemma-4-26B-A4B-it` (≈52 GB BF16; vLLM runtime-quants to FP8 on boot).
+- **vLLM containers** (digest pinned in `profiles/*/serving.yaml` — never upstream PyPI):
+  - **Qwen** → `nvcr.io/nvidia/vllm:26.03.post1-py3` (NGC, fastsafetensors loader, ~3 min cold start).
+  - **Gemma 4** → `vllm/vllm-openai:gemma4-0409-arm64-cu130` (upstream, vLLM 0.19.1.dev6 + Transformers 5.5.0; Day-1 Gemma 4 support that NGC 26.03.post1 predates). Plain safetensors loader only — ~7 min cold start.
 
 ---
 
@@ -53,8 +57,13 @@ pi-emmy
 # One-shot
 pi-emmy --print "Summarize the package.json and tell me which package has the most deps"
 
-# Profile switching (v2 baseline / v3 Phase-3-locked / v3.1 daily-driver)
+# Profile switching at launch (v2 baseline / v3 Phase-3-locked / v3.1 daily-driver)
 pi-emmy --profile profiles/qwen3.6-35b-a3b/v3
+
+# Swap to Gemma 4 26B-A4B-it (requires separate cold-boot on the upstream container
+# — ~7 min; not fastsafetensors. See runbook § "Swapping profiles" for the
+# D-02 progress phases and exit-code taxonomy.)
+pi-emmy --profile profiles/gemma-4-26b-a4b-it/v2
 
 # Environment inspection
 pi-emmy --print-environment
@@ -64,6 +73,7 @@ EMMY_TELEMETRY=off pi-emmy        # disable JSONL + OTLP telemetry (badge OFF)
 EMMY_WEB_SEARCH=off pi-emmy       # disable web_search tool (8-tool floor; badge OFFLINE OK regardless of SearxNG)
 
 # Slash commands (inside interactive TUI)
+/profile <name>[@variant]         # atomic swap of serving engine + harness state (Phase 4). Emits 4 verbatim progress phases: stopping vLLM → loading weights N% → warmup → ready. Exit codes: 0 ok, 5 pre-flight fail (prior engine alive), 6 post-stop fail with rollback. See docs/runbook.md § "Swapping profiles".
 /compact [optional instructions]  # manually compact session context (pi built-in; auto-fires at 75% of max_input_tokens)
 /clear                            # reset session history (keep boot context)
 /quit                             # exit pi-emmy
@@ -83,14 +93,30 @@ docker stop emmy-serve              # stops vLLM serving
 
 Every non-trivial knob lives in a profile. Profile bundles are immutable per version (D-02 from Phase 1); operational changes ship as sibling versions.
 
+### `profiles/qwen3.6-35b-a3b/` (primary — daily driver)
+
 | Version | Status | Daily-driver? | Notes |
 |---------|--------|---------------|-------|
 | v1 | Phase 1 locked | no | Baseline: schema + SP_OK canary + thermal-validated sampling floors. `sha256:b91e747...21913` |
 | v2 | Phase 2 locked | no | Harness MVP baseline. Strict web_fetch allowlist (none). `sha256:24be3eea...85d8b` |
 | v3 | Phase 3 locked | no | Adds OTel telemetry + compaction policy + offline badge + 5-host doc allowlist. `sha256:2beb99c7...d4d3718` |
 | **v3.1** | **daily-driver** | **yes (default)** | **RAM-tuned + live auto-compaction + web_search + web_fetch returned-URL bypass + 3-state badge. `sha256:f9dcabd1...01fc73`** |
+| v3.2 | Phase 5 A/B candidate | no | Same as v3.1 but `max_num_batched_tokens: 16384` (doubled from v3.1's 8192) — kept for eval comparison. |
 
-v1, v2, v3 are byte-identical to their commit-of-record; `uv run emmy profile validate profiles/qwen3.6-35b-a3b/<ver>/` exits 0 for all four.
+v1, v2, v3, v3.1, v3.2 are byte-identical to their commit-of-record; `uv run emmy profile validate profiles/qwen3.6-35b-a3b/<ver>/` exits 0 for all five.
+
+### `profiles/gemma-4-26b-a4b-it/` (alternate — Phase 4)
+
+| Version | Status | Bootable? | Notes |
+|---------|--------|-----------|-------|
+| v1 | superseded | **no** | Targets NGC `26.03.post1-py3` whose Transformers pre-dates `Gemma4ForCausalLM` — engine won't start. Kept only as historical record. |
+| **v2** | Phase 4 locked | **yes** | Upstream `vllm/vllm-openai:gemma4-0409-arm64-cu130` (vLLM 0.19.1.dev6, Transformers 5.5.0). `gpu_memory_utilization=0.86` measured via 11-iter KV bisection on spark-ff85; decode floors (p50 35.9 tok/s, p1 33.3 tok/s) + GPU clock floor (p5 2405 MHz) validated by two consecutive 2-hour thermal replays. `sha256:8f9c23f500...` |
+
+Swap from Qwen 3.6 → Gemma 4 v2 via `/profile gemma-4-26b-a4b-it` inside pi-emmy (or `pi-emmy --profile profiles/gemma-4-26b-a4b-it/v2` at launch). First cold boot is ~7 min because upstream doesn't ship fastsafetensors; subsequent boots are similar (no in-container compile cache yet).
+
+### Role routing (Phase 4, Qwen only)
+
+`profiles/routes.yaml` maps role heuristics (plan / edit / critic / default) to Qwen 3.6 v3.1 sibling variants (same engine bytes, different sampling + prompt). Active whenever the daily-driver profile is Qwen v3.1 — the TUI transparently routes each turn.
 
 ---
 
@@ -165,20 +191,22 @@ Some evidence items from earlier phases are operator-gated — they need a brows
 **From Phase 1:**
 - DGX Spark throughput sweep, SC-5 sampler re-validation, SC-4 air-gap CI self-hosted runner — all queued for opportunistic closure.
 
+**Phase 4:** all operator-gated deferrals **resolved 2026-04-24** (KV bisection on Gemma 4 v2 → 0.86, 2×2h thermal replay "All floors pass", Qwen↔Gemma live round-trip confirmed). See `runs/phase4-closeout/` for the close-out evidence.
+
 See `.planning/phases/03-observability-agent-loop-hardening-lived-experience/03-HUMAN-UAT.md` + `.planning/phases/01-serving-foundation-profile-schema/01-CLOSEOUT.md § Deferrals` for details.
 
 ---
 
 ## Roadmap
 
-Emmy ships in 7 phases across v1 milestones. Cumulative progress: 3/7 phases complete (Phases 1, 2, 3 + decimal polish 3.1); 38/68 v1 REQ-IDs Done.
+Emmy ships in 7 phases across v1 milestones. Cumulative progress: 4/7 phases complete (Phases 1, 2, 3 + decimal polish 3.1, 4); 43/68 v1 REQ-IDs Done.
 
 - **Phase 1** (CLOSED): serving foundation + profile schema
 - **Phase 2** (CLOSED): pi-harness MVP — daily-driver baseline
 - **Phase 3** (CLOSED): observability + agent-loop hardening + lived-experience
 - **Phase 3.1** (CLOSED): operational polish — RAM + live compaction + SearxNG + docs
-- **Phase 4** (next): Gemma 4 profile + profile system maturity
-- **Phase 5**: eval harness (terminal-bench, SWE-bench Verified, LiveCodeBench)
+- **Phase 4** (CLOSED): Gemma 4 profile + profile system maturity (all 4 operator carry-forwards resolved 2026-04-24)
+- **Phase 5** (next): eval harness (terminal-bench, SWE-bench Verified, LiveCodeBench)
 - **Phase 6**: speculative decoding (Qwen3-MTP + EAGLE-3)
 - **Phase 7**: publication + reproducibility artifact
 
