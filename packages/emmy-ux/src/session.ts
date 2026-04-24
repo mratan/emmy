@@ -40,7 +40,7 @@
 
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 import { registerEmmyProvider, type ProfileSnapshot } from "@emmy/provider";
 import {
@@ -419,11 +419,19 @@ async function buildRealPiRuntimeTui(
 	// sessionId + telemetryEnabled through so Plan 03-05 Alt+Up/Down capture
 	// works on the TUI path and Plan 03-02 EMMY_TELEMETRY=off kill-switch is
 	// honored. baseUrl enables Plan 03-04 footer poller on session_start.
+	// profileDir + profilesRoot gate the Plan 04-03 /profile slash command
+	// registration at pi-emmy-extension.ts:721 (absence signals --print mode
+	// where atomic swap makes no sense). profilesRoot is derived from the
+	// loaded bundle (profiles/<name>/<version>/ → ../../) rather than the
+	// cwd-relative default so `pi-emmy` works from any directory.
+	const profilesRoot = dirname(dirname(profile.ref.path));
 	const emmyExtensionOpts: Parameters<typeof createEmmyExtension>[0] = {
 		profile,
 		assembledPromptProvider,
 		baseUrl,
 		telemetryEnabled,
+		profileDir: profile.ref.path,
+		profilesRoot,
 	};
 	if (sessionId !== undefined) emmyExtensionOpts.sessionId = sessionId;
 	const emmyExtension = createEmmyExtension(emmyExtensionOpts);
