@@ -48,6 +48,14 @@ runs/**
 !runs/phase4-sc4/**
 !runs/phase4-closeout/
 !runs/phase4-closeout/**
+!runs/phase4.1-qwen-kv/
+!runs/phase4.1-qwen-kv/**
+!runs/phase4.1-qwen-thermal/
+!runs/phase4.1-qwen-thermal/**
+!runs/phase4.1-gemma-kv/
+!runs/phase4.1-gemma-kv/**
+!runs/phase4.1-gemma-thermal/
+!runs/phase4.1-gemma-thermal/**
 
 # HF cache + models (never committed)
 models/
