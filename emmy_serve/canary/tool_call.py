@@ -43,7 +43,7 @@ def run_tool_call(
         "tools": [tool_schema],
         "tool_choice": "auto",
         "temperature": 0.0,
-        "max_tokens": 128,
+        "max_tokens": 2048,
         "stream": False,
     }
     r = httpx.post(f"{base_url}/v1/chat/completions", json=payload, timeout=60.0)
