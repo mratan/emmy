@@ -57,13 +57,22 @@ pi-emmy
 # One-shot
 pi-emmy --print "Summarize the package.json and tell me which package has the most deps"
 
-# Profile switching at launch (v2 baseline / v3 Phase-3-locked / v3.1 daily-driver)
+# Launch against a non-default Qwen profile (serving must ALREADY be booted on
+# that profile — `pi-emmy --profile` is harness-side only, it does NOT swap
+# the vLLM engine). For a live swap, use /profile inside the TUI instead.
 pi-emmy --profile profiles/qwen3.6-35b-a3b/v3
 
-# Swap to Gemma 4 26B-A4B-it (requires separate cold-boot on the upstream container
-# — ~7 min; not fastsafetensors. See runbook § "Swapping profiles" for the
-# D-02 progress phases and exit-code taxonomy.)
-pi-emmy --profile profiles/gemma-4-26b-a4b-it/v2
+# Run against Gemma 4 26B-A4B-it — TWO separate steps:
+#   1) swap the serving engine (one of the following)
+#      (a) `/profile gemma-4-26b-a4b-it` inside an already-running pi-emmy TUI
+#          — atomic 4-phase swap, ~7 min cold boot (not fastsafetensors)
+#      (b) stop + re-start emmy-serve with the Gemma bundle:
+#          docker stop emmy-serve
+#          bash scripts/start_emmy.sh --profile profiles/gemma-4-26b-a4b-it/v2
+#   2) only if you used (b), launch pi-emmy pointed at the Gemma bundle:
+#          pi-emmy --profile profiles/gemma-4-26b-a4b-it/v2
+# See docs/runbook.md § "Swapping profiles" (+ "First-time swap to Gemma 4")
+# for the D-02 progress phases and exit-code taxonomy.
 
 # Environment inspection
 pi-emmy --print-environment
@@ -112,7 +121,7 @@ v1, v2, v3, v3.1, v3.2 are byte-identical to their commit-of-record; `uv run emm
 | v1 | superseded | **no** | Targets NGC `26.03.post1-py3` whose Transformers pre-dates `Gemma4ForCausalLM` — engine won't start. Kept only as historical record. |
 | **v2** | Phase 4 locked | **yes** | Upstream `vllm/vllm-openai:gemma4-0409-arm64-cu130` (vLLM 0.19.1.dev6, Transformers 5.5.0). `gpu_memory_utilization=0.86` measured via 11-iter KV bisection on spark-ff85; decode floors (p50 35.9 tok/s, p1 33.3 tok/s) + GPU clock floor (p5 2405 MHz) validated by two consecutive 2-hour thermal replays. `sha256:8f9c23f500...` |
 
-Swap from Qwen 3.6 → Gemma 4 v2 via `/profile gemma-4-26b-a4b-it` inside pi-emmy (or `pi-emmy --profile profiles/gemma-4-26b-a4b-it/v2` at launch). First cold boot is ~7 min because upstream doesn't ship fastsafetensors; subsequent boots are similar (no in-container compile cache yet).
+To swap from Qwen 3.6 → Gemma 4 v2, use `/profile gemma-4-26b-a4b-it` inside a running pi-emmy TUI — that's the atomic 4-phase path that actually restarts emmy-serve. First cold boot is ~7 min because upstream doesn't ship fastsafetensors; subsequent boots are similar (no in-container compile cache yet). `pi-emmy --profile <bundle>` at launch is harness-side only (prompts / tools / sampling) and assumes emmy-serve is already booted on a matching `served_model_name` — it will 404 otherwise; see Quickstart for the full sequence.
 
 ### Role routing (Phase 4, Qwen only)
 
