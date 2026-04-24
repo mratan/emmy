@@ -1,0 +1,15 @@
+total 61112128
+drwxrwxr-x 3 mratanap mratanap        4096 Apr 24 01:50 .
+drwxrwxr-x 6 mratanap mratanap        4096 Apr 24 01:50 ..
+drwxrwxr-x 3 mratanap mratanap        4096 Apr 24 01:26 .cache
+-rw-rw-r-- 1 mratanap mratanap       16448 Apr 24 01:26 chat_template.jinja
+-rw-rw-r-- 1 mratanap mratanap        4621 Apr 24 01:26 config.json
+-rw-rw-r-- 1 mratanap mratanap         208 Apr 24 01:26 generation_config.json
+-rw-rw-r-- 1 mratanap mratanap        1708 Apr 24 01:26 .gitattributes
+-rw-rw-r-- 1 mratanap mratanap 49784788364 Apr 24 01:50 model-00001-of-00002.safetensors
+-rw-rw-r-- 1 mratanap mratanap 12761549884 Apr 24 01:38 model-00002-of-00002.safetensors
+-rw-rw-r-- 1 mratanap mratanap      120246 Apr 24 01:26 model.safetensors.index.json
+-rw-rw-r-- 1 mratanap mratanap        1689 Apr 24 01:26 processor_config.json
+-rw-rw-r-- 1 mratanap mratanap       26683 Apr 24 01:26 README.md
+-rw-rw-r-- 1 mratanap mratanap        2095 Apr 24 01:26 tokenizer_config.json
+-rw-rw-r-- 1 mratanap mratanap    32169626 Apr 24 01:27 tokenizer.json
