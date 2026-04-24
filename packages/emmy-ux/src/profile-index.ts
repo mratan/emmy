@@ -16,13 +16,20 @@
 //     reserves it as the within-model routing config).
 //   - Variant preference order for unspecified variant (resolve(name)):
 //     1. explicit variant argument wins if given
-//     2. "v3.1" (current default in Qwen bundle)
-//     3. first entry starting with "v"
-//     4. first entry overall
+//     2. `profiles/<name>/DEFAULT_VARIANT` file contents if present + valid
+//     3. "v3.1" (legacy Qwen-specific default, kept for back-compat)
+//     4. first entry starting with "v"
+//     5. first entry overall
 //   - Non-directory children + children missing `profile.yaml` are ignored so
 //     half-populated scratch dirs don't corrupt the index.
+//   - DEFAULT_VARIANT file (optional, per-profile-family): a plain-text file
+//     at `profiles/<name>/DEFAULT_VARIANT` containing a single variant name
+//     (e.g. "v2\n"). Sibling to the variant dirs, NOT inside a bundle, so it
+//     cannot perturb any bundle's content hash. Added 2026-04-24 after
+//     `/profile gemma-4-26b-a4b-it` resolved to the unbootable v1 because
+//     alphabetical "first v*" picks v1 over v2.
 
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 export interface ProfileIndex {
@@ -44,6 +51,7 @@ interface Entry {
 	name: string;
 	variants: string[];
 	paths: Record<string, string>;
+	defaultVariant?: string;
 }
 
 /**
@@ -86,7 +94,20 @@ export function scanProfileIndex(profilesRoot: string): ProfileIndex {
 				paths[sub] = subFull;
 			}
 			if (variants.length > 0) {
-				entries.push({ name: dir, variants, paths });
+				// Read DEFAULT_VARIANT marker if present. Only accept values
+				// that reference a variant we actually indexed — otherwise
+				// fall through to the historical preference chain.
+				let defaultVariant: string | undefined;
+				try {
+					const dvPath = join(full, "DEFAULT_VARIANT");
+					if (existsSync(dvPath)) {
+						const claimed = readFileSync(dvPath, "utf8").trim();
+						if (claimed && paths[claimed]) defaultVariant = claimed;
+					}
+				} catch {
+					// Unreadable marker file is treated as absent — silent.
+				}
+				entries.push({ name: dir, variants, paths, defaultVariant });
 			}
 		}
 	}
@@ -116,8 +137,9 @@ export function scanProfileIndex(profilesRoot: string): ProfileIndex {
 			if (!e) return null;
 			if (variant) return e.paths[variant] ?? null;
 			// Default variant selection:
-			//   explicit > "v3.1" > any v* > first
+			//   explicit > DEFAULT_VARIANT marker > "v3.1" (legacy) > any v* > first
 			const pref =
+				e.defaultVariant ??
 				e.variants.find((s) => s === "v3.1") ??
 				e.variants.find((s) => s.startsWith("v")) ??
 				e.variants[0];
