@@ -1,0 +1,15 @@
+{
+  "actual_wall_time_s": 7204.7,
+  "decode_throughput_p1_hour2_tokps": 33.28,
+  "decode_throughput_p50_hour2_tokps": 35.9,
+  "gpu_clock_p50_hour2_mhz": 2496.0,
+  "gpu_clock_p5_hour2_mhz": 2405.0,
+  "gpu_temp_p95_hour2_c": 73.0,
+  "oom_events": 0,
+  "preemptions_hour2": 0,
+  "profile_hash": "sha256:a6cf9914e47e6ac639384f26f242db3f9b818841761983d7551c941d4a2cb94a",
+  "profile_id": "gemma-4-26b-a4b-it",
+  "profile_version": "v2",
+  "run_id": "20260423T235910Z_062507",
+  "target_wall_time_s": 7200
+}

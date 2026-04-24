@@ -8,7 +8,7 @@ profile:
     \ could not boot on NGC 26.03.post1 (Transformers pre-Gemma4ForCausalLM); see\
     \ runs/phase4-sc1/walkthrough.md."
   created: '2026-04-23'
-  hash: sha256:a6cf9914e47e6ac639384f26f242db3f9b818841761983d7551c941d4a2cb94a
+  hash: sha256:8f9c23f500e7ccac3ee2ebdf6ddece6379b3c29c1361c52dc11f8c68f40bc4db
   hash_algorithm: sha256
   hash_manifest_version: 1
   tags:

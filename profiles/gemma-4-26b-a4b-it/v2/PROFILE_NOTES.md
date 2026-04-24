@@ -4,13 +4,13 @@ profile_version: v2
 created: 2026-04-23
 hardware_id: dgx-spark-01
 measured_values:
-  gpu_memory_utilization: 0.55           # seed — operator-gated KV finder (D-15; Plan 04-06) overwrites; resume signal "p4 kv green"
-  cold_start_seconds: 0                   # placeholder — to be measured on v2 boot
-  warm_throughput_tokps: 0                # placeholder — Plan 04-06
-  decode_throughput_p50_hour2_tokps: 0    # placeholder — 2-hour thermal replay overwrites (D-15; Plan 04-06)
-  decode_throughput_p1_hour2_tokps: 0
-  gpu_clock_p5_hour2_mhz: 0
-  gpu_clock_p50_hour2_mhz: 0
+  gpu_memory_utilization: 0.55
+  cold_start_seconds: 0
+  warm_throughput_tokps: 0
+  decode_throughput_p50_hour2_tokps: 35.9
+  decode_throughput_p1_hour2_tokps: 33.3
+  gpu_clock_p5_hour2_mhz: 2405
+  gpu_clock_p50_hour2_mhz: 2496
 validation_runs: []
 ---
 
