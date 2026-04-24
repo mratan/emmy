@@ -1,0 +1,5 @@
+emmy: starting profile=profiles/gemma-4-31b-it/v1 port=8002 airgap=0 run_id=20260424T204343Z-c7933d
+emmy: image ref = sha256:db59febc6c476c9c93701cc9f54917533cee774d4e4bb27eff6fafeae37509f8
+emmy: container started; running smoke test
+smoke ok: tok/s=6.41 tokens_out=100
+emmy-serve ready — profile profiles/gemma-4-31b-it/v1 on http://127.0.0.1:8002 (cold-start 524s, 6.41 tok/s)
