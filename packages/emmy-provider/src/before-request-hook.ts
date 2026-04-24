@@ -80,6 +80,14 @@ export function handleBeforeProviderRequest(args: {
 	// BEFORE pi's extension runtime exists, so this branch is defensive only.
 	if (payload.emmy?.is_sp_ok_canary === true) return;
 
+	// (pre) Plan 04-03 follow-up (2026-04-24): after /profile swap, pi's
+	// ModelRegistry still carries the boot-time served_model_name. vLLM
+	// rejects with 404 ("model X does not exist") because the engine now
+	// answers under the NEW served_model_name. Overwrite payload.model with
+	// the currently-loaded profile's served_model_name on every request —
+	// idempotent pre-swap (same string), corrective post-swap.
+	payload.model = profile.serving.engine.served_model_name;
+
 	// (a) D-02a: enable_thinking:false at request level. Removes a17f4a9.
 	payload.chat_template_kwargs = {
 		...(payload.chat_template_kwargs ?? {}),
