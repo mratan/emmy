@@ -47,7 +47,7 @@ engine:
 
   # --- tool-call parser ---
   tool_call_parser: gemma4                          # D-17 RESOLVED — vLLM 0.19 native Gemma 4 parser
-  reasoning_parser: gemma4                          # D-17 — vLLM strips reasoning tokens engine-side; quirks.strip_thinking_tags=false below
+  reasoning_parser: gemma4                          # D-17 — vLLM attempts to strip reasoning tokens engine-side; on tool-call continuation paths it leaks literal "<|channel>thought\n<channel|>" / residual "thought\n" label (vLLM 0.19.1.dev6 bug repro'd 2026-04-24). Harness backstop via quirks.strip_thinking_tags=true below.
   enable_auto_tool_choice: true                     # required alongside tool_call_parser
 
   # --- attention + backends ---
@@ -82,7 +82,7 @@ guided_decoding:
   default_backend: xgrammar                         # vLLM 0.19 default
 
 quirks:
-  strip_thinking_tags: false                        # gemma4 reasoning_parser strips engine-side; harness does NOT re-strip
+  strip_thinking_tags: true                         # vLLM 0.19.1.dev6's gemma4 reasoning_parser leaves `<|channel>thought\n<channel|>…` AND residual `thought\n` role label in content on tool-call continuation (2026-04-24 repro in runs/phase2-sc3-capture/session-2026-04-24T06-57-37-131Z.jsonl). Harness strip via stripGemma4ChannelBleed() at message_end backstops the parser gap.
   promote_reasoning_to_content: false               # reasoning_parser already routes to content field
   buffer_tool_streams: false                        # gemma4 parser streams tool_calls natively (04-RESEARCH.md §2)
 

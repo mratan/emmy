@@ -83,6 +83,7 @@ import {
 	EMMY_FEEDBACK_UP_KEYID,
 	handleFeedbackRating,
 } from "./feedback-ui";
+import { stripGemma4ChannelBleed } from "./gemma4-strip";
 import { reloadHarnessProfile } from "./harness-swap";
 import {
 	startFooterPoller,
@@ -632,6 +633,34 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 		pi.on("turn_end", () => {
 			resetTurnSearchCount();
 			clearCurrentTurnRoleContext();
+		});
+
+		// Phase 4 post-close follow-up (2026-04-24) — Gemma 4 channel-bleed
+		// strip. vLLM 0.19.1.dev6's gemma4 reasoning_parser leaves thinking
+		// tokens ("<|channel>thought\n<channel|>…" and/or residual "thought\n"
+		// role label) in message content on tool-call continuation paths,
+		// even with chat_template_kwargs.enable_thinking=false. Reproduced
+		// 2026-04-24 against gemma-4-26B-A4B-it on
+		// vllm/vllm-openai:gemma4-0409-arm64-cu130. Gate on the profile's
+		// serving.quirks.strip_thinking_tags so Qwen (which works correctly)
+		// stays untouched; Gemma 4 v2 flips it on in the same commit.
+		//
+		// Fires on message_end (not message_update) because mid-stream token
+		// mutation risks tag-boundary splits. The polluted prefix flashes
+		// briefly in the TUI during streaming but is cleaned in the
+		// persisted AgentMessage, so the NEXT turn's chat history carries
+		// only the clean final answer (the important part — prevents the
+		// model from echoing its own bleed on subsequent turns).
+		pi.on("message_end", (event) => {
+			if (!currentProfile.serving.quirks.strip_thinking_tags) return;
+			const msg = (event as { message?: { role?: string; content?: unknown } }).message;
+			if (!msg || msg.role !== "assistant") return;
+			if (!Array.isArray(msg.content)) return;
+			for (const block of msg.content as Array<{ type?: string; text?: string }>) {
+				if (block && block.type === "text" && typeof block.text === "string") {
+					block.text = stripGemma4ChannelBleed(block.text);
+				}
+			}
 		});
 
 		// Plan 03-08 fix-forward (TELEM-02): register keyboard shortcuts via
