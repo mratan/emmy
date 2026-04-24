@@ -46,6 +46,8 @@ runs/**
 !runs/phase4-sc3/**
 !runs/phase4-sc4/
 !runs/phase4-sc4/**
+!runs/phase4-closeout/
+!runs/phase4-closeout/**
 
 # HF cache + models (never committed)
 models/

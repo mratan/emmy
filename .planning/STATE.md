@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v0.68.0
 milestone_name: milestone
 status: ready_to_plan
-last_updated: "2026-04-23T08:20:09.044Z"
+last_updated: "2026-04-24T04:10:00.000Z"
 progress:
   total_phases: 8
   completed_phases: 5
@@ -14,8 +14,8 @@ progress:
 
 # State: Emmy
 
-**Last updated:** 2026-04-23
-**Updated by:** executor (Phase 4 CLOSED — Plans 04-01..04-06 complete; Gemma 4 26B A4B MoE v1 shipped + Python swap primitive + TS `/profile` slash command + routes.yaml + 3 Qwen v3.1 sibling variants + OTel variant/role stamping + D-19 no-model-conditionals audit; 5 REQ-IDs flipped — SERVE-03 + PROFILE-07 Done, PROFILE-08 + HARNESS-08 + UX-04 Done†; 5/5 SCs green; Gemma 4 v1 hash `sha256:6d2884fb...384450`; cumulative 43/68 REQ-IDs Done)
+**Last updated:** 2026-04-24
+**Updated by:** executor (Phase 4 fully CLOSED including operator-gated carry-forwards — all 4 deferrals from 04-HUMAN-UAT.md resolved on live DGX Spark; Gemma 4 v2 bundle (upstream vllm/vllm-openai:gemma4-0409-arm64-cu130) supersedes v1 per post-close container deferral; `gpu_memory_utilization=0.86` measured via 11-iter KV bisection (3h34m, highest-clean 0.91 × 5% safety); 2×2h thermal replay "All floors pass" with p5 clock 2405 MHz + decode p50 35.9 tok/s; Qwen↔Gemma live round-trip confirmed 3 consecutive swaps. Gemma 4 v2 hash `sha256:8f9c23f500...` with measured-values frontmatter populated. Phase 4 Progress: 100% including carry-forwards. Cumulative 43/68 REQ-IDs Done; ready for Phase 5)
 
 ---
 
@@ -49,7 +49,7 @@ Plan: Not started
 **Next:** `/gsd-plan-phase 5` — Eval harness + reproducible benchmark suite (terminal-bench 2.0 primary + SWE-bench Verified milestone + LiveCodeBench rolling + prior Phase 1 prompts for continuity; eval imports harness via public SDK; ≥3 samples + std + provenance + executable-paired-with-judge).
 **Phase 2 Progress:** 100% (9/9 plans landed; Phase-2-close certified v2 hash `sha256:24be3eea...85d8b`)
 **Phase 3 Progress:** 100% (7/7 plans landed; v3 profile hash `sha256:2beb99c773a0e425a3e485459964740640c5f3addbea186738402cf66d4d3718` certified at close 2026-04-22; 8 Phase-3 REQ-IDs + 5 Phase-2 Done† → Done)
-**Phase 4 Progress:** 100% (6/6 plans landed; 26 commits across 4 waves; Gemma 4 v1 + 3 Qwen sibling variants + routes.yaml shipped; D-19 no-model-conditionals audit green in both Python and TS; 4 operator-gated evidence items carry forward with resume signals `p4 kv green` / `p4 thermal floors recorded` → `p4 thermal green` / `sc1 phase4 green` / `sc3 phase4 green` + `sc4 phase4 green`)
+**Phase 4 Progress:** 100% (6/6 plans landed + **all 4 operator-gated deferrals RESOLVED 2026-04-23 → 2026-04-24**; 26 commits across 4 waves + 4 follow-up commits; Gemma 4 v1 + 3 Qwen sibling variants + routes.yaml shipped; D-19 no-model-conditionals audit green in both Python and TS; `sc1 phase4 green` + `sc3 phase4 green` + `sc4 phase4 green` resolved in prior 2026-04-23 follow-up session; `p4 kv green` + `p4 thermal floors recorded` + `p4 thermal green` resolved 2026-04-24 via Gemma 4 v2 profile bundle: gpu_memory_utilization bisects to 0.86 (11 iters, 3h34m) + 2×2h thermal replay with zero regressions ("All floors pass"). Gemma 4 v2 hash `sha256:8f9c23f500...` measured floors populated.)
 
 **Daily-driver bar: REACHED (end of Phase 2) — 2026-04-21.** SC-1 walkthrough verdict `sc1 green`; author ran pi-emmy against a clean repo, agent completed multi-file task on Qwen3.6 via local vLLM endpoint, no cloud call.
 
