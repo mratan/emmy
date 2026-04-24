@@ -4,13 +4,13 @@ profile_version: v1
 created: 2026-04-24
 hardware_id: dgx-spark-01
 measured_values:
-  gpu_memory_utilization: <will-be-written-by-find_kv_budget>   # Pitfall #1 — scripts/find_kv_budget.py is SOLE writer; seed in serving.yaml is 0.55 placeholder
-  gpu_clock_p5_hour2_mhz: <will-be-written-by-thermal_replay>
-  gpu_clock_p50_hour2_mhz: <will-be-written-by-thermal_replay>
-  decode_throughput_p50_hour2_tokps: <will-be-written-by-thermal_replay>  # informational only per operator directive 2026-04-24 (dense bandwidth-bound; NOT a gate)
-  decode_throughput_p1_hour2_tokps: <will-be-written-by-thermal_replay>   # informational only
+  gpu_memory_utilization: <will-be-written-by-find_kv_budget>
+  gpu_clock_p5_hour2_mhz: 2476
+  gpu_clock_p50_hour2_mhz: 2476
+  decode_throughput_p50_hour2_tokps: 7.6
+  decode_throughput_p1_hour2_tokps: 6.5
   cold_start_seconds: <will-be-written-by-smoke_test>
-  warm_throughput_tokps: <will-be-written-by-smoke_test>                  # informational only
+  warm_throughput_tokps: <will-be-written-by-smoke_test>
 validation_runs: []
 ---
 

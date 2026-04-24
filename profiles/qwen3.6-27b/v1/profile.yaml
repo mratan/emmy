@@ -7,7 +7,7 @@ profile:
     \ for Phase 5 dense-vs-MoE A/B; clone-and-retarget from v3.1 with dense weights;\
     \ KV bisected + 2x2h thermal validated"
   created: '2026-04-24'
-  hash: sha256:ab02fc2fc8559607db848569cc1ab24cea7ee010b26bfcea2760df8b18d2fe2d
+  hash: sha256:c3ccf1e109fc54eed311be5a17b7b788efcd6335c6e9f55a8345d0eed84967bb
   hash_algorithm: sha256
   hash_manifest_version: 1
   tags:

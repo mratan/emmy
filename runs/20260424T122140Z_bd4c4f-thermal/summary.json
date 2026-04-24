@@ -1,0 +1,15 @@
+{
+  "actual_wall_time_s": 7749.1,
+  "decode_throughput_p1_hour2_tokps": 6.47,
+  "decode_throughput_p50_hour2_tokps": 7.57,
+  "gpu_clock_p50_hour2_mhz": 2476.0,
+  "gpu_clock_p5_hour2_mhz": 2476.0,
+  "gpu_temp_p95_hour2_c": 75.0,
+  "oom_events": 0,
+  "preemptions_hour2": 0,
+  "profile_hash": "sha256:ab02fc2fc8559607db848569cc1ab24cea7ee010b26bfcea2760df8b18d2fe2d",
+  "profile_id": "qwen3.6-27b",
+  "profile_version": "v1",
+  "run_id": "20260424T122140Z_bd4c4f",
+  "target_wall_time_s": 7200
+}

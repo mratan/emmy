@@ -1,0 +1,34 @@
+{"category":"coding","duration_s":141.938,"prompt_tokens":121,"t_start":0.002,"task_id":"code_01","tokens_out":1090,"tokens_per_second":7.68}
+{"category":"coding","duration_s":99.729,"prompt_tokens":131,"t_start":146.956,"task_id":"code_02","tokens_out":767,"tokens_per_second":7.69}
+{"category":"coding","duration_s":287.024,"prompt_tokens":228,"t_start":251.703,"task_id":"code_03","tokens_out":2206,"tokens_per_second":7.69}
+{"category":"coding","duration_s":282.482,"prompt_tokens":253,"t_start":543.735,"task_id":"code_04","tokens_out":2169,"tokens_per_second":7.68}
+{"category":"coding","duration_s":273.749,"prompt_tokens":230,"t_start":831.227,"task_id":"code_05","tokens_out":2103,"tokens_per_second":7.68}
+{"error":"timed out","t_start":1710.075,"task_id":"agent_10k_refactor"}
+{"error":"timed out","t_start":2315.186,"task_id":"agent_20k_multifile"}
+{"category":"agent_synthetic","duration_s":180.911,"prompt_tokens":29029,"t_start":2320.2,"task_id":"agent_30k_history","tokens_out":1083,"tokens_per_second":5.99}
+{"error":"timed out","t_start":3106.142,"task_id":"agent_long_output_12k"}
+{"category":"agent_synthetic","duration_s":264.733,"prompt_tokens":20452,"t_start":3111.146,"task_id":"agent_15k_pasted","tokens_out":1909,"tokens_per_second":7.21}
+{"category":"agent_synthetic","duration_s":90.559,"prompt_tokens":23274,"t_start":3380.887,"task_id":"agent_18k_multifile_trace","tokens_out":615,"tokens_per_second":6.79}
+{"error":"timed out","t_start":4076.537,"task_id":"agent_8k_refactor"}
+{"category":"agent_synthetic","duration_s":74.132,"prompt_tokens":8207,"t_start":4081.55,"task_id":"agent_6k_debug","tokens_out":564,"tokens_per_second":7.61}
+{"category":"agent_synthetic","duration_s":0.464,"prompt_tokens":26,"t_start":4160.69,"task_id":"agent_short_output","tokens_out":3,"tokens_per_second":6.47}
+{"category":"tool_sequence","duration_s":7.575,"prompt_tokens":25,"t_start":4166.17,"task_id":"tool_seq_simple_read","tokens_out":58,"tokens_per_second":7.66}
+{"category":"tool_sequence","duration_s":2.631,"prompt_tokens":35,"t_start":4178.762,"task_id":"tool_seq_write_then_read","tokens_out":19,"tokens_per_second":7.22}
+{"category":"tool_sequence","duration_s":26.135,"prompt_tokens":30,"t_start":4186.409,"task_id":"tool_seq_bash_result","tokens_out":201,"tokens_per_second":7.69}
+{"category":"tool_sequence","duration_s":45.845,"prompt_tokens":36,"t_start":4217.561,"task_id":"tool_seq_grep_files","tokens_out":353,"tokens_per_second":7.7}
+{"category":"tool_sequence","duration_s":1.476,"prompt_tokens":39,"t_start":4268.422,"task_id":"tool_seq_edit_after_read","tokens_out":11,"tokens_per_second":7.45}
+{"category":"tool_sequence","duration_s":74.365,"prompt_tokens":3699,"t_start":4274.916,"task_id":"tool_seq_multiturn_3k","tokens_out":553,"tokens_per_second":7.44}
+{"category":"tool_sequence","duration_s":16.04,"prompt_tokens":6271,"t_start":4354.297,"task_id":"tool_seq_multiturn_5k","tokens_out":110,"tokens_per_second":6.86}
+{"category":"tool_sequence","duration_s":42.788,"prompt_tokens":7486,"t_start":4375.355,"task_id":"tool_seq_multiturn_6k","tokens_out":315,"tokens_per_second":7.36}
+{"category":"tool_sequence","duration_s":541.149,"prompt_tokens":9932,"t_start":4423.149,"task_id":"tool_seq_multiturn_8k","tokens_out":4096,"tokens_per_second":7.57}
+{"category":"tool_sequence","duration_s":27.074,"prompt_tokens":12266,"t_start":4969.314,"task_id":"tool_seq_multiturn_10k","tokens_out":193,"tokens_per_second":7.13}
+{"category":"tool_sequence","duration_s":121.456,"prompt_tokens":12274,"t_start":5001.405,"task_id":"tool_seq_multiturn_12k","tokens_out":916,"tokens_per_second":7.54}
+{"category":"coding","duration_s":181.068,"prompt_tokens":121,"t_start":5127.878,"task_id":"code_01","tokens_out":1393,"tokens_per_second":7.69}
+{"category":"coding","duration_s":103.048,"prompt_tokens":131,"t_start":5313.963,"task_id":"code_02","tokens_out":791,"tokens_per_second":7.68}
+{"category":"coding","duration_s":261.754,"prompt_tokens":228,"t_start":5422.029,"task_id":"code_03","tokens_out":2013,"tokens_per_second":7.69}
+{"category":"coding","duration_s":285.84,"prompt_tokens":253,"t_start":5688.791,"task_id":"code_04","tokens_out":2197,"tokens_per_second":7.69}
+{"category":"coding","duration_s":286.819,"prompt_tokens":230,"t_start":5979.64,"task_id":"code_05","tokens_out":2205,"tokens_per_second":7.69}
+{"category":"agent_synthetic","duration_s":363.842,"prompt_tokens":13542,"t_start":6271.475,"task_id":"agent_10k_refactor","tokens_out":2753,"tokens_per_second":7.57}
+{"category":"agent_synthetic","duration_s":392.647,"prompt_tokens":25936,"t_start":6640.334,"task_id":"agent_20k_multifile","tokens_out":2932,"tokens_per_second":7.47}
+{"category":"agent_synthetic","duration_s":100.958,"prompt_tokens":29029,"t_start":7037.997,"task_id":"agent_30k_history","tokens_out":749,"tokens_per_second":7.42}
+{"error":"timed out","t_start":7744.073,"task_id":"agent_long_output_12k"}
