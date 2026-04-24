@@ -100,6 +100,10 @@ Current: Phase 4 CLOSED 2026-04-23 — Gemma 4 v1 + /profile atomic swap + route
 
 ## Accumulated Context
 
+### Roadmap Evolution
+
+- Phase 04.1 inserted after Phase 4 (2026-04-24): Dense-variant model profiles — Qwen3.6-27B-FP8 + Gemma-4-31B-it dense siblings for Phase 5 A/B (INSERTED). Goal: provide dense-vs-MoE comparison slots for Phase 5 eval matrix. Does NOT change daily-driver default. Dense throughput expected substantially lower than MoE counterparts (bandwidth-bound on GB10) — accepted and NOT a pass/fail criterion.
+
 ### Decisions Made During Roadmapping
 
 - **Phase 1 carries the SP_OK canary infrastructure** (EVAL-07), not just Phase 5. Rationale: PITFALLS.md ranks system-prompt-delivery failure as Critical and the prior repo's Phase 3 incident wasted 5/5 task scores at 0/5 success. The canary is shipped as boot-time smoke-test infrastructure used by every later phase.
