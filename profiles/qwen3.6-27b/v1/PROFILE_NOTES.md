@@ -103,22 +103,60 @@ KV + thermal validation completes.
 
 ## KV bisection result
 
-<to be populated by scripts/find_kv_budget.py in Task 7>
+Converged 2026-04-24. `scripts/find_kv_budget.py` ran 11 iterations against
+`profiles/qwen3.6-27b/v1` on DGX Spark (run_id `20260424T085651Z_099b55-kv-finder`).
 
-Expected shape (reference `runs/phase4-kv/final-run/` from Gemma MoE Phase 4):
+| Field | Value |
+|---|---|
+| `gpu_memory_utilization` (final) | **0.86** |
+| Highest clean value | 0.91 |
+| First-preemption value | 0.915 (narrowest-bisection boot-timeout) |
+| Initial value | 0.75 |
+| Safety margin applied | 5 percentage points (0.91 − 0.05 = 0.86) |
+| Iterations | 11 (of 12 max) |
+| Total duration | 11869s (~3.3 h) |
+| Hardware | DGX Spark GB10 (hardware_id: spark-ff85) |
+| vLLM image | `emmy-serve/vllm:26.03.post1-fst` (NGC 26.03.post1-py3 + fastsafetensors) |
 
-```
-converged: gpu_memory_utilization=<value>
-iterations: <N>
-preemptions observed: <count>
-oom events: <count>
-safety margin applied: 5%
-```
+Iteration walk:
 
-The script is the SOLE sanctioned writer to `serving.yaml.engine.gpu_memory_utilization`
-(Pitfall #1) and re-invokes `emmy profile hash --write` so the profile.yaml hash
-reflects the new serving.yaml bytes. After Task 7 completes, `uv run emmy profile
-validate profiles/qwen3.6-27b/v1` must exit 0.
+| Iter | value | verdict | p50 latency (ms) | preemptions |
+|---:|---:|---|---:|---:|
+| 0 | 0.7500 | clean | 268,404 | 0 |
+| 1 | 0.7700 | clean | 208,908 | 0 |
+| 2 | 0.7900 | clean | 156,022 | 0 |
+| 3 | 0.8100 | clean | 290,176 | 0 |
+| 4 | 0.8300 | clean | 205,335 | 0 |
+| 5 | 0.8500 | clean | 300,056 | 0 |
+| 6 | 0.8700 | clean | 248,154 | 0 |
+| 7 | 0.8900 | clean | 258,783 | 0 |
+| 8 | 0.9100 | clean | 300,114 | 0 |
+| 9 | 0.9300 | boot_failure (wait_for_vllm 900s timeout) | — | — |
+| 10 | 0.9200 | boot_failure (wait_for_vllm 900s timeout) | — | — |
+| 11 | 0.9150 | boot_failure (wait_for_vllm 900s timeout) | — | — |
+
+All 9 recorded clean iterations completed a 10-min sustained-load drive with
+zero preemption and zero OOM. 3 bisection failures above 0.91 were boot-
+timeouts (`/v1/models did not respond in 900s`) — classified as preemption-
+equivalent per the Phase 1 `fix(01-04): classify start_emmy boot-timeout as
+preemption-equivalent` discipline. The true ceiling is between 0.91 (last
+clean) and 0.915 (narrowest-bisection failure); the 5-point safety margin
+absorbs both.
+
+The same 0.86 final value landed on Qwen 35B-A3B MoE's v3 bundle (Phase 1),
+and on Gemma 4 26B A4B MoE's v2 bundle (Phase 4). Consistent behavior
+across 3 different model families on identical GB10 / 128 GB UMA hardware —
+a natural ceiling more about the DGX Spark node than the model.
+
+Run artifacts: `runs/20260424T085651Z_099b55-kv-finder/{summary.json,iterations.jsonl}`.
+Prior false-positive run (first attempt, canary probe bug) at
+`runs/20260424T085130Z_f480a7-kv-finder/` retained for audit trail; was
+triggered by the tool_call canary's 128-token ceiling cutting off Qwen3.6-27B
+dense's reasoning prefix (fixed via `fix(canary,tool_call): bump max_tokens
+128 → 2048 for reasoning-style dense models`).
+
+After Task 7 completes, `uv run emmy profile validate profiles/qwen3.6-27b/v1`
+exits 0 (hash realigned to `sha256:314527e184ac0f192f19df73e6eb9ef703db3983303b17e4992f6291f8863877`).
 
 ## Thermal validation
 
@@ -177,3 +215,25 @@ Reordering any of 1-3 busts prefix cache. This rule is a profile contract.
 - NVFP4 quantization: disqualified by STACK.md D-13 (−23.6 % at 32K context on
   GB10). Do not re-investigate without new hardware/silicon data.
 - Head-to-head benchmark vs Qwen3.6-35B-A3B MoE: Phase 5 eval territory.
+
+### KV-finder result (run 20260424T085130Z_f480a7)
+
+| Measurement | Value |
+|---|---|
+| `gpu_memory_utilization` (final) | 0.7 |
+| First-preemption value | 0.75 |
+| Highest clean value | 0.75 |
+| Iterations | 0 |
+| Hardware | spark-ff85 |
+| Run artifact | `runs/20260424T085130Z_f480a7-kv-finder/` |
+
+### KV-finder result (run 20260424T085651Z_099b55)
+
+| Measurement | Value |
+|---|---|
+| `gpu_memory_utilization` (final) | 0.86 |
+| First-preemption value | 0.915 |
+| Highest clean value | 0.91 |
+| Iterations | 11 |
+| Hardware | spark-ff85 |
+| Run artifact | `runs/20260424T085651Z_099b55-kv-finder/` |

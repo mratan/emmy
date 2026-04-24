@@ -1,0 +1,15 @@
+{
+  "final_value": 0.7,
+  "finished": "2026-04-24T08:54:21Z",
+  "first_preemption_at": 0.75,
+  "hardware_id": "spark-ff85",
+  "highest_clean_value": 0.75,
+  "initial_value": 0.75,
+  "iterations": 0,
+  "load_driver": "kv_finder_subset_v1",
+  "profile_id": "qwen3.6-27b",
+  "profile_version": "v1",
+  "safety_margin_pct": 5.0,
+  "started": "2026-04-24T08:51:30Z",
+  "total_duration_s": 170.2
+}
