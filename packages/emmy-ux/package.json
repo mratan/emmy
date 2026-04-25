@@ -19,6 +19,7 @@
     "@emmy/telemetry": "workspace:*",
     "@emmy/tools": "workspace:*",
     "@mariozechner/pi-coding-agent": "0.68.0",
+    "eventsource-parser": "^3.0.0",
     "js-yaml": "4.1.0"
   },
   "devDependencies": {
