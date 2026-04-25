@@ -177,6 +177,73 @@ pi-coding-agent (the harness library, pinned at 0.68.0) makes two unsolicited ou
 
 `pi-emmy.ts` sets `PI_SKIP_VERSION_CHECK=1` by default, which silences the banner. The pi.dev install-telemetry call only fires when pi's setting opts in (default off in 0.68.0). Operators wanting a stricter posture can launch with `PI_OFFLINE=1 emmy …` — that gates **all** of pi's startup network ops including its auto-download of `fd`/`rg` binaries (which pi's autocomplete uses; emmy's own `grep`/`find` tools shell out to system binaries and are unaffected). On a Spark box that already has `rg`/`fd` on PATH, `PI_OFFLINE=1` is free; on a fresh laptop in remote-client mode it degrades pi's autocomplete to no-fd. To re-enable the banner (e.g. before a deliberate version bump): `PI_SKIP_VERSION_CHECK= emmy …`.
 
+### Phase 04.2 note
+
+The Phase 04.2 sidecar listens on `0.0.0.0:8003` for the Mac-client control plane (`/start`, `/stop`, `/status`, `/profile/swap`). This is an **inbound listening socket**, not an outbound connection. The STRICT validator (`ci_verify_phase3.py`) gates only outbound `ss -tnp state established` endpoints — listening sockets are invisible to it. Local-mode air-gap posture is unchanged; the gate continues to pass on Spark with `EMMY_REMOTE_CLIENT` unset (verified: `EMMY_WEB_SEARCH=off uv run python -m emmy_serve.airgap.ci_verify_phase3 --dry-run` → exit 0).
+
+---
+
+## Remote-client posture
+
+> Phase 04.2 — Mac/laptop client controls a Spark-side sidecar over Tailscale.
+
+### When to use
+
+You're running emmy from a Mac or laptop and want `/profile`, `/start`, `/stop`, `/status`, and `web_search` to work as if you were on Spark itself. The sidecar (`emmy_serve.swap.controller`) is a thin process supervisor + HTTP proxy; vLLM stays on-demand on Spark.
+
+### Spark-side one-time setup (every box, once)
+
+```bash
+# 1. Install + enable the systemd user unit:
+bash scripts/start_emmy.sh --install-sidecar-unit
+
+# 2. Survive logout (operator MUST run this):
+loginctl enable-linger $USER
+
+# 3. Tailscale Serve routes (persists across reboot):
+tailscale serve --bg --https=8002 http://127.0.0.1:8002    # vLLM (existing)
+tailscale serve --bg --https=8003 http://127.0.0.1:8003    # sidecar (NEW)
+tailscale serve --bg --https=8888 http://127.0.0.1:8888    # SearxNG (NEW)
+
+# 4. Verify:
+systemctl --user status emmy-sidecar
+curl -sf http://127.0.0.1:8003/healthz
+tailscale serve status
+```
+
+### Mac-client environment variables
+
+The wrapper installed by `scripts/install-client.sh` sets these automatically:
+
+| Var | Value | Purpose |
+|-----|-------|---------|
+| `EMMY_REMOTE_CLIENT` | `1` | Routes `/profile` swap dispatcher through HTTP+SSE to sidecar |
+| `EMMY_SERVE_URL` | `https://<spark>.<tailnet>.ts.net:8003` | Sidecar control plane |
+| `EMMY_SEARXNG_URL` | `https://<spark>.<tailnet>.ts.net:8888` | Web-search via Spark-hosted SearxNG (replaces previous `EMMY_WEB_SEARCH=off`) |
+| `EMMY_SKIP_PROFILE_VALIDATE` | `1` | Mac has no profile bundles by default |
+
+### Air-gap posture (D-33 LOCKED preserved)
+
+In **local mode** (`EMMY_REMOTE_CLIENT` unset on Spark itself), `web-search.ts` defaults its baseUrl to `http://127.0.0.1:8888` — D-33 LOCKED loopback invariant intact. The `EMMY_SEARXNG_URL` override is the **documented escape hatch** for remote-client posture, NOT a profile change. The STRICT validator (`ci_verify_phase3.py`) continues to gate egress in local mode unchanged.
+
+In **remote mode**, the Mac client legitimately reaches Spark over Tailscale. The "no cloud INFERENCE" thesis is unaffected — the LLM is still 100% local; only the control plane and the SearxNG egress hop traverse the tailnet.
+
+### Debugging
+
+```bash
+# Live sidecar logs:
+journalctl --user -u emmy-sidecar -f
+
+# Restart after a crash:
+systemctl --user restart emmy-sidecar
+
+# Disable temporarily (e.g. for maintenance):
+systemctl --user stop emmy-sidecar
+# Re-enable: systemctl --user start emmy-sidecar
+```
+
+If `loginctl enable-linger` was not run, the sidecar dies on logout and `systemctl --user status emmy-sidecar` will show `inactive (dead)` after the SSH session closes. Re-run `loginctl enable-linger $USER` and `systemctl --user enable --now emmy-sidecar`.
+
 ---
 
 ## Feedback corpus and HF export
