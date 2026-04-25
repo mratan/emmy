@@ -16,11 +16,13 @@ Fully-local coding agent on NVIDIA DGX Spark. Two architecturally separate parts
 - **Node/Bun:** Bun 1.3+ for the TS harness (`curl -fsSL https://bun.sh/install | bash`).
 - **Python:** 3.11+ via `uv` (`curl -LsSf https://astral.sh/uv/install.sh | sh`).
 - **Model weights:**
-  - Qwen 3.6-35B-A3B-FP8 (daily driver) → `/models/Qwen3.6-35B-A3B-FP8` (≈35 GB).
-  - Gemma 4 26B-A4B-it (optional alternate model) → `/models/gemma-4-26B-A4B-it` (≈52 GB BF16; vLLM runtime-quants to FP8 on boot).
+  - Qwen 3.6-35B-A3B-FP8 (daily driver, MoE) → `/models/Qwen3.6-35B-A3B-FP8` (≈35 GB).
+  - Qwen 3.6-27B-FP8 (Phase 4.1 dense sibling, opt-in) → `/models/Qwen3.6-27B-FP8` (≈29 GB).
+  - Gemma 4 26B-A4B-it (Phase 4 alternate, MoE) → `/models/gemma-4-26B-A4B-it` (≈52 GB BF16; vLLM runtime-quants to FP8 on boot).
+  - Gemma 4 31B-it (Phase 4.1 dense sibling, opt-in) → `/models/gemma-4-31B-it` (≈61 GB BF16; runtime FP8 quant).
 - **vLLM containers** (digest pinned in `profiles/*/serving.yaml` — never upstream PyPI):
-  - **Qwen** → `nvcr.io/nvidia/vllm:26.03.post1-py3` (NGC, fastsafetensors loader, ~3 min cold start).
-  - **Gemma 4** → `vllm/vllm-openai:gemma4-0409-arm64-cu130` (upstream, vLLM 0.19.1.dev6 + Transformers 5.5.0; Day-1 Gemma 4 support that NGC 26.03.post1 predates). Plain safetensors loader only — ~7 min cold start.
+  - **Qwen (both MoE + dense)** → `nvcr.io/nvidia/vllm:26.03.post1-py3` (NGC, fastsafetensors loader, ~3 min cold start).
+  - **Gemma 4 (both MoE + dense)** → `vllm/vllm-openai:gemma4-0409-arm64-cu130` (upstream, vLLM 0.19.1.dev6 + Transformers 5.5.0; Day-1 Gemma 4 support that NGC 26.03.post1 predates). Plain safetensors loader only — ~8 min cold start.
 
 ---
 
@@ -121,11 +123,27 @@ v1, v2, v3, v3.1, v3.2 are byte-identical to their commit-of-record; `uv run emm
 | v1 | superseded | **no** | Targets NGC `26.03.post1-py3` whose Transformers pre-dates `Gemma4ForCausalLM` — engine won't start. Kept only as historical record. |
 | **v2** | Phase 4 locked | **yes** | Upstream `vllm/vllm-openai:gemma4-0409-arm64-cu130` (vLLM 0.19.1.dev6, Transformers 5.5.0). `gpu_memory_utilization=0.86` measured via 11-iter KV bisection on spark-ff85; decode floors (p50 35.9 tok/s, p1 33.3 tok/s) + GPU clock floor (p5 2405 MHz) validated by two consecutive 2-hour thermal replays. `sha256:8f9c23f500...` |
 
-To swap from Qwen 3.6 → Gemma 4 v2, use `/profile gemma-4-26b-a4b-it` inside a running pi-emmy TUI — that's the atomic 4-phase path that actually restarts emmy-serve. First cold boot is ~7 min because upstream doesn't ship fastsafetensors; subsequent boots are similar (no in-container compile cache yet). `pi-emmy --profile <bundle>` at launch is harness-side only (prompts / tools / sampling) and assumes emmy-serve is already booted on a matching `served_model_name` — it will 404 otherwise; see Quickstart for the full sequence.
+To swap from Qwen 3.6 → Gemma 4 v2, use `/profile gemma-4-26b-a4b-it` inside a running pi-emmy TUI — that's the atomic 4-phase path that actually restarts emmy-serve. First cold boot is ~8 min because upstream doesn't ship fastsafetensors; subsequent boots are similar (no in-container compile cache yet). `pi-emmy --profile <bundle>` at launch is harness-side only (prompts / tools / sampling) and assumes emmy-serve is already booted on a matching `served_model_name` — it will 404 otherwise; see Quickstart for the full sequence.
 
-### Role routing (Phase 4, Qwen only)
+### `profiles/qwen3.6-27b/` (Phase 4.1 dense sibling — eval-only, opt-in)
 
-`profiles/routes.yaml` maps role heuristics (plan / edit / critic / default) to Qwen 3.6 v3.1 sibling variants (same engine bytes, different sampling + prompt). Active whenever the daily-driver profile is Qwen v3.1 — the TUI transparently routes each turn.
+| Version | Status | Bootable? | Notes |
+|---------|--------|-----------|-------|
+| **v1** | Phase 4.1 locked | **yes** | NGC `26.03.post1-py3` + fastsafetensors (same image as Qwen 35B MoE). `gpu_memory_utilization=0.86` via 11-iter KV bisection (highest-clean 0.91 × 5pt safety) on spark-ff85; 2×2h thermal "All floors pass" with preemptions=0, oom=0; decode p50 7.6 tok/s p1 6.5 tok/s, GPU clock 2476 MHz flat (zero throttle). `sha256:c3ccf1e1...` Bandwidth-bound dense — single-digit tok/s is the expected steady state, NOT a regression. |
+
+### `profiles/gemma-4-31b-it/` (Phase 4.1 dense sibling — eval-only, opt-in)
+
+| Version | Status | Bootable? | Notes |
+|---------|--------|-----------|-------|
+| **v1** | Phase 4.1 locked | **yes** | Upstream `vllm/vllm-openai:gemma4-0409-arm64-cu130` (same image as Gemma 26B MoE v2). `container_entrypoint_override=""` + `strip_thinking_tags=true` quirks carried forward from v2. `gpu_memory_utilization=0.86` via 11-iter KV bisection on spark-ff85; 2×2h thermal "All floors pass" with preemptions=0, oom=0; decode p50 6.4 tok/s p1 6.2 tok/s (after warm-cache), GPU clock p5/p50 2405/2496 MHz. `sha256:fe9eded6...` BF16 publisher weights → runtime FP8 quant. |
+
+**Phase 4.1 dense profiles are additive + opt-in.** Daily-driver default stays on Qwen 35B-A3B v3.1; the dense siblings exist for Phase 5 dense-vs-MoE A/B comparison. Per operator directive (saved in user memory), throughput on the dense profiles is **informational only** — NOT an acceptance gate. Phase 5 eval matrix in `eval/MATRIX.md` enumerates all 4 participants. Side finding: all 4 profiles converge to gmu=0.86 → that's a hardware-level vLLM allocation ceiling on GB10 / 128 GB UMA, not a model knob.
+
+To swap to a dense profile inside a running pi-emmy TUI: `/profile qwen3.6-27b` or `/profile gemma-4-31b-it` (both have a `DEFAULT_VARIANT=v1` family marker). Each respects its family's container — Qwen lands on the NGC fastsafetensors image, Gemma on the upstream Day-1 image.
+
+### Role routing (Phase 4 + Phase 4.1)
+
+`profiles/routes.yaml` maps role heuristics (plan / edit / critic / default) to Qwen 3.6 v3.1 sibling variants (same engine bytes, different sampling + prompt). Phase 4.1 added an optional `dense:` role that maps to `qwen3.6-27b@v1` for callers that explicitly want dense behavior (no MoE expert routing variance) — opt-in only; default unchanged.
 
 ---
 
@@ -168,7 +186,10 @@ See `docs/runbook.md` for deeper daily-ops material (log locations, rotation, en
 ## Where things live
 
 ```
-profiles/qwen3.6-35b-a3b/v{1,2,3,3.1}/   # Versioned model profiles (immutable once closed)
+profiles/qwen3.6-35b-a3b/v{1,2,3,3.1,3.2}/  # Daily-driver Qwen MoE (v3.1 default)
+profiles/qwen3.6-27b/v1/                    # Phase 4.1 dense Qwen sibling (opt-in)
+profiles/gemma-4-26b-a4b-it/v{1,2}/         # Phase 4 Gemma MoE (v2 bootable)
+profiles/gemma-4-31b-it/v1/                 # Phase 4.1 dense Gemma sibling (opt-in)
 emmy_serve/                              # vLLM container wrapper, profile loader, air-gap validators
 packages/
   emmy-provider/                         # pi provider adapter + @emmy/provider streamSimple wiring
@@ -208,13 +229,14 @@ See `.planning/phases/03-observability-agent-loop-hardening-lived-experience/03-
 
 ## Roadmap
 
-Emmy ships in 7 phases across v1 milestones. Cumulative progress: 4/7 phases complete (Phases 1, 2, 3 + decimal polish 3.1, 4); 43/68 v1 REQ-IDs Done.
+Emmy ships in 7 phases across v1 milestones. Cumulative progress: 5/7 phases complete (Phases 1, 2, 3, 3.1, 4, 4.1); 43/68 v1 REQ-IDs Done.
 
 - **Phase 1** (CLOSED): serving foundation + profile schema
 - **Phase 2** (CLOSED): pi-harness MVP — daily-driver baseline
 - **Phase 3** (CLOSED): observability + agent-loop hardening + lived-experience
 - **Phase 3.1** (CLOSED): operational polish — RAM + live compaction + SearxNG + docs
 - **Phase 4** (CLOSED): Gemma 4 profile + profile system maturity (all 4 operator carry-forwards resolved 2026-04-24)
+- **Phase 4.1** (CLOSED 2026-04-25): dense-variant model profiles — Qwen 3.6-27B-FP8 + Gemma 4 31B-it dense siblings authored, KV-bisected (gmu=0.86 each, identical to MoE ceiling), 2×2h thermal-validated. `eval/MATRIX.md` enumerates the 4-profile Phase 5 participant matrix. Daily-driver default UNCHANGED.
 - **Phase 5** (next): eval harness (terminal-bench, SWE-bench Verified, LiveCodeBench)
 - **Phase 6**: speculative decoding (Qwen3-MTP + EAGLE-3)
 - **Phase 7**: publication + reproducibility artifact

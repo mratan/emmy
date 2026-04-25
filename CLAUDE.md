@@ -23,10 +23,12 @@ Always read these before substantive work — they define what we're building an
 
 ## Pinned Tech Stack
 
-- **Serving container:** `nvcr.io/nvidia/vllm:26.03.post1-py3` — never upstream PyPI wheels on Spark (SM121 kernel failures)
-- **Primary model:** `Qwen/Qwen3.6-35B-A3B-FP8` (~75 tok/s, MoE, 3B active)
+- **Serving containers (per-family):** Qwen → `nvcr.io/nvidia/vllm:26.03.post1-py3` (NGC fastsafetensors-derived, ~3 min cold start). Gemma 4 → `vllm/vllm-openai:gemma4-0409-arm64-cu130` (upstream Day-1 image, vLLM 0.19.1.dev6 + Transformers 5.5.0, plain safetensors, ~8 min cold start). Never upstream PyPI wheels on Spark (SM121 kernel failures)
+- **Primary model (daily-driver):** `Qwen/Qwen3.6-35B-A3B-FP8` (MoE, 3B active, decode p50 ~48 tok/s thermal-validated)
 - **Heavy-agent slot:** `Qwen/Qwen3-Coder-Next-80B-A3B-FP8` (RL-trained for tools, ~30–43 tok/s)
-- **Gemma slot:** `google/gemma-4-26B-A4B-it` MoE — **NOT** the 31B dense (bandwidth-bound at 6.9 tok/s)
+- **Gemma MoE slot:** `google/gemma-4-26B-A4B-it` (4B active, decode p50 ~36 tok/s thermal-validated)
+- **Phase 4.1 dense siblings (eval-only, opt-in via `/profile`, NOT daily-driver):** `Qwen/Qwen3.6-27B-FP8` (dense, decode p50 ~7.6 tok/s) + `google/gemma-4-31B-it` (dense, BF16→runtime FP8, decode p50 ~6.4 tok/s). Both bandwidth-bound by design on GB10 UMA — single-digit tok/s is **expected**, NOT a regression. Acceptance gate is thermal stability (preemptions=0, oom=0), NOT throughput. Phase 5 evaluates dense-vs-MoE on real coding tasks; until then, daily-driver default stays on Qwen 35B-A3B v3.1.
+- **Hardware-level KV ceiling:** all 4 profiles converge to `gpu_memory_utilization=0.86` via `scripts/find_kv_budget.py` on this GB10 / 128 GB UMA box. The ceiling is the box, not the model.
 - **Quantization:** FP8 only. NVFP4 is *slower* than FP16 on GB10 UMA (-23.6% at 32K context); ModelOpt 0.42.0 has a NaN bug.
 - **Boot:** `VLLM_LOAD_FORMAT=fastsafetensors` (~3× cold-start speedup, proven in prior repo)
 - **Telemetry off:** `VLLM_NO_USAGE_STATS=1` always; air-gap test gates every release
