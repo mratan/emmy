@@ -279,6 +279,35 @@ Gemma 4 lives under `profiles/gemma-4-26b-a4b-it/`. **Always swap to `v2/` — n
 
 Tuned defaults in `v2/`: `gpu_memory_utilization=0.86` (measured via 11-iteration KV bisection on spark-ff85), `max_model_len=131072`, `tool_call_parser=gemma4` (vLLM 0.19 native), `quantization=fp8` (runtime, not pre-quantized). Thermal floors (decode p50 35.9 tok/s, p1 33.3 tok/s, GPU clock p5 2405 MHz) are baked into `PROFILE_NOTES.md` frontmatter and re-checked on any `--assert-floors` replay.
 
+### Available profiles (Phase 4.1)
+
+Four profiles ship in-tree as of Phase 4.1, each with a `DEFAULT_VARIANT` family marker so `/profile <family>` resolves automatically:
+
+| Profile | HF repo | Weights path | Container | Cold boot | Notes |
+|---|---|---|---|---:|---|
+| `qwen3.6-35b-a3b@v3.1` (default daily-driver) | `Qwen/Qwen3.6-35B-A3B-FP8` | `/models/Qwen3.6-35B-A3B-FP8` | NGC `nvcr.io/nvidia/vllm:26.03.post1-py3` (+ fastsafetensors) | ~3 min | MoE, 3B active |
+| `qwen3.6-27b@v1` (Phase 4.1 dense sibling) | `Qwen/Qwen3.6-27B-FP8` | `/models/Qwen3.6-27B-FP8` | NGC `nvcr.io/nvidia/vllm:26.03.post1-py3` (+ fastsafetensors) | ~3 min | Dense, bandwidth-bound (~7.6 tok/s) |
+| `gemma-4-26b-a4b-it@v2` | `google/gemma-4-26B-A4B-it` | `/models/gemma-4-26B-A4B-it` | upstream `vllm/vllm-openai:gemma4-0409-arm64-cu130` | ~8 min | MoE, 4B active |
+| `gemma-4-31b-it@v1` (Phase 4.1 dense sibling) | `google/gemma-4-31B-it` | `/models/gemma-4-31B-it` | upstream `vllm/vllm-openai:gemma4-0409-arm64-cu130` | ~8 min | Dense, BF16 weights → runtime FP8 (~6.3 tok/s) |
+
+**Container per family** — Qwen profiles always boot on the NGC fastsafetensors-derived image; Gemma profiles always boot on the upstream Day-1 Gemma 4 image. Don't try to cross-pollinate (NGC's Transformers pre-dates Gemma4ForCausalLM; upstream lacks fastsafetensors). The `serving.yaml.engine.container_image_digest` field pins each.
+
+**Weight downloads** (one-time per profile; HF auth already configured on this host):
+
+```bash
+# Qwen 3.6 family — FP8 publisher weights
+huggingface-cli download Qwen/Qwen3.6-35B-A3B-FP8 --local-dir /models/Qwen3.6-35B-A3B-FP8
+huggingface-cli download Qwen/Qwen3.6-27B-FP8     --local-dir /models/Qwen3.6-27B-FP8
+
+# Gemma 4 family — BF16 publisher weights (vLLM runtime-quants to FP8)
+huggingface-cli download google/gemma-4-26B-A4B-it --local-dir /models/gemma-4-26B-A4B-it
+huggingface-cli download google/gemma-4-31B-it     --local-dir /models/gemma-4-31B-it
+```
+
+**Throughput note (Phase 4.1 dense siblings)** — both dense profiles run at single-digit tok/s (Qwen 27B ~7.6, Gemma 31B ~6.3). This is bandwidth-bound by design on GB10's 128 GB UMA — the dense weights have to be read every decode step. Per operator directive, throughput is NOT an acceptance gate; thermal stability (zero preemptions, zero OOM, recorded floors) is. The dense siblings exist for Phase 5 dense-vs-MoE A/B comparison, not to replace the daily-driver MoE.
+
+**Phase 5 eval matrix** — see `eval/MATRIX.md` for the four-profile participant manifest with hashes, container pins, and KV-bisection results.
+
 ---
 
 ## Within-model role routing (`routes.yaml`)
