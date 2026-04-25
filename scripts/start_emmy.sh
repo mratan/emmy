@@ -3,6 +3,7 @@
 #
 # Usage:
 #   ./scripts/start_emmy.sh [--profile profiles/qwen3.6-35b-a3b/v1] [--port 8002] [--airgap]
+#   ./scripts/start_emmy.sh --install-sidecar-unit  # one-time: install systemd user unit for emmy-sidecar
 #
 # Exit codes:
 #   0 — vLLM is up, smoke test passed, ready for harness
@@ -25,16 +26,35 @@ cd "$ROOT_DIR"
 PROFILE="profiles/qwen3.6-35b-a3b/v3.1"
 PORT=8002
 AIRGAP=0
+INSTALL_SIDECAR=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --profile) PROFILE="$2"; shift 2 ;;
     --port) PORT="$2"; shift 2 ;;
     --airgap) AIRGAP=1; shift ;;
-    -h|--help) sed -n '1,16p' "$0"; exit 0 ;;
+    --install-sidecar-unit) INSTALL_SIDECAR=1; shift ;;
+    -h|--help) sed -n '1,19p' "$0"; exit 0 ;;
     *) echo "unknown arg: $1" >&2; exit 4 ;;
   esac
 done
+
+# --- Phase 04.2 — one-time sidecar systemd user-unit install (early-exit) ---
+# Idempotent: cp -f overwrites; systemctl --user enable --now is a no-op the
+# second time. Does NOT proceed to the vLLM boot path — operator wants this
+# as a setup step, not coupled to a vLLM run.
+if [[ "$INSTALL_SIDECAR" = "1" ]]; then
+  mkdir -p "$HOME/.config/systemd/user"
+  cp -f "$ROOT_DIR/emmy_serve/systemd/emmy-sidecar.service" "$HOME/.config/systemd/user/"
+  systemctl --user daemon-reload
+  systemctl --user enable --now emmy-sidecar
+  if ! loginctl show-user --property=Linger 2>/dev/null | grep -q "Linger=yes"; then
+    echo "WARNING: loginctl enable-linger \$USER not run — sidecar will die on logout" >&2
+    echo "Run: loginctl enable-linger \$USER" >&2
+  fi
+  echo "emmy-sidecar installed and started. Check: systemctl --user status emmy-sidecar"
+  exit 0
+fi
 
 RUN_ID="$(date -u +'%Y%m%dT%H%M%SZ')-$(head -c 6 /dev/urandom | xxd -p | head -c 6)"
 RUN_DIR="runs/${RUN_ID}-boot"

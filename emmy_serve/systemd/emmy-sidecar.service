@@ -1,0 +1,23 @@
+[Unit]
+Description=Emmy sidecar — vLLM lifecycle controller (Phase 04.2)
+Documentation=file:///%h/code/emmy/docs/runbook.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/code/emmy
+ExecStart=%h/.local/bin/uv run python -m emmy_serve.swap.controller
+Restart=on-failure
+RestartSec=5
+TimeoutStopSec=40
+KillSignal=SIGTERM
+Environment=PYTHONUNBUFFERED=1
+Environment=VLLM_NO_USAGE_STATS=1
+Environment=VLLM_LOAD_FORMAT=fastsafetensors
+Environment=HF_HOME=%h/.cache/huggingface
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=default.target
