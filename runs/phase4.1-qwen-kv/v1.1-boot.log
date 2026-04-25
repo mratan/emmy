@@ -1,0 +1,5 @@
+emmy: starting profile=profiles/qwen3.6-27b/v1.1 port=8002 airgap=0 run_id=20260425T024050Z-1e6431
+emmy: image ref = sha256:77321e416cf49702ed6f04af9e5d39945726fea48970bb013617fddc659f9486
+emmy: container started; running smoke test
+smoke ok: tok/s=4.65 tokens_out=100
+emmy-serve ready — profile profiles/qwen3.6-27b/v1.1 on http://127.0.0.1:8002 (cold-start 201s, 4.65 tok/s)

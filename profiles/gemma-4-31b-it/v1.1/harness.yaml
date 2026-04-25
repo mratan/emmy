@@ -1,0 +1,70 @@
+# profiles/gemma-4-26b-a4b-it/v1/harness.yaml
+# Phase 4 Plan 04-01 — Gemma 4 26B A4B v1 bundle.
+# Shape mirrors profiles/qwen3.6-35b-a3b/v3.1/harness.yaml (analog). Divergences:
+#   - tools.grammar.path points at a Gemma-4-shape lark (native <|tool_call>call:...{}<tool_call|>)
+#   - tools.web_fetch.allowlist adds ai.google.dev (Gemma 4 model card hostname)
+#   - prompts are byte-identical to Qwen v3.1 (model-agnostic: SP_OK canary,
+#     Hashline, 9-tool descriptions, compaction) — see PATTERNS.md §3.
+# See PROFILE_NOTES.md for per-knob provenance (SC-5 / D-16).
+
+prompts:
+  system: prompts/system.md                        # SP_OK canary (Pitfall #6 / D-07)
+  edit_format: prompts/edit_format.md              # Hashline per-line hash-anchored (model-agnostic)
+  tool_descriptions: prompts/tool_descriptions.md  # 9 native tools; same as Qwen v3.1
+  use_system_role: true                             # Gemma 4 honors system role; verified by SP_OK canary at boot
+  prepend_system_text: ""                           # CONTEXT-04 layering done at runtime in @emmy/ux
+
+context:
+  max_input_tokens: 114688                          # = max_model_len(131072) - output_reserve(16384); same formula as Qwen
+  include_repo_map: false                           # Phase 3 feature (Aider-style) not wired in v1
+  repo_map_max_tokens: 0
+  default_pruning: head_tail                        # Legacy; superseded by compaction block below
+  compaction:
+    soft_threshold_pct: 0.75                       # D-11 industry default (Claude Code / Cursor / Cline); crosses at ~86K of 114K
+    preserve_recent_turns: 5                       # D-14 pi 0.68 DEFAULT_COMPACTION_SETTINGS-equivalent
+    summarization_prompt_path: prompts/compact.md   # D-13 emmy-authored; layers on pi's SUMMARIZATION_SYSTEM_PROMPT
+    preserve_tool_results: error_only              # D-14/D-15 Pitfall #15 — stacktraces ARE the error signal
+
+tools:
+  format: openai                                    # gemma4 parser emits OpenAI tool_calls
+  schemas: tool_schemas/                            # 9 JSON schema files (8 native + web_search)
+  grammar:
+    path: grammars/tool_call.lark                   # Gemma-4-shape Lark: over-accepting backstop (Pitfall #3 / D-11)
+    mode: reactive                                   # D-11 production path — correctness backstop, NOT a shape enforcer
+  per_tool_sampling:
+    edit: { temperature: 0.0 }                       # Structured-output determinism (Google Gemma 4 card recommends T=0 for structured output)
+    bash: { temperature: 0.0 }                       # Deterministic command emission
+    read: { temperature: 0.0 }                       # File reads are deterministic
+  web_fetch:
+    # D-26 default-deny allowlist; hostname-EXACT runtime enforcement (Plan 03-06).
+    # ai.google.dev NEW for Gemma 4 (model card + function-calling docs hostname).
+    allowlist:
+      - docs.python.org
+      - developer.mozilla.org
+      - docs.vllm.ai
+      - huggingface.co
+      - ai.google.dev
+      - docs.langfuse.com
+    # Plan 03.1-02 D-35 — returned-URL bypass TTL (ms). URLs returned by a
+    # recent web_search call are fetchable without allowlist entry for this
+    # many ms. 0 disables bypass entirely.
+    search_bypass_ttl_ms: 300000
+  web_search:
+    # Plan 03.1-02 D-34 — SearxNG-backed web_search tool. base_url loopback-only;
+    # rate-limited per-turn (T-03.1-02-03); tool NOT registered when
+    # enabled=false OR EMMY_WEB_SEARCH=off OR EMMY_TELEMETRY=off.
+    enabled: true
+    base_url: http://127.0.0.1:8888
+    max_results_default: 10
+    rate_limit_per_turn: 10
+    timeout_ms: 10000
+
+agent_loop:
+  max_iterations: 25                                # Revisit at Phase 5 eval
+  retry_on_unparseable_tool_call: 2                 # D-11 reactive-retry budget
+  retry_on_empty_response: 1                        # Pitfall #6 — one retry before surfacing as SP-delivery suspicion
+  self_correction: enabled                          # ReAct self-correction on parseable tool errors
+
+advanced_settings_whitelist:
+  - reasoning_effort                                 # Aider allowlist pattern; per-call knob without engine restart
+  - thinking_budget                                  # Aider allowlist pattern

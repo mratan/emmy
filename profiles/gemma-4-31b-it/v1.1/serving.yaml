@@ -1,0 +1,82 @@
+# profiles/gemma-4-31b-it/v1.1/serving.yaml
+# Phase 4.1 follow-up (2026-04-25) — RAM-headroom retune sibling of v1 per D-02.
+# v1 stays byte-identical at the KV-ceiling gmu=0.86 (hash sha256:fe9eded6...); v1.1
+# drops gmu to 0.55 to leave >40 GiB system headroom on 128 GiB UMA, mirroring the
+# D-29 v3 → v3.1 retune on the Qwen MoE daily-driver. Pitfall #3 (RAM headroom)
+# trumps Pitfall #1 (find_kv_budget sole-writer) for sibling versions that re-target
+# *operator comfort* rather than KV-ceiling — same exemption v3.1 took. See
+# PROFILE_NOTES.md § "v1.1 RAM-headroom retune".
+
+engine:
+  # --- immutable identity ---
+  model: /models/gemma-4-31B-it                    # container-internal path (matches -v mount)
+  model_hf_id: google/gemma-4-31B-it               # HF ID (BF16 weights; FP8 is RUNTIME quant per STACK.md line 122)
+  served_model_name: gemma-4-31b-it                # name vLLM exposes on /v1/models
+  container_image: vllm/vllm-openai:gemma4-0409-arm64-cu130   # Upstream vLLM Day-1 Gemma 4 image (aarch64, CUDA 13.0); vLLM 0.19.1.dev6 + Transformers 5.5.0. Pulled 2026-04-23. RepoDigest: sha256:2970dd3c8fd00bccbc663345f9b4d87b35c491f4b13a2a4cdef60fe5c015f6e2
+  container_image_digest: sha256:db59febc6c476c9c93701cc9f54917533cee774d4e4bb27eff6fafeae37509f8                # LOCAL image ID (`docker inspect --format '{{.Id}}'`). render_image_ref uses bare-digest form here since the "vllm/vllm-openai" repo lacks a registry host dot in its first segment.
+  container_entrypoint_override: ""                # Upstream vllm-openai has ENTRYPOINT=[vllm serve] baked in; our runner.py's CMD is `vllm serve <flags>` so the concat becomes `vllm serve vllm serve <flags>` → "unrecognized arguments" CLI failure. Empty-string override clears the ENTRYPOINT so CMD runs as the full exec chain. NGC images don't need this (their /opt/nvidia/nvidia_entrypoint.sh wraps `exec "$@"`).
+
+  # --- context + memory ---
+  max_model_len: 131072                            # 128K; byte-identical to v1
+  gpu_memory_utilization: 0.55                     # v1.1 D-29-equivalent retune from v1's KV-ceiling 0.86. Targets emmy-serve footprint ~70 GB leaving >40 GiB system headroom on DGX Spark UMA 128 GiB pool. CLAUDE.md Pitfall #3. v1 hash sha256:fe9eded6... preserves the bisection result for audit.
+  kv_cache_dtype: fp8                              # 04-RESEARCH.md §2 (Gemma 4 vLLM recipe)
+  enable_prefix_caching: true                      # SERVE-07
+  enable_chunked_prefill: true                     # SERVE-07
+  max_num_batched_tokens: 8192                     # 04-RESEARCH.md §2 — matches Qwen v3.1 RAM-headroom tuning
+  max_num_seqs: 4                                  # 04-RESEARCH.md §2 — NVIDIA Day-1 DGX Spark recipe; defensive against Gemma4ToolParser bug #39392 (pad-token leak under batch). PROFILE_NOTES.md documents max_num_seqs=1 as Phase-5 eval candidate if bug fires empirically.
+
+  # --- loader ---
+  load_format: safetensors                          # v2 — upstream vllm-openai container doesn't bundle fastsafetensors. Accept ~3× slower cold start (~8 min vs ~3 min) as the tradeoff for Day-1 Gemma 4 support. A derived image with fastsafetensors layered could reclaim this; deferred to a future v3 bump if cold-start wall-clock becomes operationally painful.
+
+  # --- quantization ---
+  quantization: fp8                                 # RUNTIME quant on BF16 HF weights (NVFP4 disqualified by D-13 / STACK.md 121-122)
+
+  # --- tool-call parser ---
+  tool_call_parser: gemma4                          # D-17 RESOLVED — vLLM 0.19 native Gemma 4 parser
+  reasoning_parser: gemma4                          # D-17 — vLLM attempts to strip reasoning tokens engine-side; on tool-call continuation paths it leaks literal "<|channel>thought\n<channel|>" / residual "thought\n" label (vLLM 0.19.1.dev6 bug repro'd 2026-04-24). Harness backstop via quirks.strip_thinking_tags=true below.
+  enable_auto_tool_choice: true                     # required alongside tool_call_parser
+
+  # --- attention + backends ---
+  # attention_backend: (unset — vLLM auto-selects)
+  # FlashInfer does not support Gemma 4's head_size on this container
+  # (observed 2026-04-23: ValueError "head_size not supported").
+  # Leaving unset lets vLLM pick FLASH_ATTN / TRITON_ATTN based on architecture.
+  # Qwen still uses flashinfer per its profile — this is per-profile, not global.
+
+  # --- network / runtime ---
+  host: 0.0.0.0                                     # container-internal bind
+  port: 8000                                        # container-internal
+
+  # --- what is NOT here (deferred) ---
+  # speculative: null       — Phase 6 (EAGLE-3 availability for 26B TBD)
+  # enable_lora: false      — no LoRA in v1
+
+sampling_defaults:
+  # Source: Google Gemma 4 model card (https://ai.google.dev/gemma/docs/core/model_card_4).
+  # These are PRIORS; harness per-tool sampling overrides them. Changing them = new profile version.
+  # Phase-5 eval candidate: temperature=1.5 (Unsloth HF discussion #21) — NOT shipped today.
+  temperature: 1.0                                  # Google card default (vs Qwen 0.2)
+  top_p: 0.95                                       # Google card
+  top_k: 64                                         # Google card (vs Qwen 40)
+  repetition_penalty: 1.0                           # Google card (NOT 1.05; no repetition dampening declared)
+  max_tokens: 8192
+  stop: []                                          # gemma4 parser handles stop tokens
+
+speculative: null                                   # Phase 6 per 04-CONTEXT.md deferred list
+
+guided_decoding:
+  default_backend: xgrammar                         # vLLM 0.19 default
+
+quirks:
+  strip_thinking_tags: true                         # vLLM 0.19.1.dev6's gemma4 reasoning_parser leaves `<|channel>thought\n<channel|>…` AND residual `thought\n` role label in content on tool-call continuation (2026-04-24 repro in runs/phase2-sc3-capture/session-2026-04-24T06-57-37-131Z.jsonl). Harness strip via stripGemma4ChannelBleed() at message_end backstops the parser gap.
+  promote_reasoning_to_content: false               # reasoning_parser already routes to content field
+  buffer_tool_streams: false                        # gemma4 parser streams tool_calls natively (04-RESEARCH.md §2)
+
+env:
+  VLLM_NO_USAGE_STATS: "1"                          # SERVE-09 / D-12 layer c (enforced by schema._airgap_policy)
+  DO_NOT_TRACK: "1"
+  VLLM_LOAD_FORMAT: safetensors
+  VLLM_FLASHINFER_MOE_BACKEND: latency
+  VLLM_DISABLE_COMPILE_CACHE: "1"
+  HF_HUB_OFFLINE: "1"                               # REPRO-04 (enforced by schema._airgap_policy)
+  TRANSFORMERS_OFFLINE: "1"

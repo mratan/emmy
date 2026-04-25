@@ -1,0 +1,29 @@
+profile:
+  id: qwen3.6-27b
+  version: v1.1
+  family: qwen3.6
+  base_model: Qwen/Qwen3.6-27B-FP8
+  description: "Qwen3.6-27B-FP8 dense profile \u2014 v1.1 RAM-headroom retune (D-29-equivalent\
+    \ Pitfall #3 sibling per D-02 immutability). v1 stays byte-identical at the KV-ceiling\
+    \ gmu=0.86; v1.1 is the operational variant at gmu=0.55 mirroring Qwen 35B-A3B\
+    \ v3.1's daily-driver lock-in (>40 GiB system headroom on 128 GiB UMA)."
+  created: '2026-04-25'
+  hash: sha256:4f08e4e5430e11c594a746086fbc297032312022c3b2a41e822259eff4e3bc0b
+  hash_algorithm: sha256
+  hash_manifest_version: 1
+  tags:
+  - coding
+  - dgx-spark
+  - fp8
+  - qwen3.6
+  - phase-4.1
+  - phase-4.1-followup
+  - dense
+  - ram-headroom
+  community_sources:
+  - title: Qwen3.6-27B-FP8 HF model card
+    url: https://huggingface.co/Qwen/Qwen3.6-27B-FP8
+    retrieved: '2026-04-24'
+  - title: vLLM Qwen3.5/3.6 recipes
+    url: https://docs.vllm.ai/projects/recipes/en/latest/Qwen/Qwen3.5.html
+    retrieved: '2026-04-24'

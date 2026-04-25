@@ -1,0 +1,16 @@
+{
+  "type": "function",
+  "function": {
+    "name": "web_fetch",
+    "description": "HTTP GET → markdown. Reads documentation only (no inference). Tagged network-required.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "url": { "type": "string", "format": "uri" },
+        "timeout_ms": { "type": "number" }
+      },
+      "required": ["url"],
+      "additionalProperties": false
+    }
+  }
+}

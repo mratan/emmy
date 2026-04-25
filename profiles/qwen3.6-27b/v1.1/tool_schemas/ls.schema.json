@@ -1,0 +1,17 @@
+{
+  "type": "function",
+  "function": {
+    "name": "ls",
+    "description": "List directory contents.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": { "type": "string" },
+        "long": { "type": "boolean" },
+        "all": { "type": "boolean" }
+      },
+      "required": ["path"],
+      "additionalProperties": false
+    }
+  }
+}

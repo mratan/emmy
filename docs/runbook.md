@@ -283,12 +283,14 @@ Tuned defaults in `v2/`: `gpu_memory_utilization=0.86` (measured via 11-iteratio
 
 Four profiles ship in-tree as of Phase 4.1, each with a `DEFAULT_VARIANT` family marker so `/profile <family>` resolves automatically:
 
-| Profile | HF repo | Weights path | Container | Cold boot | Notes |
-|---|---|---|---|---:|---|
-| `qwen3.6-35b-a3b@v3.1` (default daily-driver) | `Qwen/Qwen3.6-35B-A3B-FP8` | `/models/Qwen3.6-35B-A3B-FP8` | NGC `nvcr.io/nvidia/vllm:26.03.post1-py3` (+ fastsafetensors) | ~3 min | MoE, 3B active |
-| `qwen3.6-27b@v1` (Phase 4.1 dense sibling) | `Qwen/Qwen3.6-27B-FP8` | `/models/Qwen3.6-27B-FP8` | NGC `nvcr.io/nvidia/vllm:26.03.post1-py3` (+ fastsafetensors) | ~3 min | Dense, bandwidth-bound (~7.6 tok/s) |
-| `gemma-4-26b-a4b-it@v2` | `google/gemma-4-26B-A4B-it` | `/models/gemma-4-26B-A4B-it` | upstream `vllm/vllm-openai:gemma4-0409-arm64-cu130` | ~8 min | MoE, 4B active |
-| `gemma-4-31b-it@v1` (Phase 4.1 dense sibling) | `google/gemma-4-31B-it` | `/models/gemma-4-31B-it` | upstream `vllm/vllm-openai:gemma4-0409-arm64-cu130` | ~8 min | Dense, BF16 weights → runtime FP8 (~6.3 tok/s) |
+| Profile | HF repo | Weights path | Container | Cold boot | gmu | Notes |
+|---|---|---|---|---:|---:|---|
+| `qwen3.6-35b-a3b@v3.1` (default daily-driver) | `Qwen/Qwen3.6-35B-A3B-FP8` | `/models/Qwen3.6-35B-A3B-FP8` | NGC `nvcr.io/nvidia/vllm:26.03.post1-py3` (+ fastsafetensors) | ~3 min | 0.55 | MoE, 3B active |
+| `qwen3.6-27b@v1.1` (Phase 4.1 dense — operational, DEFAULT_VARIANT) | `Qwen/Qwen3.6-27B-FP8` | `/models/Qwen3.6-27B-FP8` | NGC `nvcr.io/nvidia/vllm:26.03.post1-py3` (+ fastsafetensors) | ~3 min | 0.55 | Dense, bandwidth-bound (~7.6 tok/s); RAM-headroom retune of v1 |
+| `qwen3.6-27b@v1` (Phase 4.1 dense — KV-ceiling audit) | `Qwen/Qwen3.6-27B-FP8` | `/models/Qwen3.6-27B-FP8` | NGC `nvcr.io/nvidia/vllm:26.03.post1-py3` (+ fastsafetensors) | ~3 min | 0.86 | Dense at the bisection ceiling; ~110 GiB UMA reservation. **Use only for KV-ceiling audit / Phase 5 ceiling studies, not daily use.** |
+| `gemma-4-26b-a4b-it@v2` | `google/gemma-4-26B-A4B-it` | `/models/gemma-4-26B-A4B-it` | upstream `vllm/vllm-openai:gemma4-0409-arm64-cu130` | ~8 min | 0.86 | MoE, 4B active |
+| `gemma-4-31b-it@v1.1` (Phase 4.1 dense — operational, DEFAULT_VARIANT) | `google/gemma-4-31B-it` | `/models/gemma-4-31B-it` | upstream `vllm/vllm-openai:gemma4-0409-arm64-cu130` | ~8 min | 0.55 | Dense, BF16 weights → runtime FP8 (~6.4 tok/s); RAM-headroom retune of v1 |
+| `gemma-4-31b-it@v1` (Phase 4.1 dense — KV-ceiling audit) | `google/gemma-4-31B-it` | `/models/gemma-4-31B-it` | upstream `vllm/vllm-openai:gemma4-0409-arm64-cu130` | ~8 min | 0.86 | Dense at the bisection ceiling; ~110 GiB UMA reservation. Audit-only. |
 
 **Container per family** — Qwen profiles always boot on the NGC fastsafetensors-derived image; Gemma profiles always boot on the upstream Day-1 Gemma 4 image. Don't try to cross-pollinate (NGC's Transformers pre-dates Gemma4ForCausalLM; upstream lacks fastsafetensors). The `serving.yaml.engine.container_image_digest` field pins each.
 
