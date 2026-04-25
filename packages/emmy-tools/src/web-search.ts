@@ -92,12 +92,34 @@ export function __resetSearchCountForTests(): void {
 
 // ---- webSearch ------------------------------------------------------------
 
+// Plan 04.2-05 — EMMY_SEARXNG_URL is the documented remote-client escape hatch.
+// D-33 LOCKED: when unset, baseUrl is the literal loopback default 127.0.0.1:8888
+// (air-gap thesis preserved in local mode). When set (Mac client over Tailscale),
+// baseUrl points at the Spark-side SearxNG via the install-client.sh wrapper.
+//
+// CRITICAL: baseUrl is a GETTER (not a const literal) so env-var changes within
+// the process lifetime are picked up. This avoids fragile module-cache-busting
+// in tests (per Plan 05 checker BLOCKER #5 fix). Per-call cost is ~50ns
+// (one process.env lookup + one ?? expression) — negligible relative to a
+// network fetch.
+function _resolveDefaultBaseUrl(): string {
+	return process.env.EMMY_SEARXNG_URL ?? "http://127.0.0.1:8888";
+}
+
 const DEFAULT_CFG: WebSearchConfig = {
-	baseUrl: "http://127.0.0.1:8888",
+	get baseUrl(): string {
+		return _resolveDefaultBaseUrl();
+	},
 	maxResultsDefault: 10,
 	rateLimitPerTurn: 10,
 	timeoutMs: 10000,
 };
+
+/** Test-only: peek at DEFAULT_CFG (used by web-search-env-override.test.ts to assert
+ *  D-33 LOCKED loopback default + live env-var pickup via the getter). */
+export function __getDefaultCfgForTests(): WebSearchConfig {
+	return DEFAULT_CFG;
+}
 
 /** Lazy import to avoid a hard circular dep with web-fetch-allowlist. */
 async function _recordSearchUrlSafe(url: string): Promise<void> {
