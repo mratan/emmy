@@ -161,6 +161,98 @@ With all three up, the harness talks to three loopback endpoints. SearxNG is the
 
 ---
 
+## Remote-client mode (Mac / laptop ↔ Spark over Tailscale)
+
+You can run the **harness on a client machine** (e.g. a MacBook) and offload **just inference** to Spark over Tailscale. Tools (`bash`, `read`, `edit`, `web_fetch`) execute on the client's filesystem against whatever folder you launch from — so coding sessions act on the laptop's project tree while the model runs on Spark. Air-gap invariant is preserved: emmy-serve still binds loopback on Spark; Tailscale Serve adds a controlled tailnet-only HTTPS endpoint on top.
+
+### Spark side (one-time setup)
+
+```sh
+# 1. Enable Tailscale Serve on your tailnet — admin console toggle, one click:
+#    https://login.tailscale.com/admin/settings/general (tailnet feature flags)
+
+# 2. Set tailscale operator so future serve commands don't need sudo:
+sudo tailscale set --operator=$USER
+
+# 3. Expose emmy-serve's port 8002 on the tailnet at HTTPS 443 (MagicDNS cert auto-provisioned):
+tailscale serve --bg 8002
+
+# 4. Verify:
+tailscale serve status
+#  https://<spark-hostname>.<tailnet>.ts.net (tailnet only)
+#  |-- / proxy http://127.0.0.1:8002
+```
+
+### Client side (per machine)
+
+Replace `<spark>.<tailnet>.ts.net` with your actual MagicDNS name from `tailscale serve status`.
+
+```sh
+# 1. Prerequisites (macOS):
+brew install bun git
+
+# 2. Clone the repo somewhere stable on the client:
+mkdir -p ~/code && cd ~/code
+git clone <emmy-repo-url> emmy
+cd emmy && bun install
+
+# 3. Confirm Tailscale + Spark reachability:
+curl -sf https://<spark>.<tailnet>.ts.net/v1/models | head -c 200
+#   {"object":"list","data":[{"id":"qwen3.6-35b-a3b",...
+
+# 4. One-shot smoke test:
+EMMY_SKIP_PROFILE_VALIDATE=1 \
+  bun packages/emmy-ux/bin/pi-emmy.ts \
+  --base-url https://<spark>.<tailnet>.ts.net \
+  --print "Reply with: SP_OK_TEST_PASS"
+
+# 5. Wrapper in PATH for any-folder use:
+mkdir -p ~/.local/bin
+cat > ~/.local/bin/emmy <<'WRAPPER'
+#!/bin/sh
+# emmy — remote-client wrapper. Routes inference through Tailscale Serve to Spark.
+# AGENTS.md / per-project context picked up from $PWD at session start.
+# Tools (bash/edit/read) execute locally; inference offloads to Spark.
+exec env \
+  EMMY_PROFILE_ROOT="$HOME/code/emmy" \
+  EMMY_SKIP_PROFILE_VALIDATE=1 \
+  EMMY_WEB_SEARCH=off \
+  bun "$HOME/code/emmy/packages/emmy-ux/bin/pi-emmy.ts" \
+  --base-url "https://<spark>.<tailnet>.ts.net" \
+  "$@"
+WRAPPER
+chmod +x ~/.local/bin/emmy
+
+# Ensure ~/.local/bin is on PATH (zsh):
+echo 'export PATH="$HOME/.local/bin:$PATH"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+Then from any folder on the client:
+
+```sh
+cd ~/some-project
+emmy                                # interactive TUI
+emmy --print "Summarize this repo"  # one-shot
+```
+
+### Why each env var in the wrapper
+
+| Var | Purpose |
+|---|---|
+| `EMMY_PROFILE_ROOT` | Tells pi-emmy where the cloned repo lives so profile lookup works from arbitrary `$PWD`. |
+| `EMMY_SKIP_PROFILE_VALIDATE=1` | The Mac doesn't have the Python `emmy` package; Spark already validated the profile at boot. |
+| `EMMY_WEB_SEARCH=off` | SearxNG is loopback-only on Spark; not exposed via Tailscale Serve. Drop this var if you add a second `tailscale serve --bg --tcp=8888` for SearxNG. |
+
+### Caveats
+
+- **Profile swaps (`/profile <name>`)** dispatch to the Spark side via the SDK; the Mac repo just needs to stay `git pull`-fresh so both ends agree on the profile dir layout.
+- **Telemetry**: by default JSONL telemetry writes to `~/.emmy/telemetry/feedback.jsonl` on the Mac. To pipe Mac sessions into the Spark-hosted Langfuse instance, expose Langfuse via a second `tailscale serve --bg --https=443 --set-path=/langfuse http://localhost:3000` (or similar) and set `LANGFUSE_PUBLIC_KEY` / `LANGFUSE_SECRET_KEY` in the wrapper.
+- **Hardening followup** (tracked, not blocking client mode): Docker's `-p 8002:8000` currently binds `0.0.0.0` rather than the loopback `CLAUDE.md § Hidden cloud dependencies` claims. Tailscale ACLs gate access for now; a future tightening to `-p 127.0.0.1:8002:8000` makes Tailscale Serve the *only* tailnet-exposure path.
+- **emmy-serve must be running on Spark** for the client to work — `tailscale serve` only proxies; it doesn't auto-start the model server. `bash scripts/start_emmy.sh` on Spark first.
+
+---
+
 ## Common troubleshooting
 
 **Agent returns 400 "context length is only 131072 tokens, maximum input length 114688"**
