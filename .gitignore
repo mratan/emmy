@@ -71,6 +71,26 @@ observability/langfuse/.env
 observability/searxng/.env
 observability/searxng/settings.yml
 
+# Claude Code / agent local state — not part of the repo
+.claude/
+
+# Stray pi-emmy session transcripts dropped at repo root (real telemetry lives
+# under ~/.emmy/telemetry/ via @emmy/telemetry, not at repo root).
+/*.jsonl
+
+# Stray top-level server logs (real serving evidence lives under runs/)
+/server*.log
+
+# Coding-session test artifacts — Emmy occasionally writes scratch projects at
+# repo root during dogfooding sessions; ignore at top level so they don't
+# accidentally land in PRs. Real source code lives under packages/, emmy_serve/,
+# scripts/, etc.
+/solar_system/
+
+# Process-ID files from background helper scripts (download/pull pids) — runtime
+# state, not evidence. The .log files from the same scripts ARE committed.
+*.pid
+
 # TS/Node
 node_modules/
 packages/*/dist/

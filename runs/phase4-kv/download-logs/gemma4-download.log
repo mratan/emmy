@@ -1,0 +1,25 @@
+[33m⚠️  Warning: 'huggingface-cli download' is deprecated. Use 'hf download' instead.[0m
+Fetching 11 files:   0%|          | 0/11 [00:00<?, ?it/s]Downloading 'README.md' to '/data/models/gemma-4-26B-A4B-it/.cache/huggingface/download/Xn7B-BWUGOee2Y6hCZtEhtFu4BE=.3949a793c7e94452d4b8f1899af93396f42be9e8.incomplete'
+Downloading 'config.json' to '/data/models/gemma-4-26B-A4B-it/.cache/huggingface/download/8_PA_wEVGiVa2goH2H4KQOQpvVY=.f42adcca257bb0865c506947671e7d0af52ac9c4.incomplete'
+Downloading 'chat_template.jinja' to '/data/models/gemma-4-26B-A4B-it/.cache/huggingface/download/yIUQ6Jg7XpBWXEkozaEkS2ih05g=.98da08eb6be6f7a353d390456a6c4cacf811c9ed.incomplete'
+Downloading '.gitattributes' to '/data/models/gemma-4-26B-A4B-it/.cache/huggingface/download/wPaCkH-WbT7GsmxMKKrNZTV4nSM=.ddcb389f1c4efd0f6ec18e8925435134b04580da.incomplete'
+Download complete. Moving file to /data/models/gemma-4-26B-A4B-it/README.md
+Download complete. Moving file to /data/models/gemma-4-26B-A4B-it/chat_template.jinja
+Download complete. Moving file to /data/models/gemma-4-26B-A4B-it/config.json
+Download complete. Moving file to /data/models/gemma-4-26B-A4B-it/.gitattributes
+Fetching 11 files:   9%|▉         | 1/11 [00:00<00:05,  1.95it/s]Downloading 'model-00001-of-00002.safetensors' to '/data/models/gemma-4-26B-A4B-it/.cache/huggingface/download/aoe4E07IMh7reFyUkVoVk040mQk=.1127684971bbca40465435a5cad69d67ad603bf5e61c6dfd5561fae4a3bcfdb3.incomplete'
+Downloading 'model-00002-of-00002.safetensors' to '/data/models/gemma-4-26B-A4B-it/.cache/huggingface/download/Dr_lZJDwE1cnGAQMwA77jJEQIk8=.aab47033e1e8a492ef8e581efae1cf36478d0433567e7729b3c1728bc8970db7.incomplete'
+Downloading 'generation_config.json' to '/data/models/gemma-4-26B-A4B-it/.cache/huggingface/download/3EVKVggOldJcKSsGjSdoUCN1AyQ=.e605bb4523b1462ea9d9a3810b9e3ecf7ab7b1f6.incomplete'
+Downloading 'model.safetensors.index.json' to '/data/models/gemma-4-26B-A4B-it/.cache/huggingface/download/yVzAsSxRSINSz-tQbpx-TLpfkLU=.889ab10e12aca96c43c9804a041fb1780de1e5ca.incomplete'
+Download complete. Moving file to /data/models/gemma-4-26B-A4B-it/generation_config.json
+Fetching 11 files:  45%|████▌     | 5/11 [00:00<00:00,  6.81it/s]Download complete. Moving file to /data/models/gemma-4-26B-A4B-it/model.safetensors.index.json
+Downloading 'tokenizer.json' to '/data/models/gemma-4-26B-A4B-it/.cache/huggingface/download/HgM_lKo9sdSCfRtVg7MMFS7EKqo=.cc8d3a0ce36466ccc1278bf987df5f71db1719b9ca6b4118264f45cb627bfe0f.incomplete'
+Downloading 'processor_config.json' to '/data/models/gemma-4-26B-A4B-it/.cache/huggingface/download/8BeVhMN1eB33CiLECQDJwUnv7xg=.5465974d23e1eca2c46c2809b26c997946ce0d90.incomplete'
+Download complete. Moving file to /data/models/gemma-4-26B-A4B-it/processor_config.json
+Downloading 'tokenizer_config.json' to '/data/models/gemma-4-26B-A4B-it/.cache/huggingface/download/vzaExXFZNBay89bvlQv-ZcI6BTg=.375b25dc8be85705251e41be1c25310d24932051.incomplete'
+Download complete. Moving file to /data/models/gemma-4-26B-A4B-it/tokenizer_config.json
+Download complete. Moving file to /data/models/gemma-4-26B-A4B-it/tokenizer.json
+Download complete. Moving file to /data/models/gemma-4-26B-A4B-it/model-00002-of-00002.safetensors
+Download complete. Moving file to /data/models/gemma-4-26B-A4B-it/model-00001-of-00002.safetensors
+Fetching 11 files:  55%|█████▍    | 6/11 [11:37<13:32, 162.59s/it]Fetching 11 files: 100%|██████████| 11/11 [11:37<00:00, 63.44s/it]
+/data/models/gemma-4-26B-A4B-it
