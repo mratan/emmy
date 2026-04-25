@@ -260,7 +260,16 @@ Plans:
   4. Attempting to declare a prompt or sampling change "positive" via a subset run is blocked by the runner — the full suite must complete with mean(new) > mean(old) + std(old) before the change is recorded as a regression-passing tuning.
   5. Every result row carries the same `[SP_OK]` canary verification from Phase 1; any failed canary in the run aborts the batch and forces investigation before numbers are recorded (per the Phase 3 system-prompt-delivery incident).
 
-**Plans**: TBD
+**Plans**: 7 plans
+
+Plans:
+- [ ] 05-01-holdout-suite-PLAN.md — Holdout corpus (operator-authored 5 hand-written + 5 rephrased tasks) + LiveCodeBench rolling fetcher + contamination-signal threshold logic + 3 suite manifest YAMLs (EVAL-05)
+- [ ] 05-02-eval-driver-core-PLAN.md — packages/emmy-eval/ workspace package: orchestrator + provenance + stats + promotion gate + SP_OK gate + air-gap-lane verifier + judge family-guard + prior-Phase-1 5 coding tasks suite + pi-emmy --print-environment (EVAL-02, 03, 04, 07, 08, 09 + UX-06)
+- [ ] 05-03-terminal-bench-PLAN.md — terminal-bench-2.0 BaseInstalledAgent shim (Python PiEmmyAgent) + tbench.ts adapter + 89-task driver; Tier B coverage (MoE N=3 + dense N=1 smoke) (EVAL-01)
+- [ ] 05-04-swe-bench-lite-PLAN.md — SWE-bench-Lite (300 tasks per D-02) predictions JSON producer + aarch64 image pre-flight + grading wrapper (PERMISSIVE) + 30-instance Risk-3 smoke gate; Tier B coverage (EVAL-01)
+- [ ] 05-05-llama-judge-profile-PLAN.md — profiles/llama-3.3-70b-instruct/v1/ brand-new bundle (full Phase-04.1 dense-profile discipline: HF pull → container pin → bundle → hash → validate → smoke → KV bisect → 2×2h thermal) + judge subsystem (default self-hosted via /profile-swap; opt-in cloud-Claude under PERMISSIVE) (EVAL-06)
+- [ ] 05-06-ab-compare-PLAN.md — pi-emmy-eval compare/report/matrix CLI + ab-compare statistical classifier + 4-profile cross-cell aggregator + markdown render (POLISH-01)
+- [ ] 05-07-closeout-PLAN.md — eval/REPRODUCER.md manifest + scripts/reproduce_eval.sh + 5 SC walkthroughs + 6 A/B compare + 5 matrix aggregations + REQUIREMENTS/ROADMAP/STATE/runbook updates + CLOSEOUT (EVAL-03 + EVAL-09 closeout-level)
 
 ---
 
