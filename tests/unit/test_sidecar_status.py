@@ -230,31 +230,37 @@ def test_parse_float_or_none(raw: str, expected: float | None) -> None:
 # ============================================================================
 
 
-def _client_or_skip():  # type: ignore[no-untyped-def]
-    """Construct a TestClient(app); skip the test if controller.py is absent.
+def _client_with_no_vllm(monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-def]
+    """Construct a TestClient(app); patch fetch_vllm_metrics_cached to raise.
 
-    Used as the first line in every Task-3 test below. Once Task 3 commits
-    controller.py, the import succeeds and tests run.
+    Mirrors the runtime invariant the controller depends on: if vLLM is not
+    running, fetch_vllm_metrics_cached raises an httpx error, which the
+    /status handler catches and reports as ``vllm_up=False`` with all metric
+    fields null. The default test environment may have an unrelated service
+    on 8002 (e.g. another emmy worktree), so we MUST patch.
     """
     pytest.importorskip("emmy_serve.swap.controller")
     from fastapi.testclient import TestClient
 
-    from emmy_serve.swap.controller import app, state as _sm
-    from emmy_serve.swap.state import SidecarState
+    from emmy_serve.swap import controller as _ctl
 
-    # Reset the module-level singleton each test so prior tests' transitions
-    # don't leak.
-    _sm.reset_for_tests()
-    return TestClient(app)
+    _ctl._reset_runtime_for_tests()
+
+    async def _refuse(base_url: str = "http://127.0.0.1:8002") -> dict:
+        raise ConnectionRefusedError("vLLM not running (test isolation)")
+
+    monkeypatch.setattr(_ctl, "fetch_vllm_metrics_cached", _refuse)
+    monkeypatch.setattr(_ctl, "sample_gpu_temp_cached", lambda: None)
+    return TestClient(_ctl.app)
 
 
-def test_status_returns_json_not_sse() -> None:
+def test_status_returns_json_not_sse(monkeypatch: pytest.MonkeyPatch) -> None:
     """D-03 LOCKED: GET /status returns application/json, NEVER text/event-stream.
 
     Mac footer poller depends on this — switching to SSE here would silently
     block the poller's 2s cadence, which is the wrong tradeoff per D-03.
     """
-    client = _client_or_skip()
+    client = _client_with_no_vllm(monkeypatch)
     r = client.get("/status")
     assert r.status_code == 200
     ct = r.headers.get("content-type", "")
@@ -262,9 +268,9 @@ def test_status_returns_json_not_sse() -> None:
     assert "text/event-stream" not in ct
 
 
-def test_status_payload_schema_when_stopped() -> None:
+def test_status_payload_schema_when_stopped(monkeypatch: pytest.MonkeyPatch) -> None:
     """D-07 LOCKED: optional fields are null when state=stopped (no vLLM)."""
-    client = _client_or_skip()
+    client = _client_with_no_vllm(monkeypatch)
     r = client.get("/status")
     body = r.json()
     assert body["state"] == "stopped"
@@ -277,24 +283,22 @@ def test_status_payload_schema_when_stopped() -> None:
         "vllm_pid",
         "container_digest",
         "kv_used_pct",
+        "gpu_temp_c",
         "in_flight",
         "last_error",
     ):
         assert body[field] is None, f"expected {field} to be null when stopped, got {body[field]!r}"
-    # gpu_temp_c may be a float (host has nvidia-smi) or None (sidecar host
-    # without GPU); both shapes are valid per D-07.
-    assert body["gpu_temp_c"] is None or isinstance(body["gpu_temp_c"], (int, float))
 
 
-def test_status_state_field_value_is_lowercase_string() -> None:
+def test_status_state_field_value_is_lowercase_string(monkeypatch: pytest.MonkeyPatch) -> None:
     """D-07 wire shape: state field is one of 6 lowercase tokens."""
-    client = _client_or_skip()
+    client = _client_with_no_vllm(monkeypatch)
     r = client.get("/status")
     state = r.json()["state"]
     assert state in {"stopped", "starting", "ready", "swapping", "draining", "error"}
 
 
-def test_status_payload_when_ready_includes_kv_pct(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_status_payload_when_ready_includes_kv_pct(monkeypatch: pytest.MonkeyPatch) -> None:
     """D-07: when vllm_up=true, kv_used_pct = vllm:gpu_cache_usage_perc (fraction)."""
     pytest.importorskip("emmy_serve.swap.controller")
 
@@ -304,21 +308,16 @@ def test_status_payload_when_ready_includes_kv_pct(monkeypatch: pytest.MonkeyPat
     from emmy_serve.swap.state import SidecarState
 
     # Pre-position state machine to READY so /status surfaces metric fields.
-    _ctl.state.reset_for_tests()
-    # Drive STOPPED → STARTING → READY synchronously inside the test event loop.
-    import asyncio
-
-    async def _drive() -> None:
-        await _ctl.state.transition_to(SidecarState.STARTING)
-        await _ctl.state.transition_to(SidecarState.READY)
-
-    asyncio.get_event_loop().run_until_complete(_drive()) if False else asyncio.run(_drive())
+    _ctl._reset_runtime_for_tests()
+    await _ctl.state.transition_to(SidecarState.STARTING)
+    await _ctl.state.transition_to(SidecarState.READY)
 
     # Patch the cached metric fetcher to return a synthetic payload.
     async def _fake_metrics(base_url: str = "http://127.0.0.1:8002") -> dict[str, float]:
         return {"vllm:gpu_cache_usage_perc": 0.34, "vllm:num_requests_running": 2.0}
 
     monkeypatch.setattr(_ctl, "fetch_vllm_metrics_cached", _fake_metrics)
+    monkeypatch.setattr(_ctl, "sample_gpu_temp_cached", lambda: 64.2)
 
     client = TestClient(_ctl.app)
     r = client.get("/status")
@@ -327,3 +326,4 @@ def test_status_payload_when_ready_includes_kv_pct(monkeypatch: pytest.MonkeyPat
     assert body["vllm_up"] is True
     assert body["kv_used_pct"] == 0.34
     assert body["in_flight"] == 2
+    assert body["gpu_temp_c"] == 64.2

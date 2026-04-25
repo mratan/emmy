@@ -82,6 +82,11 @@ def __getattr__(name: str):  # PEP 562 lazy attribute access
         from .orchestrator_runner import run_orchestrator_subprocess
 
         return run_orchestrator_subprocess
+    # Phase 04.2 — controller.py.
+    if name in {"app", "run", "StartRequest", "StopRequest", "SwapRequest", "StatusResponse"}:
+        from . import controller as _ctl
+
+        return getattr(_ctl, name)
     raise AttributeError(f"module 'emmy_serve.swap' has no attribute {name!r}")
 
 
@@ -110,4 +115,11 @@ __all__ = [
     "sample_gpu_temp_cached",
     # Lazy (Phase 04.2 — orchestrator_runner.py).
     "run_orchestrator_subprocess",
+    # Lazy (Phase 04.2 — controller.py).
+    "app",
+    "run",
+    "StartRequest",
+    "StopRequest",
+    "SwapRequest",
+    "StatusResponse",
 ]

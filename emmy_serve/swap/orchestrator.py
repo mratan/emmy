@@ -212,9 +212,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument(
         "--from",
-        required=True,
+        required=False,
+        default=None,
         dest="old_profile",
-        help="path to profiles/<name>/v<N>/ currently loaded",
+        help=(
+            "path to profiles/<name>/v<N>/ currently loaded. Optional: omit "
+            "for COLD START (no engine currently loaded — Phase 04.2 sidecar "
+            "first /start invocation). When omitted, swap_profile receives "
+            "an empty Path and runs with no_rollback=True (nothing to roll "
+            "back to)."
+        ),
     )
     p.add_argument(
         "--to",
@@ -229,16 +236,21 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help=(
             "skip rollback on post-stop failure; only used internally by "
-            "rollback() to prevent infinite recursion"
+            "rollback() to prevent infinite recursion. Forced True implicitly "
+            "when --from is omitted (cold start has nothing to roll back to)."
         ),
     )
     args = p.parse_args(argv)
+    # Cold-start path (Phase 04.2): --from omitted ⇒ no rollback target.
+    cold_start = args.old_profile is None
+    old_profile = Path(args.old_profile) if not cold_start else Path()
+    no_rollback = bool(args.no_rollback) or cold_start
     return swap_profile(
-        Path(args.old_profile),
+        old_profile,
         Path(args.new_profile),
         args.port,
         Path(args.run_dir),
-        no_rollback=args.no_rollback,
+        no_rollback=no_rollback,
     )
 
 
