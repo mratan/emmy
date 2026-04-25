@@ -85,7 +85,24 @@ ok "bun $(bun --version)"
 
 if ! command -v tailscale >/dev/null 2>&1; then
   case "$OS" in
-    Darwin) die "Tailscale not installed. Get it from https://tailscale.com/download/mac (App Store version recommended)." ;;
+    Darwin)
+      # App Store Tailscale on Mac bundles the CLI inside the .app but doesn't
+      # symlink into PATH by default. Detect this and give a precise fix.
+      if [[ -x /Applications/Tailscale.app/Contents/MacOS/Tailscale ]]; then
+        warn "Tailscale.app found, but the 'tailscale' CLI isn't on PATH."
+        warn "Two ways to fix:"
+        warn "  GUI:  Click the Tailscale menu-bar icon → 'Install Command Line Tools...'"
+        warn "  CLI:  Pick the right one for your Mac:"
+        if [[ -d /opt/homebrew ]]; then
+          warn "          sudo ln -sf /Applications/Tailscale.app/Contents/MacOS/Tailscale /opt/homebrew/bin/tailscale"
+        else
+          warn "          sudo ln -sf /Applications/Tailscale.app/Contents/MacOS/Tailscale /usr/local/bin/tailscale"
+        fi
+        warn "Then verify with 'tailscale status' and re-run this installer."
+        die "Tailscale CLI not on PATH"
+      fi
+      die "Tailscale not installed. Get it from https://tailscale.com/download/mac (App Store version recommended)."
+      ;;
     Linux)  die "Tailscale not installed. See https://tailscale.com/download/linux for distro-specific install." ;;
   esac
 fi
