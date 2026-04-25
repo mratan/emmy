@@ -62,6 +62,26 @@ def __getattr__(name: str):  # PEP 562 lazy attribute access
             "ALLOWED_TRANSITIONS": ALLOWED_TRANSITIONS,
             "InvalidTransitionError": InvalidTransitionError,
         }[name]
+    # Phase 04.2 — sidecar_metrics.py.
+    if name in {"fetch_vllm_metrics", "fetch_vllm_metrics_cached", "sample_gpu_temp", "sample_gpu_temp_cached"}:
+        from .sidecar_metrics import (
+            fetch_vllm_metrics,
+            fetch_vllm_metrics_cached,
+            sample_gpu_temp,
+            sample_gpu_temp_cached,
+        )
+
+        return {
+            "fetch_vllm_metrics": fetch_vllm_metrics,
+            "fetch_vllm_metrics_cached": fetch_vllm_metrics_cached,
+            "sample_gpu_temp": sample_gpu_temp,
+            "sample_gpu_temp_cached": sample_gpu_temp_cached,
+        }[name]
+    # Phase 04.2 — orchestrator_runner.py.
+    if name == "run_orchestrator_subprocess":
+        from .orchestrator_runner import run_orchestrator_subprocess
+
+        return run_orchestrator_subprocess
     raise AttributeError(f"module 'emmy_serve.swap' has no attribute {name!r}")
 
 
@@ -83,4 +103,11 @@ __all__ = [
     "SidecarState",
     "ALLOWED_TRANSITIONS",
     "InvalidTransitionError",
+    # Lazy (Phase 04.2 — sidecar_metrics.py).
+    "fetch_vllm_metrics",
+    "fetch_vllm_metrics_cached",
+    "sample_gpu_temp",
+    "sample_gpu_temp_cached",
+    # Lazy (Phase 04.2 — orchestrator_runner.py).
+    "run_orchestrator_subprocess",
 ]
