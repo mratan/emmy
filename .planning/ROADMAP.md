@@ -222,17 +222,19 @@ Plans:
 
 ---
 
-### Phase 04.1: Dense-variant model profiles — Qwen3.6-27B-FP8 + Gemma-4-31B-it dense siblings for Phase 5 A/B (INSERTED)
+### Phase 04.1: Dense-variant model profiles — Qwen3.6-27B-FP8 + Gemma-4-31B-it dense siblings for Phase 5 A/B (INSERTED) ✓ COMPLETE 2026-04-25
 
 **Goal:** Add dense sibling profiles to both existing model families — Qwen/Qwen3.6-27B-FP8 alongside the qwen3.6-35b-a3b MoE, and google/gemma-4-31B-it alongside the gemma-4-26b-a4b-it MoE — with the same full profile discipline (KV bisection, 2×2h thermal replay, profile validate + hash) as Phase 1/4 so both are Phase 5-eval-ready. Daily-driver default stays unchanged on qwen3.6-35b-a3b@v3.1; new profiles are additive + opt-in via /profile. Per operator directive, dense variants are bandwidth-bound by design and are NOT gated on tok/s — the gates are thermal stability (zero preemptions, zero OOM) + KV-bisection convergence.
 **Requirements**: None (insert-phase scoped as Phase 5 eval readiness; success criteria in 04.1-CONTEXT.md § Success criteria)
 **Depends on:** Phase 4
 **Plans:** 3 plans
 
+**Outcome:** Both dense bundles validated, KV-bisected (gmu=0.86 — same hardware ceiling as both MoE siblings), 2×2h thermal "All floors pass" with preemptions=0, oom=0. Throughput (Qwen 27B p50 7.6 tok/s, Gemma 31B p50 6.4 tok/s) recorded as informational only per operator directive — not a gate. Daily-driver default UNCHANGED. routes.yaml extended with optional `dense:` role; `eval/MATRIX.md` enumerates the 4-profile Phase-5 participant matrix; runbook updated with profile table + container-per-family rule.
+
 Plans:
-- [ ] 04.1-01-qwen27b-PLAN.md — Qwen3.6-27B-FP8 dense profile bundle (clone-retarget from qwen3.6-35b-a3b@v3.1; KV bisect + 2x2h thermal)
-- [ ] 04.1-02-gemma31b-PLAN.md — google/gemma-4-31B-it dense profile bundle (clone-retarget from gemma-4-26b-a4b-it@v2; KV bisect + 2x2h thermal)
-- [ ] 04.1-03-routing-matrix-PLAN.md — routes.yaml dense role token + eval/MATRIX.md Phase 5 enumeration + runbook.md swap documentation
+- [x] 04.1-01-qwen27b-PLAN.md — Qwen3.6-27B-FP8 dense profile bundle (clone-retarget from qwen3.6-35b-a3b@v3.1; KV bisect + 2x2h thermal) ✓ hash c3ccf1e1, gmu 0.86
+- [x] 04.1-02-gemma31b-PLAN.md — google/gemma-4-31B-it dense profile bundle (clone-retarget from gemma-4-26b-a4b-it@v2; KV bisect + 2x2h thermal) ✓ hash fe9eded6, gmu 0.86
+- [x] 04.1-03-routing-matrix-PLAN.md — routes.yaml dense role token + eval/MATRIX.md Phase 5 enumeration + runbook.md swap documentation ✓
 
 ### Phase 5: Eval Harness + Reproducible Benchmark Suite
 

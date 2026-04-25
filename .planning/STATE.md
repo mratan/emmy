@@ -3,19 +3,19 @@ gsd_state_version: 1.0
 milestone: v0.68.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-04-24T08:23:33.596Z"
+last_updated: "2026-04-25T01:01:15.644Z"
 progress:
   total_phases: 10
-  completed_phases: 5
-  total_plans: 37
-  completed_plans: 34
-  percent: 92
+  completed_phases: 6
+  total_plans: 40
+  completed_plans: 37
+  percent: 93
 ---
 
 # State: Emmy
 
-**Last updated:** 2026-04-24
-**Updated by:** executor (Phase 4 fully CLOSED including operator-gated carry-forwards — all 4 deferrals from 04-HUMAN-UAT.md resolved on live DGX Spark; Gemma 4 v2 bundle (upstream vllm/vllm-openai:gemma4-0409-arm64-cu130) supersedes v1 per post-close container deferral; `gpu_memory_utilization=0.86` measured via 11-iter KV bisection (3h34m, highest-clean 0.91 × 5% safety); 2×2h thermal replay "All floors pass" with p5 clock 2405 MHz + decode p50 35.9 tok/s; Qwen↔Gemma live round-trip confirmed 3 consecutive swaps. Gemma 4 v2 hash `sha256:8f9c23f500...` with measured-values frontmatter populated. Phase 4 Progress: 100% including carry-forwards. Cumulative 43/68 REQ-IDs Done; ready for Phase 5)
+**Last updated:** 2026-04-25
+**Updated by:** executor (Phase 04.1 fully CLOSED — both dense sibling profiles authored, KV-bisected, 2×2h thermal-passed. `qwen3.6-27b/v1` (NGC fastsafetensors, hash c3ccf1e1, gmu 0.86, decode p50 7.6 tok/s) + `gemma-4-31b-it/v1` (upstream Day-1 Gemma 4 image, hash fe9eded6, gmu 0.86, decode p50 6.4 tok/s) both pass with preemptions=0, oom=0. Daily-driver default UNCHANGED at qwen3.6-35b-a3b@v3.1 per operator directive. routes.yaml extended with optional `dense:` role, eval/MATRIX.md authored as Phase 5 participant manifest, runbook updated with 4-profile table + container-per-family rule. Throughput informational only — both dense profiles bandwidth-bound by design (CONTEXT.md research range met for Gemma; Qwen lower than estimate but per operator directive NOT a gate). Mid-stream canary fix landed (max_tokens 128→2048 in tool_call probe to handle Qwen3.6-27B's reasoning-prefix style — backward-compatible across all profiles). All 4 GB10 profiles converge to gmu=0.86 — clearly a hardware-level vLLM allocation ceiling. Cumulative 43/68 REQ-IDs Done; Phase 5 eval matrix is now eval-ready)
 
 ---
 
@@ -23,7 +23,7 @@ progress:
 
 **Project:** Emmy — fully-local coding agent on NVIDIA DGX Spark
 **Core Value:** A local coding agent good enough to be the author's daily driver, structured rigorously enough to be a public research artifact others can reproduce — with no cloud dependency anywhere in the loop.
-**Current Focus:** Phase 05 — eval-harness + reproducible benchmark suite (Phase 4 CLOSED 2026-04-23)
+**Current Focus:** Phase 5 — eval harness (Phase 04.1 closed; 4-profile matrix in `eval/MATRIX.md` ready for Phase 5 to consume)
 
 **Authoritative documents:**
 
@@ -40,8 +40,8 @@ progress:
 
 ## Current Position
 
-Phase: 5
-Plan: Not started
+Phase: --phase (04.1) — EXECUTING
+Plan: 1 of --name
 **Phase 1:** Serving Foundation + Profile Schema — closed 2026-04-21 with 3 documented deferrals; see `.planning/phases/01-serving-foundation-profile-schema/01-CLOSEOUT.md`
 **Phase 2:** Pi-Harness MVP — Daily-Driver Baseline — closed 2026-04-21 with SC-1 green + SC-2/3/4/5 pass; 5 Phase-3 wire-through deferrals; see `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-CLOSEOUT.md`
 **Phase 3:** Observability + Agent-Loop Hardening + Lived-Experience — closed 2026-04-22 with SC-1 phase3 green + SC-2/3/4/5 pass; v3 profile hash `sha256:2beb99c7...d4d3718`; 8 Phase-3 REQ-IDs + 5 Phase-2 Done† promoted to Done (13 total flipped; cumulative 36); 5 operator-gated evidence items deferred (not blockers); see `.planning/phases/03-observability-agent-loop-hardening-lived-experience/03-CLOSEOUT.md`
