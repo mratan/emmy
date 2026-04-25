@@ -224,13 +224,26 @@ Plans:
 
 ### Phase 04.2: Remote-client mode parity (INSERTED)
 
-**Goal:** [Urgent work - to be planned]
-**Requirements**: TBD
-**Depends on:** Phase 4
-**Plans:** 0 plans
+**Goal:** Make `/profile`, `/start`, `/stop`, `/status`, and `web_search` work from a Mac/laptop client over Tailscale by adding a Spark-side always-on FastAPI sidecar (`emmy_serve.swap.controller`) and a Mac-side dual-path dispatcher in `profile-swap-runner.ts`. Local mode (no `EMMY_REMOTE_CLIENT`) MUST be byte-stable.
+
+**Requirements**: TOOLS-10 (web_search remote-client compatibility via EMMY_SEARXNG_URL), UX-04 (model-swap progress UX over SSE; C-06 wraps Phase-4 D-02 LOCKED contract verbatim), UX-07 (3-state offline badge logic preserved in remote mode; metrics-poller D-09 branch feeds the same state machine)
+
+**Depends on:** Phase 4 (needs the swap orchestrator + /profile slash command + JSON-per-line progress contract)
+
+**Success Criteria** (operator-gated SC walkthroughs per D-08 LOCKED):
+  1. **SC-1 phase4.2** — Mac client one-shot through Tailscale: `emmy --print "..."` from a Mac with the install-client.sh wrapper succeeds; web_search via EMMY_SEARXNG_URL works; SP_OK canary alive on remote path (Pitfall #6 preserved).
+  2. **SC-2 phase4.2** — /start /stop /status round-trip with graceful drain: D-01 LOCKED 30s drain + SIGTERM + 5s SIGKILL semantics work; in-flight long generation either completes or truncates cleanly without corrupting the session.
+  3. **SC-3 phase4.2** — /profile swap from Mac: 4-phase progress sequence (`stopping vLLM` → `loading weights` 0/50/90 → `warmup` → `ready`) renders verbatim in footer (C-06 LOCKED Phase-4 D-02 contract preserved over SSE); D-02 idempotent same-variant short-circuit fires within ~1s; SSE survives ≥10-min idle (RESEARCH Risk A1 negative).
+
+**Plans:** 6 plans
 
 Plans:
-- [ ] TBD (run /gsd-plan-phase 04.2 to break down)
+- [ ] 04.2-01-PLAN.md — Sidecar core: state machine + orchestrator_runner + sidecar_metrics + FastAPI controller.py + 5 unit-test files (Wave 1)
+- [ ] 04.2-02-PLAN.md — Sidecar lifecycle: systemd user unit + start_emmy.sh --install-sidecar-unit + integration test (no real vLLM) + runbook Remote-client posture section (Wave 2)
+- [ ] 04.2-03-PLAN.md — TS dual-path dispatcher: profile-swap-runner-http.ts + profile-swap-runner.ts dispatcher branch + spawn-argv snapshot test (D-04 BYTE-STABLE canary) (Wave 1)
+- [ ] 04.2-04-PLAN.md — TS slash commands + footer remote branch: /start /stop /status + sidecar-status-client + metrics-poller D-09 branch + pi-emmy-extension wiring (Wave 2)
+- [ ] 04.2-05-PLAN.md — Install + posture: install-client.sh wrapper env vars + tailscale serve reminders + web-search.ts EMMY_SEARXNG_URL override + README + air-gap regression smoke (D-33 LOCKED canary) (Wave 2)
+- [ ] 04.2-06-PLAN.md — Operator-gated SC walkthroughs (SC-1/SC-2/SC-3 phase4.2) + ROADMAP/STATE/REQUIREMENTS backfill + closeout (Wave 3)
 
 ### Phase 04.1: Dense-variant model profiles — Qwen3.6-27B-FP8 + Gemma-4-31B-it dense siblings for Phase 5 A/B (INSERTED) ✓ COMPLETE 2026-04-25
 
