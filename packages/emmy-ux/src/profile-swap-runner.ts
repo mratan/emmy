@@ -3,6 +3,14 @@
 // Plan 04-03 Task 1 — TS-side child-process driver for the Python swap
 // primitive shipped by Plan 04-02 (`emmy_serve.swap.orchestrator`).
 //
+// Plan 04.2-03 D-04 LOCKED dual-path dispatcher (4-line leading branch
+// added at the top of runSwapAndStreamProgress): when EMMY_REMOTE_CLIENT='1'
+// the call routes through ./profile-swap-runner-http (HTTP+SSE to the
+// FastAPI sidecar over Tailscale). When unset/anything-else, the existing
+// spawn path runs UNTOUCHED — Phase-4-stabilized daily-driver byte-stable.
+// The spawn-argv snapshot test in test/spawn-argv.snapshot.test.ts pins
+// the exact argv array; any future refactor of this body fails CI loudly.
+//
 // Spawns `uv run python -m emmy_serve.swap.orchestrator --from X --to Y --port N`,
 // line-buffers its stdout, parses each complete line as JSON, and:
 //   - forwards `{phase, pct?}` records to opts.onProgress(phase, pct?)
@@ -77,6 +85,14 @@ export async function runSwapAndStreamProgress(args: {
 	cwd?: string;
 	spawnFn?: SpawnFn;
 }): Promise<SwapResult> {
+	// Plan 04.2-03 D-04 LOCKED dual-path dispatcher.
+	// EMMY_REMOTE_CLIENT='1' → HTTP+SSE path (Mac client over Tailscale to sidecar).
+	// Anything else → byte-stable spawn path (Spark-side daily-driver, UNCHANGED).
+	if (process.env.EMMY_REMOTE_CLIENT === "1") {
+		const { runSwapAndStreamProgressHttp } = await import("./profile-swap-runner-http");
+		return runSwapAndStreamProgressHttp(args);
+	}
+	// ===== EXISTING SPAWN PATH (UNCHANGED below this line — D-04 BYTE-STABLE) =====
 	const spawnFn: SpawnFn = args.spawnFn ?? (defaultSpawn as unknown as SpawnFn);
 	return new Promise<SwapResult>((resolve, reject) => {
 		const p = spawnFn(
