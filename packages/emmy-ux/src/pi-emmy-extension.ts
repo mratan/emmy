@@ -95,7 +95,14 @@ import { runSwapAndStreamProgress } from "./profile-swap-runner";
 // registerCompactCommand import dropped post-Plan-03.1-03 — pi 0.68 ships a
 // built-in /compact that collides; see pi-emmy-extension body comment.
 // Plan 04-03: registerProfileCommand added alongside registerClearCommand.
-import { registerClearCommand, registerProfileCommand } from "./slash-commands";
+// Plan 04.2-04: register{Start,Stop,Status}Command for sidecar control.
+import {
+	registerClearCommand,
+	registerProfileCommand,
+	registerStartCommand,
+	registerStatusCommand,
+	registerStopCommand,
+} from "./slash-commands";
 
 export interface EmmyExtensionOptions {
 	profile: ProfileSnapshot;
@@ -179,6 +186,28 @@ export interface EmmyExtensionOptions {
 	 * ./profile-swap-runner.
 	 */
 	runSwapImpl?: typeof runSwapAndStreamProgress;
+	/**
+	 * Plan 04.2-04 test hooks — DI seams for /start, /stop, /status slash
+	 * commands. Production callers omit these; defaults wire to the HTTP+SSE
+	 * dispatcher in sidecar-lifecycle-client.ts (this plan, Task 2 — self-
+	 * contained POST→SSE helpers; does NOT touch profile-swap-runner-http.ts
+	 * which is Plan 03's contract) + getSidecarStatus from
+	 * sidecar-status-client.ts (this plan, Task 1).
+	 */
+	runSidecarStartImpl?: (args: {
+		profile_id: string;
+		variant?: string;
+		onProgress: (phase: string, pct?: number) => void;
+	}) => Promise<{
+		exit: number;
+		envelope?: { rolled_back?: boolean; rollback_succeeded?: boolean };
+	}>;
+	runSidecarStopImpl?: (args: {
+		onProgress: (phase: string, pct?: number) => void;
+	}) => Promise<{ exit: number }>;
+	getSidecarStatusImpl?: (
+		baseUrl?: string,
+	) => Promise<import("./sidecar-status-client").SidecarStatus>;
 }
 
 /**
@@ -764,6 +793,61 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 				},
 			});
 		}
+
+		// Plan 04.2-04 — /start, /stop, /status sidecar control commands.
+		// Register UNCONDITIONALLY (no opts.profileDir gate): sidecar is the
+		// source of truth for valid profiles, not the local FS profile bundle
+		// — the Mac client doesn't have profile bundles by default. Defaults
+		// route through sidecar-lifecycle-client.ts (POST→SSE) and
+		// sidecar-status-client.ts (GET); test hooks via opts.* override.
+		const sidecarBaseUrl =
+			process.env.EMMY_SERVE_URL ?? "http://127.0.0.1:8003";
+
+		registerStartCommand(pi, {
+			runStart: async ({ profile_id, variant, onProgress }) => {
+				if (opts.runSidecarStartImpl) {
+					return opts.runSidecarStartImpl({
+						profile_id,
+						variant,
+						onProgress,
+					});
+				}
+				const { runSidecarStartHttp } = await import(
+					"./sidecar-lifecycle-client"
+				);
+				return runSidecarStartHttp({
+					baseUrl: sidecarBaseUrl,
+					profile_id,
+					variant,
+					onProgress,
+				});
+			},
+		});
+		registerStopCommand(pi, {
+			runStop: async ({ onProgress }) => {
+				if (opts.runSidecarStopImpl) {
+					return opts.runSidecarStopImpl({ onProgress });
+				}
+				const { runSidecarStopHttp } = await import(
+					"./sidecar-lifecycle-client"
+				);
+				return runSidecarStopHttp({
+					baseUrl: sidecarBaseUrl,
+					onProgress,
+				});
+			},
+		});
+		registerStatusCommand(pi, {
+			getStatus: async () => {
+				if (opts.getSidecarStatusImpl) {
+					return opts.getSidecarStatusImpl(sidecarBaseUrl);
+				}
+				const { getSidecarStatus } = await import(
+					"./sidecar-status-client"
+				);
+				return getSidecarStatus(sidecarBaseUrl);
+			},
+		});
 
 		// Plan 03-03 — turn_start handler invokes emmyCompactionTrigger per
 		// D-11 turn-boundary atomicity (Pitfall #3). Plan 03.1-01 (D-30)

@@ -27,6 +27,10 @@ import {
 	type MetricSnapshot,
 } from "./vllm-metrics";
 import { formatFooter, type FooterValues } from "./footer";
+// Plan 04.2-04 D-09 — remote-mode branch reads sidecar /status instead of
+// vLLM /metrics + nvidia-smi. Lazy import inside tick() to keep local-mode
+// import cost at zero.
+import type { SidecarStatus } from "./sidecar-status-client";
 
 export interface FooterPollerOpts {
 	/** vLLM endpoint (e.g. "http://127.0.0.1:8002"). */
@@ -47,6 +51,13 @@ export interface FooterPollerOpts {
 	fetchMetricsImpl?: (baseUrl: string, timeoutMs: number) => Promise<MetricSnapshot>;
 	/** Test hook: inject nvidia-smi sampler (default: sampleNvidiaSmi). */
 	sampleNvidiaSmiImpl?: () => NvidiaSample | null;
+	/**
+	 * Plan 04.2-04 D-09 test hook — inject sidecar /status fetcher (default:
+	 * lazy-imported getSidecarStatus from ./sidecar-status-client). Used by
+	 * the EMMY_REMOTE_CLIENT='1' branch only; local-mode ticks never invoke
+	 * this hook.
+	 */
+	getStatusImpl?: (baseUrl: string, timeoutMs: number) => Promise<SidecarStatus>;
 }
 
 export interface FooterPollerHandle {
@@ -79,6 +90,15 @@ export function startFooterPoller(opts: FooterPollerOpts): FooterPollerHandle {
 	const clearInt = opts.clearIntervalImpl ?? ((h) => clearInterval(h as ReturnType<typeof setInterval>));
 	const fetchMetrics = opts.fetchMetricsImpl ?? fetchVllmMetrics;
 	const sampleSmi = opts.sampleNvidiaSmiImpl ?? sampleNvidiaSmi;
+	// Plan 04.2-04 D-09 — sidecar /status fetcher resolver. Lazy import so
+	// local-mode (the daily-driver) pays zero import cost. Bun's module cache
+	// makes subsequent remote calls O(1).
+	const getStatus =
+		opts.getStatusImpl ??
+		(async (b: string, t: number): Promise<SidecarStatus> => {
+			const { getSidecarStatus } = await import("./sidecar-status-client");
+			return getSidecarStatus(b, t);
+		});
 
 	const tokTracker = new TokRateTracker();
 	const fields: Record<"gpu" | "kv" | "tok", FieldState> = {
@@ -102,6 +122,67 @@ export function startFooterPoller(opts: FooterPollerOpts): FooterPollerHandle {
 	const tick = async (): Promise<void> => {
 		const values: FooterValues = { specAccept: "-" };
 
+		// Plan 04.2-04 D-09 LOCKED — remote-mode branch.
+		// EMMY_REMOTE_CLIENT='1': single GET /status replaces vllm /metrics +
+		// nvidia-smi. ANY other value (unset, '0', 'true', etc.) falls through
+		// to the existing local-path body UNCHANGED below.
+		// T-04.2-S5 mitigation: when getStatus throws, all 3 fields degrade
+		// to `--`; we MUST NOT silently fall back to local nvidia-smi (which
+		// would fail on a Mac with no NVIDIA tools). The early `return` at
+		// the end of this branch ensures the local body never executes in
+		// remote mode. D-04 BYTE-STABLE: local body unchanged below the
+		// marker comment.
+		if (process.env.EMMY_REMOTE_CLIENT === "1") {
+			const sidecarUrl =
+				process.env.EMMY_SERVE_URL ?? "http://127.0.0.1:8003";
+			const statusTimeoutMs = Math.max(500, Math.floor(intervalMs / 2));
+			let status: SidecarStatus | null = null;
+			try {
+				status = await getStatus(sidecarUrl, statusTimeoutMs);
+			} catch {
+				status = null;
+			}
+			if (
+				status !== null &&
+				status.kv_used_pct !== null &&
+				Number.isFinite(status.kv_used_pct)
+			) {
+				values.kvPct = status.kv_used_pct * 100;
+				fields.kv.lastValue = values.kvPct;
+				fields.kv.failCount = 0;
+			} else {
+				fields.kv.failCount++;
+				applyDegrade(
+					fields.kv,
+					values as Record<string, unknown>,
+					"kvPct",
+					"kvDegraded",
+				);
+			}
+			// gpu_temp_c is temperature, not utilization — not directly mappable
+			// to the existing gpuPct field. For v1 remote mode we leave gpuPct
+			// undefined → renders as `--%` via the existing degrade pipeline.
+			// tokPerS likewise unset (no tok-rate source in /status v1; revisit
+			// when sidecar exposes a derived rate).
+			fields.gpu.failCount++;
+			applyDegrade(
+				fields.gpu,
+				values as Record<string, unknown>,
+				"gpuPct",
+				"gpuDegraded",
+			);
+			fields.tok.failCount++;
+			applyDegrade(
+				fields.tok,
+				values as Record<string, unknown>,
+				"tokPerS",
+				"tokDegraded",
+			);
+			opts.setStatus(footerKey, formatFooter(values));
+			return;
+		}
+
+		// ===== EXISTING LOCAL PATH (UNCHANGED below this line — D-04 BYTE-STABLE) =====
 		// --- vLLM /metrics ---
 		let snap: MetricSnapshot | null = null;
 		try {
