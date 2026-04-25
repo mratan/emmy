@@ -29,6 +29,7 @@ import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 import type { ProfileIndex } from "./profile-index";
 import type { SwapResult } from "./profile-swap-runner";
+import type { SidecarStatus } from "./sidecar-status-client";
 
 /**
  * Minimal ctx shape for /compact. Uses unknown for pi's opaque internals so
@@ -344,6 +345,242 @@ export function registerProfileCommand(
 				`swap failed (exit ${exit}); see runs/boot-failures/`,
 				"error",
 			);
+		},
+	});
+}
+
+// ---------------------------------------------------------------------------
+// Plan 04.2-04 Task 1 — /start, /stop, /status sidecar control commands.
+// These work regardless of opts.profileDir (the sidecar is the source of
+// truth for valid profiles + lifecycle state).
+//
+// /start <profileId>[@<variant>] — D-02 LOCKED: same syntax as /profile.
+//   - Idempotent on same variant (sidecar short-circuits with state=ready).
+//   - Cold-start when sidecar reports state=stopped.
+//   - Cross-variant when sidecar reports state=ready with different variant.
+//
+// /stop — D-01 LOCKED: graceful drain (30s + SIGTERM + 5s SIGKILL).
+//   - Streams draining N requests SSE event into the footer.
+//   - Confirm dialog protects against accidental Ctrl+S typo.
+//
+// /status — D-03 LOCKED: GET-only (no SSE). Renders sidecar /status JSON
+// as a one-line summary via ctx.ui.notify(text, "info"). No isIdle guard
+// because the call is read-only.
+// ---------------------------------------------------------------------------
+
+/**
+ * Minimal ctx shape for /start and /stop. Mirrors ProfileCmdCtx — both
+ * commands need isIdle gating (long-running sidecar lifecycle ops) and the
+ * ui.{confirm, notify, setStatus} surface.
+ */
+interface SidecarCmdCtx {
+	isIdle: () => boolean;
+	ui: {
+		confirm: (title: string, message: string) => Promise<boolean>;
+		notify: (message: string, type?: "info" | "warning" | "error") => void;
+		setStatus: (key: string, text: string | undefined) => void;
+	};
+}
+
+/**
+ * Minimal ctx shape for /status — read-only, so no isIdle / confirm / setStatus
+ * is required. Just ui.notify for the one-line summary.
+ */
+interface StatusCmdCtx {
+	ui: {
+		notify: (message: string, type?: "info" | "warning" | "error") => void;
+	};
+}
+
+export interface RegisterStartCommandOpts {
+	/**
+	 * Shell out to the sidecar /start endpoint over HTTP+SSE; returns the
+	 * same {exit, envelope?} shape runSwap returns. The default impl in
+	 * pi-emmy-extension.ts wires this to runSidecarStartHttp from
+	 * sidecar-lifecycle-client.ts.
+	 */
+	runStart: (args: {
+		profile_id: string;
+		variant?: string;
+		onProgress: (phase: string, pct?: number) => void;
+	}) => Promise<SwapResult>;
+}
+
+export interface RegisterStopCommandOpts {
+	/**
+	 * Shell out to the sidecar /stop endpoint over HTTP+SSE; returns the
+	 * post-drain exit code. The default impl wires this to runSidecarStopHttp.
+	 */
+	runStop: (args: {
+		onProgress: (phase: string, pct?: number) => void;
+	}) => Promise<{ exit: number }>;
+}
+
+export interface RegisterStatusCommandOpts {
+	/**
+	 * GET the sidecar /status endpoint and return parsed SidecarStatus. The
+	 * default impl wires this to getSidecarStatus from sidecar-status-client.ts.
+	 */
+	getStatus: () => Promise<SidecarStatus>;
+}
+
+/**
+ * Render SidecarStatus as a one-line summary for ctx.ui.notify. Omits null
+ * fields so a stopped sidecar doesn't smear "vllm=null kv=null …" across the
+ * TUI.
+ *
+ * Format: "sidecar: state=ready vllm=qwen3.6-35b-a3b@v3.1-default kv=34% temp=64°C in_flight=2"
+ *
+ * T-04.2-S2 mitigation: last_error.msg is sliced to 40 chars to prevent a
+ * malicious / long error string from line-wrapping the TUI. Math.round on
+ * numerics — kv_used_pct + gpu_temp_c are checked at JSON.parse time by the
+ * controller's Pydantic schema (no NaN injection surface here).
+ */
+export function renderSidecarStatus(s: SidecarStatus): string {
+	const parts: string[] = [`state=${s.state}`];
+	if (s.profile_id !== null && s.profile_variant !== null) {
+		parts.push(`vllm=${s.profile_id}@${s.profile_variant}`);
+	} else if (s.vllm_up) {
+		parts.push("vllm=up");
+	}
+	if (s.kv_used_pct !== null && Number.isFinite(s.kv_used_pct)) {
+		parts.push(`kv=${Math.round(s.kv_used_pct * 100)}%`);
+	}
+	if (s.gpu_temp_c !== null && Number.isFinite(s.gpu_temp_c)) {
+		parts.push(`temp=${Math.round(s.gpu_temp_c)}°C`);
+	}
+	if (s.in_flight !== null && s.in_flight > 0) {
+		parts.push(`in_flight=${s.in_flight}`);
+	}
+	if (s.last_error !== null) {
+		// Slice to 40 chars before composing — T-04.2-S2 line-wrap guard.
+		parts.push(`error=${s.last_error.msg.slice(0, 40)}`);
+	}
+	return `sidecar: ${parts.join(" ")}`;
+}
+
+/**
+ * Register /start via pi.registerCommand. Handler:
+ *   1. isIdle() guard — defer if a request is in flight.
+ *   2. Parse `<profileId>[@<variant>]` (same syntax as /profile).
+ *   3. Call opts.runStart({profile_id, variant, onProgress}); relay onProgress
+ *      to ctx.ui.setStatus("emmy.swap", renderProgress(phase, pct?)).
+ *   4. Clear emmy.swap status, then notify success/failure based on exit code.
+ */
+export function registerStartCommand(
+	pi: ExtensionAPI,
+	opts: RegisterStartCommandOpts,
+): void {
+	pi.registerCommand("start", {
+		description:
+			"Start the local LLM. /start <profileId>[@<variant>] — same variant syntax as /profile.",
+		handler: async (args: string, ctx: unknown) => {
+			const cmdCtx = ctx as SidecarCmdCtx;
+			if (!cmdCtx.isIdle()) {
+				cmdCtx.ui.notify(
+					"start deferred — request in flight, finish or Ctrl+C first",
+					"warning",
+				);
+				return;
+			}
+			const trimmed = args.trim();
+			if (trimmed.length === 0) {
+				cmdCtx.ui.notify(
+					"usage: /start <profileId>[@<variant>]",
+					"error",
+				);
+				return;
+			}
+			const atIdx = trimmed.indexOf("@");
+			const profile_id = atIdx >= 0 ? trimmed.slice(0, atIdx) : trimmed;
+			const variant = atIdx >= 0 ? trimmed.slice(atIdx + 1) : undefined;
+
+			const { exit } = await opts.runStart({
+				profile_id,
+				variant,
+				onProgress: (phase, pct) => {
+					cmdCtx.ui.setStatus("emmy.swap", renderProgress(phase, pct));
+				},
+			});
+			cmdCtx.ui.setStatus("emmy.swap", undefined);
+			if (exit === 0) {
+				cmdCtx.ui.notify(`started ${trimmed}`, "info");
+			} else {
+				cmdCtx.ui.notify(`start failed (exit ${exit})`, "error");
+			}
+		},
+	});
+}
+
+/**
+ * Register /stop via pi.registerCommand. Handler:
+ *   1. isIdle() guard — defer if a request is in flight.
+ *   2. ctx.ui.confirm — protect against accidental keystrokes.
+ *   3. Call opts.runStop({onProgress}); relay onProgress to ctx.ui.setStatus.
+ *   4. Clear emmy.swap status, then notify success/failure.
+ */
+export function registerStopCommand(
+	pi: ExtensionAPI,
+	opts: RegisterStopCommandOpts,
+): void {
+	pi.registerCommand("stop", {
+		description:
+			"Stop the local LLM (graceful 30s drain + SIGTERM). vLLM container exits; sidecar stays up.",
+		handler: async (_args: string, ctx: unknown) => {
+			const cmdCtx = ctx as SidecarCmdCtx;
+			if (!cmdCtx.isIdle()) {
+				cmdCtx.ui.notify(
+					"stop deferred — request in flight, finish or Ctrl+C first",
+					"warning",
+				);
+				return;
+			}
+			const confirmed = await cmdCtx.ui.confirm(
+				"Stop emmy-serve",
+				"Stop the local LLM? In-flight requests get up to 30 s to drain, then SIGTERM. Sidecar stays up; restart vLLM with /start.",
+			);
+			if (!confirmed) return;
+
+			const { exit } = await opts.runStop({
+				onProgress: (phase, pct) => {
+					cmdCtx.ui.setStatus("emmy.swap", renderProgress(phase, pct));
+				},
+			});
+			cmdCtx.ui.setStatus("emmy.swap", undefined);
+			if (exit === 0) {
+				cmdCtx.ui.notify("emmy-serve stopped", "info");
+			} else {
+				cmdCtx.ui.notify(`stop failed (exit ${exit})`, "error");
+			}
+		},
+	});
+}
+
+/**
+ * Register /status via pi.registerCommand. Read-only — no isIdle gate, no
+ * confirm. Calls opts.getStatus and renders the result via ctx.ui.notify.
+ * On error (sidecar unreachable etc.) emits an error notify with a hint at
+ * the systemctl debug command.
+ */
+export function registerStatusCommand(
+	pi: ExtensionAPI,
+	opts: RegisterStatusCommandOpts,
+): void {
+	pi.registerCommand("status", {
+		description:
+			"Show emmy-sidecar + vLLM status (state, profile, KV, temp, in-flight).",
+		handler: async (_args: string, ctx: unknown) => {
+			const cmdCtx = ctx as StatusCmdCtx;
+			try {
+				const status = await opts.getStatus();
+				cmdCtx.ui.notify(renderSidecarStatus(status), "info");
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : String(err);
+				cmdCtx.ui.notify(
+					`sidecar unreachable: ${msg} — check: systemctl --user status emmy-sidecar`,
+					"error",
+				);
+			}
 		},
 	});
 }
