@@ -222,6 +222,16 @@ Plans:
 
 ---
 
+### Phase 04.2: Remote-client mode parity (INSERTED)
+
+**Goal:** [Urgent work - to be planned]
+**Requirements**: TBD
+**Depends on:** Phase 4
+**Plans:** 0 plans
+
+Plans:
+- [ ] TBD (run /gsd-plan-phase 04.2 to break down)
+
 ### Phase 04.1: Dense-variant model profiles — Qwen3.6-27B-FP8 + Gemma-4-31B-it dense siblings for Phase 5 A/B (INSERTED) ✓ COMPLETE 2026-04-25
 
 **Goal:** Add dense sibling profiles to both existing model families — Qwen/Qwen3.6-27B-FP8 alongside the qwen3.6-35b-a3b MoE, and google/gemma-4-31B-it alongside the gemma-4-26b-a4b-it MoE — with the same full profile discipline (KV bisection, 2×2h thermal replay, profile validate + hash) as Phase 1/4 so both are Phase 5-eval-ready. Daily-driver default stays unchanged on qwen3.6-35b-a3b@v3.1; new profiles are additive + opt-in via /profile. Per operator directive, dense variants are bandwidth-bound by design and are NOT gated on tok/s — the gates are thermal stability (zero preemptions, zero OOM) + KV-bisection convergence.

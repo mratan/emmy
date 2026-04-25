@@ -103,6 +103,7 @@ Current: Phase 4 CLOSED 2026-04-23 — Gemma 4 v1 + /profile atomic swap + route
 ### Roadmap Evolution
 
 - Phase 04.1 inserted after Phase 4 (2026-04-24): Dense-variant model profiles — Qwen3.6-27B-FP8 + Gemma-4-31B-it dense siblings for Phase 5 A/B (INSERTED). Goal: provide dense-vs-MoE comparison slots for Phase 5 eval matrix. Does NOT change daily-driver default. Dense throughput expected substantially lower than MoE counterparts (bandwidth-bound on GB10) — accepted and NOT a pass/fail criterion.
+- Phase 04.2 inserted after Phase 4 (2026-04-25): Remote-client mode parity (URGENT). Goal: make `/profile`, `/start`, `/stop`, `/status`, and `web_search` work from a Mac/laptop client over Tailscale; today they all hardcode `127.0.0.1` and break on the client. Architecture: always-on Python sidecar on Spark (`emmy_serve.swap.controller`) owns vLLM lifecycle so user can `/stop` to reclaim RAM and `/start <profile>` to wake; vLLM container stays on-demand. Mac client refactor: `profile-swap-runner.ts` detects `EMMY_REMOTE_CLIENT=1` and routes to HTTP+SSE instead of `spawn("uv",…)`; `web-search.ts` honors `EMMY_SEARXNG_URL` override (D-33 LOCKED loopback invariant preserved for local mode — env override is the documented remote-client escape hatch). `install-client.sh` adds two `tailscale serve` routes (sidecar :8003, SearxNG :8888). Auth: trust-on-tailnet, no token (single-user single-tailnet posture). Estimated 6 plans.
 
 ### Decisions Made During Roadmapping
 
