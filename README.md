@@ -165,6 +165,26 @@ With all three up, the harness talks to three loopback endpoints. SearxNG is the
 
 You can run the **harness on a client machine** (e.g. a MacBook) and offload **just inference** to Spark over Tailscale. Tools (`bash`, `read`, `edit`, `web_fetch`) execute on the client's filesystem against whatever folder you launch from — so coding sessions act on the laptop's project tree while the model runs on Spark. Air-gap invariant is preserved: emmy-serve still binds loopback on Spark; Tailscale Serve adds a controlled tailnet-only HTTPS endpoint on top.
 
+### One-press client install (recommended)
+
+After completing the Spark-side setup below, on the client machine:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/mratan/emmy/main/scripts/install-client.sh | bash
+```
+
+The bootstrap auto-detects Spark's MagicDNS name from your tailnet, installs missing prereqs (bun + git via Homebrew on Mac, or apt/dnf/pacman on Linux), clones the repo to `~/code/emmy`, writes the `emmy` wrapper to `~/.local/bin`, ensures PATH is set, and runs an end-to-end smoke test. Idempotent — re-run any time to update.
+
+To review the script before piping it to a shell:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/mratan/emmy/main/scripts/install-client.sh -o install-client.sh
+less install-client.sh
+bash install-client.sh
+```
+
+Skip to "Caveats" below for what to know about profile swaps, telemetry, and hardening followups. The manual setup that follows is the equivalent unrolled in case you want fine-grained control.
+
 ### Spark side (one-time setup)
 
 ```sh
@@ -183,9 +203,9 @@ tailscale serve status
 #  |-- / proxy http://127.0.0.1:8002
 ```
 
-### Client side (per machine)
+### Client side — manual fallback
 
-Replace `<spark>.<tailnet>.ts.net` with your actual MagicDNS name from `tailscale serve status`.
+Use this if the one-press install above doesn't fit your environment (e.g. you want a custom install location or non-default repo URL). Replace `<spark>.<tailnet>.ts.net` with your actual MagicDNS name from `tailscale serve status`.
 
 ```sh
 # 1. Prerequisites (macOS):
