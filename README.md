@@ -194,14 +194,27 @@ Skip to "Caveats" below for what to know about profile swaps, telemetry, and har
 # 2. Set tailscale operator so future serve commands don't need sudo:
 sudo tailscale set --operator=$USER
 
-# 3. Expose emmy-serve's port 8002 on the tailnet at HTTPS 443 (MagicDNS cert auto-provisioned):
-tailscale serve --bg 8002
+# 3. Expose three Spark services on the tailnet (Phase 04.2 expanded from 1 → 3):
+tailscale serve --bg --https=8002 http://127.0.0.1:8002    # vLLM (existing)
+tailscale serve --bg --https=8003 http://127.0.0.1:8003    # sidecar (NEW — /start /stop /status /profile)
+tailscale serve --bg --https=8888 http://127.0.0.1:8888    # SearxNG (NEW — web_search from Mac)
 
-# 4. Verify:
+# 4. Install + enable the always-on sidecar systemd user unit (Phase 04.2):
+bash scripts/start_emmy.sh --install-sidecar-unit
+systemctl --user enable --now emmy-sidecar
+
+# 5. Survive logout (sidecar persists across SSH disconnect / reboot):
+loginctl enable-linger $USER
+
+# 6. Verify:
 tailscale serve status
-#  https://<spark-hostname>.<tailnet>.ts.net (tailnet only)
-#  |-- / proxy http://127.0.0.1:8002
+#  https://<spark-hostname>.<tailnet>.ts.net:8002 → http://127.0.0.1:8002  (vLLM)
+#  https://<spark-hostname>.<tailnet>.ts.net:8003 → http://127.0.0.1:8003  (sidecar)
+#  https://<spark-hostname>.<tailnet>.ts.net:8888 → http://127.0.0.1:8888  (SearxNG)
+systemctl --user status emmy-sidecar
 ```
+
+**Air-gap thesis preserved (D-33 LOCKED):** in **local mode** (Spark with `EMMY_REMOTE_CLIENT` unset), `web_search` defaults to loopback `127.0.0.1:8888`. The remote-client `EMMY_SEARXNG_URL` env override is the documented escape hatch for Mac→Spark posture, NOT a profile change. The STRICT air-gap CI gate (`emmy_serve.airgap.ci_verify_phase3 --dry-run`) continues to pass on Spark in local mode (verified by `tests/smoke/verify_airgap_local_mode.sh`).
 
 ### Client side — manual fallback
 
@@ -262,7 +275,9 @@ emmy --print "Summarize this repo"  # one-shot
 |---|---|
 | `EMMY_PROFILE_ROOT` | Tells pi-emmy where the cloned repo lives so profile lookup works from arbitrary `$PWD`. |
 | `EMMY_SKIP_PROFILE_VALIDATE=1` | The Mac doesn't have the Python `emmy` package; Spark already validated the profile at boot. |
-| `EMMY_WEB_SEARCH=off` | SearxNG is loopback-only on Spark; not exposed via Tailscale Serve. Drop this var if you add a second `tailscale serve --bg --tcp=8888` for SearxNG. |
+| `EMMY_REMOTE_CLIENT=1` | Phase 04.2 — flips `profile-swap-runner.ts` and `metrics-poller.ts` into HTTP-mode (route through the Spark sidecar instead of `spawn("uv", …)`). |
+| `EMMY_SERVE_URL=https://<spark>:8003` | Phase 04.2 — sidecar control-plane endpoint; consumed by `/start`, `/stop`, `/status`, `/profile` slash commands and the footer poller. |
+| `EMMY_SEARXNG_URL=https://<spark>:8888` | Phase 04.2 — Spark-side SearxNG over Tailscale; replaces the prior `EMMY_WEB_SEARCH=off` workaround. The local-mode default of `127.0.0.1:8888` (D-33 LOCKED) is preserved when this env is unset. |
 
 ### Caveats
 
