@@ -171,6 +171,12 @@ Phase 3.1 split air-gap CI into two levels:
 
 Full (non-dry-run) validators require a self-hosted runner with tcpdump + sustained-load capture; deferred per Phase 1 Plan 01-08 carry-forward.
 
+### pi-coding-agent's startup network calls
+
+pi-coding-agent (the harness library, pinned at 0.68.0) makes two unsolicited outbound calls when the TUI starts: `registry.npmjs.org/.../latest` (the "Update Available" banner) and `pi.dev/install?version=…` (install telemetry, gated on pi's `installTelemetryEnabled` setting). Neither is inference, so neither is in the `ci_verify_phase3` perimeter — but neither is in emmy's documented egress story (SearxNG only) either.
+
+`pi-emmy.ts` sets `PI_SKIP_VERSION_CHECK=1` by default, which silences the banner. The pi.dev install-telemetry call only fires when pi's setting opts in (default off in 0.68.0). Operators wanting a stricter posture can launch with `PI_OFFLINE=1 emmy …` — that gates **all** of pi's startup network ops including its auto-download of `fd`/`rg` binaries (which pi's autocomplete uses; emmy's own `grep`/`find` tools shell out to system binaries and are unaffected). On a Spark box that already has `rg`/`fd` on PATH, `PI_OFFLINE=1` is free; on a fresh laptop in remote-client mode it degrades pi's autocomplete to no-fd. To re-enable the banner (e.g. before a deliberate version bump): `PI_SKIP_VERSION_CHECK= emmy …`.
+
 ---
 
 ## Feedback corpus and HF export

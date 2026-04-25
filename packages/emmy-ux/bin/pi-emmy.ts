@@ -35,6 +35,12 @@ import { SpOkCanaryError, UxError } from "../src/errors";
 import { loadProfile } from "../src/profile-loader";
 import { createEmmySession } from "../src/session";
 
+// Silence pi-coding-agent's npm-registry "Update Available" banner. Bumping
+// pi 0.68 → 0.70 is a deliberate phase task (extension API breaks); the banner
+// is a footgun. Operators wanting pi's broader offline mode (also disables
+// fd/rg auto-download) can set PI_OFFLINE=1 — see docs/runbook.md.
+process.env.PI_SKIP_VERSION_CHECK ??= "1";
+
 // Resolve the emmy install root. Derived from this script's path
 // (packages/emmy-ux/bin/pi-emmy.ts -> ../../..), overridable via $EMMY_PROFILE_ROOT.
 // Both the default profile path AND the `uv run emmy` subprocess need this — running
