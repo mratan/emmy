@@ -84,6 +84,26 @@ async function _streamSseHelper(args: _SseHelperArgs): Promise<_SseHelperResult>
 	}
 
 	if (!resp.ok || !resp.body) {
+		// Phase 04.2 follow-up — surface the sidecar's HTTP error body so the
+		// slash command can render an actionable message instead of bare
+		// "exit 1". Common cases:
+		//   400 — variant required (WARNING #10), path-traversal rejected
+		//   409 — state guard rejection (e.g. "start requires state in (...)")
+		// FastAPI emits {detail: "<msg>"} for HTTPException; pull that out
+		// when present, fall back to the raw text for non-FastAPI bodies.
+		try {
+			const body = await resp.text();
+			let detail = body;
+			try {
+				const parsed = JSON.parse(body) as { detail?: unknown };
+				if (typeof parsed.detail === "string") detail = parsed.detail;
+			} catch {
+				// not JSON — keep raw
+			}
+			args.onProgress(`error: HTTP ${resp.status}: ${detail.slice(0, 200)}`);
+		} catch {
+			args.onProgress(`error: HTTP ${resp.status}`);
+		}
 		return { exit: 1 };
 	}
 

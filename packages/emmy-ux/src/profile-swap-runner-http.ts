@@ -131,11 +131,31 @@ export async function runSwapAndStreamProgressHttp(args: {
 	}
 
 	if (!resp.ok || !resp.body) {
+		// Phase 04.2 follow-up — surface sidecar HTTP error detail (same fix
+		// applied to sidecar-lifecycle-client.ts). For /profile/swap the
+		// common 409 is "swap requires state=ready, currently=<X>".
+		try {
+			const body = await resp.text();
+			let detail = body;
+			try {
+				const parsed = JSON.parse(body) as { detail?: unknown };
+				if (typeof parsed.detail === "string") detail = parsed.detail;
+			} catch {
+				// not JSON — keep raw
+			}
+			args.onProgress(`error: HTTP ${resp.status}: ${detail.slice(0, 200)}`);
+		} catch {
+			args.onProgress(`error: HTTP ${resp.status}`);
+		}
 		return { exit: 1 };
 	}
 
 	let envelope: SwapResult["envelope"];
-	let exitCode = 0;
+	// Phase 04.2 follow-up — flip default to 1 (fail-loud). Pre-fix default
+	// of 0 meant any SSE stream that closed without an exit frame (e.g.
+	// network drop mid-stream) was reported as success. Now: only an explicit
+	// {exit:0} frame from the controller promotes to success.
+	let exitCode = 1;
 
 	// eventsource-parser v3 API: createParser({ onEvent: fn }) — the v2
 	// callback-as-positional-arg form was removed.

@@ -297,12 +297,21 @@ export function registerProfileCommand(
 			);
 			if (!confirmed) return;
 
+			// Phase 04.2 follow-up — capture the LAST error: progress so the
+			// failure notify can include actionable detail. The HTTP dispatcher
+			// emits "error: HTTP 4xx: <detail>" for sidecar-rejected requests
+			// (e.g. 409 "swap requires state=ready, currently=stopped" — telling
+			// the operator they need /start first).
+			let lastErrorDetail: string | null = null;
 			const { exit, envelope } = await opts.runSwap({
 				from: opts.profileDir,
 				to: target,
 				port: opts.port,
 				onProgress: (phase, pct) => {
 					cmdCtx.ui.setStatus("emmy.swap", renderProgress(phase, pct));
+					if (phase.startsWith("error")) {
+						lastErrorDetail = phase;
+					}
 				},
 			});
 
@@ -341,10 +350,17 @@ export function registerProfileCommand(
 				}
 				return;
 			}
-			cmdCtx.ui.notify(
-				`swap failed (exit ${exit}); see runs/boot-failures/`,
-				"error",
-			);
+			if (lastErrorDetail !== null) {
+				cmdCtx.ui.notify(
+					`swap failed (exit ${exit}) — ${lastErrorDetail}`,
+					"error",
+				);
+			} else {
+				cmdCtx.ui.notify(
+					`swap failed (exit ${exit}); see runs/boot-failures/`,
+					"error",
+				);
+			}
 		},
 	});
 }
@@ -509,6 +525,20 @@ export function registerStartCommand(
 			const profile_id = atIdx >= 0 ? trimmed.slice(0, atIdx) : trimmed;
 			const variant = atIdx >= 0 ? trimmed.slice(atIdx + 1) : undefined;
 
+			// Phase 04.2 follow-up — variant is required by the sidecar
+			// (WARNING #10: no silent fallback to bare 'v1'). Surface a clear
+			// client-side message instead of letting the round-trip return a
+			// useless "exit 1" via the lifecycle client's HTTP-error path.
+			if (variant === undefined || variant.length === 0) {
+				cmdCtx.ui.notify(
+					`/start requires <profileId>@<variant>. ` +
+						`Try: /start ${profile_id}@v3.1-default ` +
+						`(or look in profiles/${profile_id}/ for available variants).`,
+					"error",
+				);
+				return;
+			}
+
 			// Phase 04.2 follow-up — swap-guard. /start is for "bring vLLM up"
 			// not "switch to a different model". If vLLM is already running a
 			// different profile/variant, /start would trigger a swap on the
@@ -549,16 +579,29 @@ export function registerStartCommand(
 				return;
 			}
 
+			// Phase 04.2 follow-up — capture the LAST error: progress message
+			// so the failure notify can include actionable detail rather than
+			// just "exit N". The lifecycle client emits "error: HTTP 4xx: <detail>"
+			// for sidecar-rejected requests (variant-required, state-guard 409, etc).
+			let lastErrorDetail: string | null = null;
 			const { exit } = await opts.runStart({
 				profile_id,
 				variant,
 				onProgress: (phase, pct) => {
 					cmdCtx.ui.setStatus("emmy.swap", renderProgress(phase, pct));
+					if (phase.startsWith("error")) {
+						lastErrorDetail = phase;
+					}
 				},
 			});
 			cmdCtx.ui.setStatus("emmy.swap", undefined);
 			if (exit === 0) {
 				cmdCtx.ui.notify(`started ${trimmed}`, "info");
+			} else if (lastErrorDetail !== null) {
+				cmdCtx.ui.notify(
+					`start failed (exit ${exit}) — ${lastErrorDetail}`,
+					"error",
+				);
 			} else {
 				cmdCtx.ui.notify(`start failed (exit ${exit})`, "error");
 			}

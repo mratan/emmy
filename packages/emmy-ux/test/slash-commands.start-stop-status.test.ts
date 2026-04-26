@@ -192,22 +192,29 @@ describe("renderSidecarStatus (pure)", () => {
 // ============================================================================
 
 describe("registerStartCommand", () => {
-	test("parses '<id>' (no @) → profile_id=id, variant=undefined", async () => {
+	// Phase 04.2 follow-up — variant is REQUIRED (sidecar enforces WARNING #10:
+	// no silent fallback to bare 'v1'). Slash command refuses bare profile_id
+	// client-side rather than letting the round-trip return a useless "exit 1"
+	// via the lifecycle client's HTTP-error path.
+	test("bare '<id>' (no @) → notify('requires <profileId>@<variant>'), runStart NOT called", async () => {
 		const { registerStartCommand } = await import("../src/slash-commands");
 		const { pi, registered } = makeFakePi();
-		const calls: Array<{ profile_id: string; variant?: string }> = [];
+		let runStartCalled = false;
 		registerStartCommand(pi, {
-			runStart: async ({ profile_id, variant }) => {
-				calls.push({ profile_id, variant });
+			runStart: async () => {
+				runStartCalled = true;
 				return { exit: 0 };
 			},
 		});
 		const cmd = registered.find((r) => r.name === "start");
 		expect(cmd).toBeDefined();
-		const { ctx } = makeSidecarCtx();
+		const { ctx, notifyCalls } = makeSidecarCtx();
 		await cmd!.options.handler("qwen3.6-35b-a3b", ctx);
-		expect(calls.length).toBe(1);
-		expect(calls[0]).toEqual({ profile_id: "qwen3.6-35b-a3b", variant: undefined });
+		expect(runStartCalled).toBe(false);
+		expect(notifyCalls.length).toBe(1);
+		expect(notifyCalls[0]![0]).toBe("error");
+		expect(notifyCalls[0]![1]).toMatch(/requires <profileId>@<variant>/);
+		expect(notifyCalls[0]![1]).toMatch(/qwen3\.6-35b-a3b@v3\.1-default/);
 	});
 
 	test("parses '<id>@<variant>' → profile_id=id, variant=variant", async () => {
@@ -407,7 +414,9 @@ describe("registerStartCommand", () => {
 		});
 		const cmd = registered.find((r) => r.name === "start")!;
 		const { ctx, notifyCalls } = makeSidecarCtx();
-		await cmd.options.handler("qwen3.6-35b-a3b", ctx);
+		// Phase 04.2 follow-up — supply @variant; bare profile_id now refused
+		// client-side before reaching runStart (variant is required).
+		await cmd.options.handler("qwen3.6-35b-a3b@v3.1-default", ctx);
 		expect(notifyCalls.some(([t, m]) =>
 			t === "error" && /start failed.*exit 1/.test(m ?? ""),
 		)).toBe(true);
@@ -425,7 +434,9 @@ describe("registerStartCommand", () => {
 		});
 		const cmd = registered.find((r) => r.name === "start")!;
 		const { ctx, statusCalls } = makeSidecarCtx();
-		await cmd.options.handler("x", ctx);
+		// Phase 04.2 follow-up — supply @variant; bare profile_id now refused
+		// client-side before runStart can fire onProgress.
+		await cmd.options.handler("x@v1", ctx);
 		// Should have at least: 2 progress updates + 1 final clear.
 		const swapStatuses = statusCalls.filter(([k]) => k === "emmy.swap");
 		expect(swapStatuses.length).toBeGreaterThanOrEqual(3);
