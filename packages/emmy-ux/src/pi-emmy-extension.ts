@@ -104,6 +104,8 @@ import {
 	registerStatusCommand,
 	registerStopCommand,
 } from "./slash-commands";
+// Plan 04.4-06 — append-only-prefix invariant (D-3X) telemetry helper.
+import { computePrefixHash } from "./prefix-hash";
 
 export interface EmmyExtensionOptions {
 	profile: ProfileSnapshot;
@@ -618,6 +620,48 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 				...(turnCtx.variantHash ? { "emmy.profile.variant_hash": turnCtx.variantHash } : {}),
 				...(turnCtx.role ? { "emmy.role": turnCtx.role } : {}),
 			});
+
+			// Phase 04.4 plan 06 — append-only-prefix invariant (D-3X) telemetry.
+			// Compute sha256 of the system-prompt prefix (system message + tool
+			// catalog + leading user preamble messages BEFORE the first
+			// assistant turn). The hash MUST be byte-equal across every request
+			// in a single session-id; any drift indicates D-3X violation.
+			// emitEvent's profile-stamp processor auto-attaches
+			// emmy.profile.{id,version,hash}.
+			try {
+				const prefixHash = computePrefixHash({
+					messages: payload.messages as Array<{
+						role: string;
+						content: unknown;
+					}>,
+					tools: (payload as { tools?: unknown }).tools as
+						| Array<{ function?: { name?: unknown } }>
+						| undefined,
+				});
+				const sessionIdAttr =
+					(payload as { emmy?: { session_id?: string } }).emmy
+						?.session_id ?? "unknown";
+				const turnIdAttr =
+					(payload as { emmy?: { turn_id?: string } }).emmy?.turn_id ??
+					"unknown";
+				emitEvent({
+					event: "compaction.prefix_hash",
+					ts: new Date().toISOString(),
+					"emmy.prefix.hash": prefixHash,
+					"emmy.session.id": sessionIdAttr,
+					"emmy.turn.id": turnIdAttr,
+				});
+			} catch (err) {
+				// Best-effort. emitEvent failures are already swallowed in
+				// @emmy/telemetry; a hash compute failure here would only
+				// happen if extractSystemPrefixBytes saw an unexpected payload
+				// shape. Log to stderr and continue.
+				console.error(
+					`[emmy/prefix-hash] compute failed: ${
+						err instanceof Error ? err.message : String(err)
+					}`,
+				);
+			}
 		});
 
 		// Plan 03-05 (TELEM-02): turn_end handler populates the TurnTracker

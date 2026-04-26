@@ -30,8 +30,8 @@ interface AnyToolDescriptor {
 export function extractSystemPrefixBytes(args: {
 	messages: AnyMessage[];
 	tools?: AnyToolDescriptor[];
-}): Buffer {
-	const parts: Buffer[] = [];
+}): Uint8Array {
+	const parts: string[] = [];
 
 	// Find the first assistant turn — that is the cutoff.
 	let cutoffIdx = args.messages.length;
@@ -47,9 +47,7 @@ export function extractSystemPrefixBytes(args: {
 		const m = args.messages[i];
 		if (!m) continue;
 		const text = stringifyContent(m.content);
-		parts.push(
-			Buffer.from(`<<msg ${m.role}>>\n${text}\n<<end>>\n`, "utf8"),
-		);
+		parts.push(`<<msg ${m.role}>>\n${text}\n<<end>>\n`);
 	}
 
 	// Tool catalog — sort alphabetic by function.name; canonical JSON.
@@ -67,15 +65,10 @@ export function extractSystemPrefixBytes(args: {
 				parameters: t.function?.parameters,
 			},
 		}));
-		parts.push(
-			Buffer.from(
-				`<<tools>>\n${JSON.stringify(canonical)}\n<<end>>\n`,
-				"utf8",
-			),
-		);
+		parts.push(`<<tools>>\n${JSON.stringify(canonical)}\n<<end>>\n`);
 	}
 
-	return Buffer.concat(parts);
+	return new TextEncoder().encode(parts.join(""));
 }
 
 function stringifyContent(content: unknown): string {

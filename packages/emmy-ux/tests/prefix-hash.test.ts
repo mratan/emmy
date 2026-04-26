@@ -8,6 +8,14 @@ import {
 
 const SHA256_RE = /^[0-9a-f]{64}$/;
 
+function equalBytes(a: Uint8Array, b: Uint8Array): boolean {
+	if (a.length !== b.length) return false;
+	for (let i = 0; i < a.length; i++) {
+		if (a[i] !== b[i]) return false;
+	}
+	return true;
+}
+
 describe("extractSystemPrefixBytes", () => {
 	test("returns buffer for system message text", () => {
 		const buf = extractSystemPrefixBytes({
@@ -16,7 +24,8 @@ describe("extractSystemPrefixBytes", () => {
 				{ role: "user", content: "u1" },
 			],
 		});
-		expect(buf.toString("utf8")).toContain("sys");
+		const text = new TextDecoder("utf-8").decode(buf);
+		expect(text).toContain("sys");
 	});
 
 	test("empty buffer when no system + no preamble + first turn is assistant", () => {
@@ -38,7 +47,7 @@ describe("extractSystemPrefixBytes", () => {
 				{ function: { name: "tool_b", description: "b" } },
 			],
 		});
-		expect(a.equals(b)).toBe(false);
+		expect(equalBytes(a, b)).toBe(false);
 	});
 
 	test("tool catalog: reordering input is INVARIANT (alphabetic canonicalization)", () => {
@@ -56,7 +65,7 @@ describe("extractSystemPrefixBytes", () => {
 				{ function: { name: "tool_a", description: "a" } },
 			],
 		});
-		expect(a.equals(b)).toBe(true);
+		expect(equalBytes(a, b)).toBe(true);
 	});
 
 	test("leading user messages BEFORE first assistant turn contribute", () => {
@@ -69,7 +78,7 @@ describe("extractSystemPrefixBytes", () => {
 		const b = extractSystemPrefixBytes({
 			messages: [{ role: "system", content: "s" }],
 		});
-		expect(a.equals(b)).toBe(false);
+		expect(equalBytes(a, b)).toBe(false);
 	});
 
 	test("first assistant message is the cutoff (subsequent messages don't contribute)", () => {
@@ -90,7 +99,7 @@ describe("extractSystemPrefixBytes", () => {
 				{ role: "tool", content: "t" },
 			],
 		});
-		expect(a.equals(b)).toBe(true);
+		expect(equalBytes(a, b)).toBe(true);
 	});
 });
 
