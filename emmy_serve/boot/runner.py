@@ -129,7 +129,19 @@ def render_docker_only_args(
     if airgap:
         args += ["--network", "none"]
     else:
-        args += ["-p", f"{port}:{engine.port}"]
+        # Phase 04.2 follow-up — bind 127.0.0.1 only, NOT 0.0.0.0.
+        #
+        # Without the loopback prefix, Docker tries to bind 0.0.0.0:{port} on
+        # the host, which collides with `tailscale serve --bg --https={port}
+        # http://127.0.0.1:{port}` (tailscale's per-tailnet-IP listener owns
+        # that port already). Container fails to start with:
+        #     "failed to bind host port 0.0.0.0:{port}/tcp: address already
+        #      in use"
+        # — same architectural mistake we just fixed in the sidecar
+        # controller (commit aa239b2). Tailscale Serve is the explicit,
+        # ACL-gated tailnet exposure path; the container itself stays
+        # loopback-only per CLAUDE.md two-hard-boundaries principle.
+        args += ["-p", f"127.0.0.1:{port}:{engine.port}"]
 
     env = serving.env
     args += [
