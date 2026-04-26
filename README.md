@@ -85,6 +85,9 @@ EMMY_WEB_SEARCH=off pi-emmy       # disable web_search tool (8-tool floor; badge
 
 # Slash commands (inside interactive TUI)
 /profile <name>[@variant]         # atomic swap of serving engine + harness state (Phase 4). Emits 4 verbatim progress phases: stopping vLLM → loading weights N% → warmup → ready. Exit codes: 0 ok, 5 pre-flight fail (prior engine alive), 6 post-stop fail with rollback. See docs/runbook.md § "Swapping profiles".
+/start <name>[@variant]           # cold-start vLLM via the always-on sidecar (Phase 04.2). Idempotent same-variant short-circuit returns ~1s; cross-variant reuses the /profile swap path.
+/stop                             # graceful drain via sidecar (Phase 04.2): D-01 30s grace for in-flight requests, then SIGTERM, then SIGKILL deadline. Footer shows draining {in_flight: N}.
+/status                           # poll-only sidecar /status (Phase 04.2): state, vllm_up, profile_id, profile_variant, KV%, GPU temp.
 /compact [optional instructions]  # manually compact session context (pi built-in; auto-fires at 75% of max_input_tokens)
 /clear                            # reset session history (keep boot context)
 /quit                             # exit pi-emmy
@@ -154,10 +157,11 @@ To swap to a dense profile inside a running pi-emmy TUI: `/profile qwen3.6-27b` 
 | Stack | Port | Required for | Disable |
 |-------|------|--------------|---------|
 | `emmy-serve` | 127.0.0.1:8002 | inference (every pi-emmy request) | none — required |
+| `emmy-sidecar` | 127.0.0.1:8003 | `/start`, `/stop`, `/status`, `/profile` slash commands; remote-client control plane (Phase 04.2) | `systemctl --user stop emmy-sidecar` (local-mode `/profile` falls back to spawn path) |
 | Langfuse | 127.0.0.1:3000 | tracing (optional) | leave `LANGFUSE_*` env empty or `EMMY_TELEMETRY=off` |
 | SearxNG | 127.0.0.1:8888 | `web_search` tool (optional) | `bash scripts/stop_searxng.sh` or `EMMY_WEB_SEARCH=off` |
 
-With all three up, the harness talks to three loopback endpoints. SearxNG is the only container with outbound traffic (to search engines). That's the one deliberate egress surface; see `CLAUDE.md § Design Principles` for the rationale.
+With all four up, the harness talks to four loopback endpoints. SearxNG is the only container with outbound traffic (to search engines). That's the one deliberate egress surface; see `CLAUDE.md § Design Principles` for the rationale. The sidecar (FastAPI on 8003) is also loopback in local mode — it only becomes tailnet-exposed when you opt in via `tailscale serve` (see Remote-client mode below).
 
 ---
 
@@ -239,17 +243,19 @@ EMMY_SKIP_PROFILE_VALIDATE=1 \
   --base-url https://<spark>.<tailnet>.ts.net \
   --print "Reply with: SP_OK_TEST_PASS"
 
-# 5. Wrapper in PATH for any-folder use:
+# 5. Wrapper in PATH for any-folder use (Phase 04.2 — 3 endpoints, no kill-switch needed):
 mkdir -p ~/.local/bin
 cat > ~/.local/bin/emmy <<'WRAPPER'
 #!/bin/sh
-# emmy — remote-client wrapper. Routes inference through Tailscale Serve to Spark.
+# emmy — remote-client wrapper. Routes inference + sidecar control + web_search to Spark via Tailscale.
 # AGENTS.md / per-project context picked up from $PWD at session start.
-# Tools (bash/edit/read) execute locally; inference offloads to Spark.
+# Tools (bash/edit/read) execute locally; inference + /start /stop /status /profile + web_search offload to Spark.
 exec env \
   EMMY_PROFILE_ROOT="$HOME/code/emmy" \
   EMMY_SKIP_PROFILE_VALIDATE=1 \
-  EMMY_WEB_SEARCH=off \
+  EMMY_REMOTE_CLIENT=1 \
+  EMMY_SERVE_URL="https://<spark>.<tailnet>.ts.net:8003" \
+  EMMY_SEARXNG_URL="https://<spark>.<tailnet>.ts.net:8888" \
   bun "$HOME/code/emmy/packages/emmy-ux/bin/pi-emmy.ts" \
   --base-url "https://<spark>.<tailnet>.ts.net" \
   "$@"
@@ -320,12 +326,14 @@ profiles/qwen3.6-27b/v1/                    # Phase 4.1 dense Qwen sibling (opt-
 profiles/gemma-4-26b-a4b-it/v{1,2}/         # Phase 4 Gemma MoE (v2 bootable)
 profiles/gemma-4-31b-it/v1/                 # Phase 4.1 dense Gemma sibling (opt-in)
 emmy_serve/                              # vLLM container wrapper, profile loader, air-gap validators
+  swap/                                  # FastAPI sidecar (Phase 04.2): /start /stop /status /profile/swap; D-01 graceful drain; SSE progress
+  systemd/                               # emmy-sidecar.service user unit (Phase 04.2): always-on control plane
 packages/
   emmy-provider/                         # pi provider adapter + @emmy/provider streamSimple wiring
-  emmy-tools/                            # 8 native tools + web_search + MCP bridge + web_fetch allowlist
+  emmy-tools/                            # 8 native tools + web_search (EMMY_SEARXNG_URL override) + MCP bridge + web_fetch allowlist
   emmy-telemetry/                        # dual-sink JSONL+OTLP telemetry + feedback capture
   emmy-context/                          # compaction trigger (D-14 preservation + D-12 hard-ceiling)
-  emmy-ux/                               # prompt assembly + pi-emmy CLI + TUI integration + slash commands
+  emmy-ux/                               # prompt assembly + pi-emmy CLI + TUI + slash commands + dual-path dispatcher (D-04 BYTE-STABLE)
 observability/
   langfuse/                              # self-hosted v3 compose
   searxng/                               # self-hosted search aggregator compose
@@ -352,13 +360,20 @@ Some evidence items from earlier phases are operator-gated — they need a brows
 
 **Phase 4:** all operator-gated deferrals **resolved 2026-04-24** (KV bisection on Gemma 4 v2 → 0.86, 2×2h thermal replay "All floors pass", Qwen↔Gemma live round-trip confirmed). See `runs/phase4-closeout/` for the close-out evidence.
 
+**From Phase 04.2** (CLOSURE PENDING — 3 SCs need a live Mac+Spark+Tailscale rig; runbook scripts ship reproducible steps):
+- `sc1 phase4.2 green` — Mac client one-shot through Tailscale (`emmy --print "Reply with: SP_OK_PHASE4_2_GREEN"` round-trip + optional `web_search` smoke). Promotes TOOLS-10 Done† → Done.
+- `sc2 phase4.2 green` — `/start` `/stop` `/status` round-trip with D-01 graceful drain (long-gen interrupt verified). Promotes UX-04 + UX-07 Done† → Done.
+- `sc3 phase4.2 green` — `/profile` swap from Mac with C-06 4-phase SSE progress over Tailscale. Promotes UX-04 Done† → Done.
+
+See `docs/runbook.md § Phase 04.2 SC walkthroughs` for the verbatim operator scripts and `.planning/phases/04.2-remote-client-mode-parity/04.2-HUMAN-UAT.md` for the promotion path.
+
 See `.planning/phases/03-observability-agent-loop-hardening-lived-experience/03-HUMAN-UAT.md` + `.planning/phases/01-serving-foundation-profile-schema/01-CLOSEOUT.md § Deferrals` for details.
 
 ---
 
 ## Roadmap
 
-Emmy ships in 7 phases across v1 milestones. Cumulative progress: 5/7 phases complete (Phases 1, 2, 3, 3.1, 4, 4.1); 43/68 v1 REQ-IDs Done.
+Emmy ships in 7 phases across v1 milestones. Cumulative progress: 5/7 phases complete (Phases 1, 2, 3, 3.1, 4, 4.1) + Phase 04.2 CLOSURE PENDING (3 operator-gated SCs deferred). 43/68 v1 REQ-IDs Done; TOOLS-10/UX-04/UX-07 at Done† pending Phase 04.2 SC operator confirmation.
 
 - **Phase 1** (CLOSED): serving foundation + profile schema
 - **Phase 2** (CLOSED): pi-harness MVP — daily-driver baseline
@@ -366,6 +381,7 @@ Emmy ships in 7 phases across v1 milestones. Cumulative progress: 5/7 phases com
 - **Phase 3.1** (CLOSED): operational polish — RAM + live compaction + SearxNG + docs
 - **Phase 4** (CLOSED): Gemma 4 profile + profile system maturity (all 4 operator carry-forwards resolved 2026-04-24)
 - **Phase 4.1** (CLOSED 2026-04-25): dense-variant model profiles — Qwen 3.6-27B-FP8 + Gemma 4 31B-it dense siblings authored, KV-bisected (gmu=0.86 each, identical to MoE ceiling), 2×2h thermal-validated. `eval/MATRIX.md` enumerates the 4-profile Phase 5 participant matrix. Daily-driver default UNCHANGED.
+- **Phase 04.2** (CLOSURE PENDING 2026-04-25/26): remote-client mode parity — FastAPI sidecar (`emmy-sidecar` on 8003) + always-on systemd unit + Mac TS dispatcher + `/start /stop /status` slash commands + `install-client.sh` one-press wrapper + `EMMY_SEARXNG_URL` Tailscale override (D-33 LOCKED preserved in local mode). 250 Python + 620 TS tests green; 3 SC walkthroughs deferred.
 - **Phase 5** (next): eval harness (terminal-bench, SWE-bench Verified, LiveCodeBench)
 - **Phase 6**: speculative decoding (Qwen3-MTP + EAGLE-3)
 - **Phase 7**: publication + reproducibility artifact
