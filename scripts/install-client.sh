@@ -143,20 +143,43 @@ fi
 ok "Spark host: $EMMY_SPARK_HOST"
 
 # ----------------------------------------------------------------------------
-# 3. Verify Spark Tailscale Serve is exposing emmy-serve
+# 3. Verify Spark Tailscale Serve is exposing the control-plane endpoints
 # ----------------------------------------------------------------------------
+# Phase 04.2 follow-up — sidecar /healthz is the right "is Spark configured?"
+# probe in remote-client mode. vLLM may legitimately be down (operator handed
+# lifecycle ownership to the sidecar; user will /start from the TUI). The old
+# pure-vLLM probe trapped operators in this state outside the TUI. Mirrors
+# packages/emmy-ux/bin/pi-emmy.ts:resolvePrereqProbe — same precedence rule.
 step "Verifying Tailscale Serve reachability"
 
-if ! curl -sf --max-time 10 "https://$EMMY_SPARK_HOST/v1/models" >/dev/null 2>&1; then
-  warn "Cannot reach https://$EMMY_SPARK_HOST/v1/models — checks before retrying:"
-  warn "  1. emmy-serve is running on Spark:        ssh $EMMY_SPARK_HOST 'docker ps | grep emmy-serve'"
-  warn "  2. Tailscale Serve config exists on Spark: ssh $EMMY_SPARK_HOST 'tailscale serve status'"
-  warn "  3. Tailscale routes are healthy:           tailscale ping $EMMY_SPARK_HOST"
+SIDECAR_OK=0
+VLLM_OK=0
+if curl -sf --max-time 10 "https://$EMMY_SPARK_HOST:8003/healthz" >/dev/null 2>&1; then
+  SIDECAR_OK=1
+  ok "Sidecar reachable at https://$EMMY_SPARK_HOST:8003"
+fi
+if curl -sf --max-time 10 "https://$EMMY_SPARK_HOST/v1/models" >/dev/null 2>&1; then
+  VLLM_OK=1
+  MODEL_ID="$(curl -sf "https://$EMMY_SPARK_HOST/v1/models" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"][0]["id"])' 2>/dev/null || echo "?")"
+  ok "vLLM reachable — current served model: $MODEL_ID"
+fi
+
+if [[ "$SIDECAR_OK" -eq 0 && "$VLLM_OK" -eq 0 ]]; then
+  warn "Cannot reach Spark on either control plane — checks before retrying:"
+  warn "  1. Sidecar systemd unit running on Spark:  ssh $EMMY_SPARK_HOST 'systemctl --user status emmy-sidecar'"
+  warn "  2. emmy-serve container running on Spark:  ssh $EMMY_SPARK_HOST 'docker ps | grep emmy-serve'"
+  warn "  3. Tailscale Serve has all 3 routes:       ssh $EMMY_SPARK_HOST 'tailscale serve status'"
+  warn "  4. Tailscale routes are healthy:           tailscale ping $EMMY_SPARK_HOST"
   die "Spark unreachable; aborting before clone"
 fi
 
-MODEL_ID="$(curl -sf "https://$EMMY_SPARK_HOST/v1/models" | python3 -c 'import json,sys; print(json.load(sys.stdin)["data"][0]["id"])' 2>/dev/null || echo "?")"
-ok "Spark replied — current served model: $MODEL_ID"
+if [[ "$SIDECAR_OK" -eq 1 && "$VLLM_OK" -eq 0 ]]; then
+  warn "Sidecar healthy but vLLM is down — install will continue (you can /start vLLM from inside the TUI after install)"
+fi
+if [[ "$SIDECAR_OK" -eq 0 && "$VLLM_OK" -eq 1 ]]; then
+  warn "vLLM reachable but sidecar is unreachable — slash commands (/start /stop /status /profile) won't work in remote-client mode."
+  warn "On Spark: bash scripts/start_emmy.sh --install-sidecar-unit && systemctl --user enable --now emmy-sidecar"
+fi
 
 # ----------------------------------------------------------------------------
 # 3.5 Phase 04.2 — Spark-side Tailscale Serve route reminders
