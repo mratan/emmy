@@ -594,6 +594,41 @@ NGC `nvcr.io/nvidia/vllm:YY.MM-py3` ships on a monthly cadence; the bundled `tra
 
 ---
 
+### Pitfall 22: vLLM prefix caching silently a no-op on Mamba-hybrid models
+
+**Verified empirically 2026-04-26** during the Phase 4.5 sub-agent spike (H9 real-deal Qwen test).
+
+**What goes wrong:**
+The serving config sets `enable_prefix_caching: True`. The `/v1/models` endpoint reports the model loaded. Chat completions return correctly. The harness ships under the assumption that "shared system prompts across requests = free prefix-cache hits = lower TTFT and lower KV pressure." Then `vllm:prefix_cache_hits_total` reads **zero** across an entire session, even though `vllm:prefix_cache_queries_total` increments correctly. `prompt_tokens_by_source_total{source="local_cache_hit"}` is also zero. The feature is configured ON, observable, queried — and silently a no-op.
+
+**Why it happens:**
+On Mamba-hybrid architectures (Qwen 3.6 35B-A3B is `Qwen3_5MoeForConditionalGeneration` with Mamba layers), vLLM's prefix cache mode defaults to `'align'` and explicitly logs at boot:
+
+```
+WARNING [config.py:381] Mamba cache mode is set to 'align' ... when prefix caching is enabled.
+INFO    [config.py:401] Warning: Prefix caching in Mamba cache 'align' mode is currently
+        experimental. Please report any issues you may observe.
+```
+
+In practice, "experimental" appears to mean "currently a no-op for hybrid models" rather than "fully working but possibly buggy." The boot warning is easy to miss because (a) it's an INFO/WARNING, not an error, (b) the feature still appears to run (queries increment), and (c) the harness still works correctly without it.
+
+**How to avoid:**
+- **Measure per profile, not per project.** Each shipped profile gets a `prefix_cache_hit_rate` metric in its acceptance gate. Target: ≥ 80% on attention-only profiles (Qwen 27B dense, Gemma 31B dense). Target on Mamba-hybrid profiles (Qwen 35B-A3B, Gemma 26B-A4B) is **whatever measurement reveals**, not assumption — currently observed at 0% for Qwen 35B v3.1.
+- **Treat "feature flag set, hit rate zero" as a bug class.** Add a CI assertion that emits `WARNING (verify): prefix-cache hit rate is 0% on profile <X>; manual ack required` rather than silently passing.
+- **Don't argue prefix-cache benefits in design docs unless the architecture has been measured.** The integration sketch's Pattern A originally claimed shared services would benefit from "free" caching — that claim was withdrawn after H9.
+- **Keep an eye on vLLM upstream**: when Mamba prefix caching graduates from "experimental" to validated, the targets above tighten. Track via the boot WARNING text — when it's gone, run the measurement again.
+
+**Warning signs:**
+- vLLM boot log contains `Mamba cache mode is set to 'align'` + `experimental`
+- `vllm:prefix_cache_hits_total` is exactly 0 after multiple requests with shared prefixes
+- `vllm:prompt_tokens_by_source_total{source="local_cache_hit"}` stays at 0
+- `Prefix cache hit rate: 0.0%` appears in vLLM's iteration logs
+- Latency drops between repeat requests are happening (CUDA graph warm-up, JIT) but the `prefix_cache_hits` metric never moves
+
+**Phase to address:** Phase 4.4 (compaction design's V4 verification — per-profile prefix-cache measurement); Phase 5 (eval harness boot matrix should record prefix-cache hit rate per profile as a first-class metric); Phase 6 (eval reports must qualify any "shared-prefix" performance claim with the architecture). Severity: **Medium** — does not break correctness, but invalidates a design-time assumption used by the sub-agent integration sketch and any "shared system prompt" optimization argument.
+
+---
+
 ## Technical Debt Patterns
 
 Shortcuts that seem reasonable but create long-term problems.

@@ -259,6 +259,66 @@ Plans:
 - [x] 04.1-02-gemma31b-PLAN.md — google/gemma-4-31B-it dense profile bundle (clone-retarget from gemma-4-26b-a4b-it@v2; KV bisect + 2x2h thermal) ✓ hash fe9eded6, gmu 0.86
 - [x] 04.1-03-routing-matrix-PLAN.md — routes.yaml dense role token + eval/MATRIX.md Phase 5 enumeration + runbook.md swap documentation ✓
 
+### Phase 04.4: Filesystem memory tool + append-only-prefix compaction polish (INSERTED)
+
+**Goal:** Ship Anthropic `memory_20250818` adapted for Emmy (six commands: view/create/str_replace/insert/delete/rename; two scopes via path prefix `/memories/project/...` → `<repo>/.emmy/notes/` and `/memories/global/...` → `~/.emmy/memory/`; profile-owned config; reproducibility hooks for eval) AND codify the append-only-prefix invariant (D-3X — system-prompt prefix never mutates mid-session, audited via `emmy.prefix.hash` per-request OTel attribute) AND replace pi's default compaction prompt with Emmy's terse v1 (~35 tokens) measured-driven prompt, with `/compact [reason]` and `/clear` slash-command confirmation. Pi-mono minimalism principle: ship minimum description, measure adoption, expand only if measurement demands.
+
+**Requirements:** None (insert-phase scoped; success criteria locked in 04.4-CONTEXT.md § Success criteria — derived from MEMORY-TOOL-SPEC.md V1–V8 and COMPACTION-DESIGN.md V1–V8)
+
+**Depends on:** Phase 3 (compaction infra — `@emmy/context` D-30 live-wire + telemetry); Phase 3.1 (`/compact` and `/clear` stubs)
+
+**Source artifacts (locked context):**
+- `.planning/pre-phase/04.4-memory-compaction/MEMORY-TOOL-SPEC.md` — tool surface, schemas, scoping, profile schema, telemetry, V1–V8 verification
+- `.planning/pre-phase/04.4-memory-compaction/COMPACTION-DESIGN.md` — append-only invariant D-3X, v1 prompt, slash-command confirmation, V1–V8 verification (V4 architecture-aware per Pitfall #22)
+
+**Success Criteria:**
+  1. **Memory tool V1–V8 pass** — adoption ≥ 60% on Qwen 35B-A3B v3.1, write discipline ≥ 70% load-bearing, rot protection 100%, path-traversal block 30/30, air-gap zero outbound syscalls, snapshot/restore byte-identical, quotas enforced, real-deal session organic memory use.
+  2. **Compaction V1–V8 pass** — soft-threshold trigger ±5%, summary quality (goal ≥ 80% / decision ≥ 70% / error 100%), append-only-prefix invariant intact (V3 hash equality), prefix-cache architecture-aware per profile (V4 per-profile, no false-fail on Mamba-hybrid), `/compact [reason]` + `/clear` end-to-end, auto-retry + D-16 fallback, real-deal long session organic compaction.
+  3. **Reproducibility:** `--no-memory` and `--memory-snapshot` flags work end-to-end; `EMMY_MEMORY_OVERRIDE_*` env vars override profile defaults; eval driver can isolate per-run memory state.
+
+**Plans:** 8 plans (5 memory + 3 compaction; wave-parallelizable per INTEGRATION-SKETCH-equivalent breakdown)
+
+Plans:
+- [ ] 04.4-01-memory-surface-PLAN.md — Tool surface + path resolver: TypeBox schemas, two-scope resolution, traversal block, quota plumbing (Wave 1)
+- [ ] 04.4-02-memory-commands-PLAN.md — Six command implementations: view/create/str_replace/insert/delete/rename, one file each (Wave 1, depends on 04.4-01)
+- [ ] 04.4-03-memory-profile-PLAN.md — Profile schema + harness.yaml integration: add `memory.*` block to all 4 shipped profiles, validation (Wave 1)
+- [ ] 04.4-04-memory-telemetry-PLAN.md — Telemetry + OTel events: GenAI semconv, blocked-extension redaction, headless envelope counters, air-gap test extension (Wave 2)
+- [ ] 04.4-05-memory-repro-PLAN.md — Reproducibility hooks: `--no-memory`, `--memory-snapshot`, `EMMY_MEMORY_OVERRIDE_*` precedence, snapshot/restore atomicity (Wave 2)
+- [ ] 04.4-06-prefix-invariant-PLAN.md — Append-only invariant (D-3X) audit + per-request `emmy.prefix.hash` telemetry assertion + V3, V4 tests (Wave 1)
+- [ ] 04.4-07-compaction-prompt-PLAN.md — Trimmed `prompts/compact.md` for all 4 shipped profiles + V1, V2, V6, V7 tests (Wave 1)
+- [ ] 04.4-08-slash-commands-PLAN.md — `/compact [reason]` and `/clear` confirmation + V5 test (Wave 2)
+
+### Phase 04.5: Observable sub-agent dispatch v1 (INSERTED)
+
+**Goal:** Ship `SubAgentTool` (Claude Code-style `Agent` tool) with persona-based dispatch profile-owned in `harness.yaml subagents.personas.<name>`, depth-1 cap, scoped `customTools` per persona, OTel parent-child trace propagation via `context.with(parentCtx, ...)`, auto-compaction-off on children, clean disposal in finally. Two spawn patterns: Pattern A (lean — shared services, ~5 ms instantiation) for utility sub-agents, Pattern B (per-persona services + cwd, ~50 ms) for sub-agents with their own system prompts. Single-model only in v1 (cross-model + parallelism deferred to a future v2 phase pending vLLM concurrency + sleep-mode-swap measurement). Pi-mono fork NOT required (H1–H8 spike confirmed). Pitfall #18 (sub-agent black-boxes) addressed via mandatory OTel observability + TUI nesting.
+
+**Requirements:** None (insert-phase scoped; success criteria locked in 04.5-CONTEXT.md § Success criteria — derived from INTEGRATION-SKETCH.md V1–V8)
+
+**Depends on:** Phase 1 (sidecar + profile registry); Phase 2 (pi-coding-agent SDK surface — confirmed mature in spike); Phase 3 (OTel telemetry); Phase 04.4 (optional — sub-agents may opt into memory tool but not required)
+
+**Source artifacts (locked context):**
+- `.planning/pre-phase/04.5-subagents/SPIKE-pi-internals.md` — H1–H9 spike plan
+- `.planning/pre-phase/04.5-subagents/SPIKE-RESULTS.md` — empirical evidence: 8/8 + H9 PARTIAL (with Pitfall #22 finding)
+- `.planning/pre-phase/04.5-subagents/INTEGRATION-SKETCH.md` — recommended pattern, ~50-line SubAgentTool skeleton, persona schema, V1–V8 verification, 7 suggested plans
+- `packages/emmy-ux/scripts/spikes/04.5-subagents/h{1..9}-*.ts` — 9 runnable spike scripts (single commit pending)
+
+**Success Criteria:**
+  1. **V1–V7 pass** — Pattern A spawn+execute (<100 ms wall faux), Pattern B spawn+execute (different `systemPrompt`), tool allowlist enforced, OTel parent→tool→child trace tree, concurrent children no cross-talk, long-context serialization gate fires above 40 K parent tokens, child auto-compaction stays disabled.
+  2. **V8 real-deal E2E pass** — live Qwen 3.6 35B-A3B v3.1; parent fires `Agent({subagent_type: "research", prompt: "find usages of customTools"})`; child does grep+read; returns coherent summary; OTel trace tree shows `parent → Agent_tool_span → child_invoke_agent → child_chat_completion`.
+  3. **Observability contract (Pitfall #18 mitigation):** every sub-agent step emits its own OTel span parented to the `Agent` tool's span; sub-agent tool calls visible in TUI as collapsible nested block (custom Ink component); sidecar JSONL `session-<id>.subagents.jsonl` for child transcripts (linked by trace_id).
+  4. **No fork of pi-mono** — confirmed structurally feasible by H1–H8.
+
+**Plans:** 7 plans (wave-parallelizable per INTEGRATION-SKETCH § 5)
+
+Plans:
+- [ ] 04.5-01-subagent-tool-PLAN.md — `SubAgentTool` core: defineTool wrapper, Pattern A + B spawn, dispose-in-finally, V1–V3 tests (Wave 1)
+- [ ] 04.5-02-persona-schema-PLAN.md — Persona definition format + harness.yaml schema, validation, `subagents/` subdir convention with built-in `research`, `code_reviewer`, `bash_runner` for all 4 profiles (Wave 1)
+- [ ] 04.5-03-otel-propagation-PLAN.md — OTel parent-child propagation: `context.with(parentCtx, ...)`, GenAI semconv attributes (`gen_ai.agent.{id,name,version,parent_id?}`, `gen_ai.conversation.id`), V4 test (Wave 1)
+- [ ] 04.5-04-concurrency-governor-PLAN.md — Dispatcher: `max_concurrent: 2` enforcement, long-context serialization above 40 K parent tokens, telemetry events (`agent.dispatch.serialized`), V5 + V6 tests (Wave 2)
+- [ ] 04.5-05-tui-nesting-PLAN.md — Custom Ink component for collapsible nested-turn rendering of sub-agent transcripts under parent tool block (Wave 2)
+- [ ] 04.5-06-sidecar-jsonl-PLAN.md — Per-child JSONL via `SessionManager.create(cwd, subagentDir)`; sidecar `session-<id>.subagents.jsonl` linked by `parent_span_id` for forensics + reproducibility (Wave 2)
+- [ ] 04.5-07-real-deal-e2e-PLAN.md — V8 real-deal Qwen 3.6 35B-A3B v3.1 E2E + docs/runbook.md sub-agent section + verification (Wave 3)
+
 ### Phase 5: Eval Harness + Reproducible Benchmark Suite
 
 **Goal**: A reproducible benchmark suite that imports the Phase 2 harness as a library and drives `session.run(task)` through the public SDK — never bypassing — produces JSON + markdown reports. Suite includes terminal-bench 2.0 (primary), the prior repo's Phase 1 prompts (continuity baseline), SWE-bench Verified (milestone scoreboard), and LiveCodeBench (rolling contamination-resistant). Every result embeds full provenance; ≥3 samples report mean ± std; executable correctness is paired with LLM-as-judge from a different model family. This is where the research-artifact bar is reached.

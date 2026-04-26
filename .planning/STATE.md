@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.68.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-04-26T00:49:12.849Z"
+last_updated: "2026-04-26T22:14:17.534Z"
 progress:
-  total_phases: 11
+  total_phases: 13
   completed_phases: 6
-  total_plans: 50
+  total_plans: 66
   completed_plans: 40
-  percent: 80
+  percent: 61
 ---
 
 # State: Emmy
@@ -227,7 +227,7 @@ All three are operator-gated (DGX Spark GPU time); each has a documented runbook
 
 *State initialized: 2026-04-20 by roadmapper*
 
-**Planned Phase:** 04.2 (remote-client-mode-parity) — 6 plans — 2026-04-25T21:22:17.597Z
+**Planned Phase:** 04.5 (Observable sub-agent dispatch v1) — 7 plans — 2026-04-26T22:14:17.527Z
 
 **Plan 01-06 Task 1 completed:** 2026-04-21 — commits `feea40c` (RED) + `742fd9b` (GREEN); SUMMARY.md written; awaiting DGX Spark operator for Task 2.
 
