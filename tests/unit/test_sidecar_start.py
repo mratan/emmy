@@ -120,9 +120,13 @@ async def test_idempotent_same_variant(client: TestClient, spy: _OrchestratorSpy
         lines = _consume_sse(r)
     frames = _data_frames(lines)
 
-    # Single 'ready' frame, no orchestrator invocation.
-    assert len(frames) == 1, f"expected 1 frame, got {frames}"
+    # Phase 04.2 follow-up — idempotent path now emits a terminal {exit:0}
+    # frame after the 'ready' frame so the TS lifecycle client (which defaults
+    # exit=1, fail-loud) can distinguish idempotent success from a stream that
+    # closed without an exit signal. Two frames, no orchestrator invocation.
+    assert len(frames) == 2, f"expected 2 frames, got {frames}"
     assert frames[0] == {"state": "ready", "phase": "ready"}
+    assert frames[1] == {"exit": 0}
     assert spy.calls == [], f"expected no orchestrator calls, got {spy.calls}"
 
 

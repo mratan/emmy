@@ -281,6 +281,11 @@ async def post_start(req: StartRequest, request: Request) -> EventSourceResponse
     ):
         async def _idempotent_gen() -> AsyncIterator[dict]:
             yield {"data": json.dumps({"state": "ready", "phase": "ready"})}
+            # Phase 04.2 follow-up — emit terminal exit frame so the TS lifecycle
+            # client (which defaults exit=1 on absence) treats this as success.
+            # Without it, an idempotent short-circuit would be misread as failure
+            # by any client that fails closed on missing exit.
+            yield {"data": json.dumps({"exit": 0})}
 
         return EventSourceResponse(
             _idempotent_gen(),
@@ -345,6 +350,12 @@ async def post_start(req: StartRequest, request: Request) -> EventSourceResponse
             except InvalidTransitionError:
                 pass
             yield {"data": json.dumps({"phase": "error", "details": {"msg": str(e)}})}
+            # Phase 04.2 follow-up — explicit exit frame so the TS client doesn't
+            # interpret a bare error frame as success (exit=0 default). Use exit=1
+            # for handler-level exceptions; orchestrator-emitted non-zero codes
+            # (5/6 for swap pre-flight / post-stop failures) flow through the
+            # `exit_rc != 0` branch above unchanged.
+            yield {"data": json.dumps({"exit": 1})}
 
     return EventSourceResponse(
         event_generator(),
