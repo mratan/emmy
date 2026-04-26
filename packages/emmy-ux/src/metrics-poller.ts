@@ -135,7 +135,16 @@ export function startFooterPoller(opts: FooterPollerOpts): FooterPollerHandle {
 		if (process.env.EMMY_REMOTE_CLIENT === "1") {
 			const sidecarUrl =
 				process.env.EMMY_SERVE_URL ?? "http://127.0.0.1:8003";
-			const statusTimeoutMs = Math.max(500, Math.floor(intervalMs / 2));
+			// Phase 04.2 follow-up — bump the per-tick fetch timeout. Original
+			// `Math.max(500, intervalMs/2)` resolved to 500ms with the default
+			// 1Hz interval, which is too short for HTTPS over Tailscale: TLS
+			// handshake + tailscale ACL check + cross-host RTT can exceed
+			// 500ms easily. Result: every tick aborted, status stayed null,
+			// footer rendered `GPU --% • KV --%` even with vLLM up.
+			// 3s gives a comfortable margin while still catching a truly hung
+			// sidecar within one tick, and stays well under the next tick's
+			// dispatch (poller serializes on this await).
+			const statusTimeoutMs = Math.max(3000, Math.floor(intervalMs / 2));
 			let status: SidecarStatus | null = null;
 			try {
 				status = await getStatus(sidecarUrl, statusTimeoutMs);

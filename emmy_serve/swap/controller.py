@@ -277,30 +277,64 @@ async def post_start(req: StartRequest, request: Request) -> EventSourceResponse
             detail=f"start requires state in (stopped,ready,error), currently={state.state.value}",
         )
 
-    # D-02 idempotent same-variant short-circuit (READY + same profile + same variant).
+    # D-02 idempotent same-variant short-circuit (READY + same profile + same
+    # variant + vLLM actually alive).
+    #
+    # Phase 04.2 follow-up — added live vllm_up probe to the gate. Without it,
+    # an externally-killed vLLM (e.g. `docker stop emmy-serve`) leaves the
+    # sidecar's `state` stuck at READY (the state machine doesn't auto-
+    # transition on death). A subsequent /start with the same profile would
+    # then short-circuit as "already running" when vLLM is actually dead —
+    # operator's next inference 502s.
+    #
+    # Probe via the same fetch_vllm_metrics_cached path the /status endpoint
+    # uses; this is cached (1s TTL) so the cost is negligible.
     if (
         state.state == SidecarState.READY
         and _current_profile_id == req.profile_id
         and _current_variant == variant
     ):
-        async def _idempotent_gen() -> AsyncIterator[dict]:
-            yield {"data": json.dumps({"state": "ready", "phase": "ready"})}
-            # Phase 04.2 follow-up — emit terminal exit frame so the TS lifecycle
-            # client (which defaults exit=1 on absence) treats this as success.
-            # Without it, an idempotent short-circuit would be misread as failure
-            # by any client that fails closed on missing exit.
-            yield {"data": json.dumps({"exit": 0})}
+        try:
+            await fetch_vllm_metrics_cached(_VLLM_BASE_URL)
+            vllm_actually_up = True
+        except Exception:
+            vllm_actually_up = False
 
-        return EventSourceResponse(
-            _idempotent_gen(),
-            ping=15,
-            send_timeout=10,
-        )
+        if vllm_actually_up:
+            async def _idempotent_gen() -> AsyncIterator[dict]:
+                yield {"data": json.dumps({"state": "ready", "phase": "ready"})}
+                # Phase 04.2 follow-up — emit terminal exit frame so the TS lifecycle
+                # client (which defaults exit=1 on absence) treats this as success.
+                # Without it, an idempotent short-circuit would be misread as failure
+                # by any client that fails closed on missing exit.
+                yield {"data": json.dumps({"exit": 0})}
+
+            return EventSourceResponse(
+                _idempotent_gen(),
+                ping=15,
+                send_timeout=10,
+            )
+        # else: fall through — vLLM is dead despite our READY state. Reset
+        # bookkeeping and treat as cold-start so the orchestrator recreates
+        # the container.
+        _current_profile_id = None
+        _current_variant = None
+        # Force the cold-start branch below by pretending we were STOPPED.
+        # We can't transition_to(STOPPED) because READY → STOPPED isn't allowed,
+        # and the cold_start flag below already keys on STOPPED|ERROR.
+        # Easier: directly reassign the local cold_start bookkeeping after
+        # this block (see the next section).
 
     # Determine paths + cold-vs-cross-variant.
     to_path = f"profiles/{req.profile_id}/{variant}"
-    # STOPPED and ERROR both map to cold-start (no prior engine to swap from).
-    cold_start = state.state in {SidecarState.STOPPED, SidecarState.ERROR}
+    # STOPPED and ERROR map to cold-start (no prior engine to swap from).
+    # READY also maps to cold-start IF we just reset _current_* above (the
+    # "vLLM died externally" recovery path) — detected by the bookkeeping
+    # being None despite state==READY.
+    cold_start = (
+        state.state in {SidecarState.STOPPED, SidecarState.ERROR}
+        or (state.state == SidecarState.READY and _current_profile_id is None)
+    )
     if cold_start:
         from_path: str | None = None
         target_state = SidecarState.STARTING  # STOPPED|ERROR → STARTING → READY

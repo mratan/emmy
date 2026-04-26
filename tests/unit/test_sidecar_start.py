@@ -103,13 +103,25 @@ def _data_frames(lines: list[str]) -> list[dict]:
 # --- D-02 idempotent same-variant short-circuit -----------------------------
 
 
-async def test_idempotent_same_variant(client: TestClient, spy: _OrchestratorSpy) -> None:
-    """READY + same profile + same variant → single SSE ready frame, no orch spawn."""
+async def test_idempotent_same_variant(
+    client: TestClient,
+    spy: _OrchestratorSpy,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """READY + same profile + same variant + vllm_up=true → single SSE ready frame, no orch spawn."""
     # Pre-position: READY, profile=qwen3.6-35b-a3b, variant=v3.1-default.
     await _ctl.state.transition_to(SidecarState.STARTING)
     await _ctl.state.transition_to(SidecarState.READY)
     _ctl._current_profile_id = "qwen3.6-35b-a3b"
     _ctl._current_variant = "v3.1-default"
+
+    # Phase 04.2 follow-up — idempotent gate now also checks vllm_up via the
+    # cached metrics fetch. Mock fetch_vllm_metrics_cached to return a
+    # successful response so the gate passes and the short-circuit fires.
+    async def _fake_metrics(_url: str) -> dict[str, float]:
+        return {"vllm:gpu_cache_usage_perc": 0.42}
+
+    monkeypatch.setattr(_ctl, "fetch_vllm_metrics_cached", _fake_metrics)
 
     with client.stream(
         "POST",
@@ -128,6 +140,63 @@ async def test_idempotent_same_variant(client: TestClient, spy: _OrchestratorSpy
     assert frames[0] == {"state": "ready", "phase": "ready"}
     assert frames[1] == {"exit": 0}
     assert spy.calls == [], f"expected no orchestrator calls, got {spy.calls}"
+
+
+async def test_idempotent_same_variant_but_vllm_dead_falls_through_to_cold_start(
+    client: TestClient,
+    spy: _OrchestratorSpy,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """READY + same profile/variant BUT vllm_up=false → cold-start (the recovery path).
+
+    Phase 04.2 follow-up: this is the "operator did `docker stop emmy-serve`
+    externally" recovery scenario. Sidecar's state stays READY (state machine
+    doesn't auto-transition on vLLM death) but vllm_up via probe is False.
+    Without the new gate, /start would short-circuit as "already running"
+    even though vLLM is dead — operator's next inference 502s.
+    """
+    # Pre-position: READY, profile + variant set as if last /start succeeded.
+    await _ctl.state.transition_to(SidecarState.STARTING)
+    await _ctl.state.transition_to(SidecarState.READY)
+    _ctl._current_profile_id = "qwen3.6-35b-a3b"
+    _ctl._current_variant = "v3.1-default"
+
+    # vLLM is dead: probe raises (mimics ECONNREFUSED on the loopback metrics
+    # endpoint when the container is gone).
+    async def _dead_metrics(_url: str) -> dict[str, float]:
+        raise ConnectionRefusedError("vllm is gone")
+
+    monkeypatch.setattr(_ctl, "fetch_vllm_metrics_cached", _dead_metrics)
+
+    # Orchestrator spy yields a successful cold-start sequence.
+    spy.set_yields(
+        [
+            {"ts": "2026-04-26T00:00:00Z", "phase": "loading weights", "pct": 0},
+            {"ts": "2026-04-26T00:00:01Z", "phase": "warmup"},
+            {"ts": "2026-04-26T00:00:02Z", "phase": "ready"},
+            {"_internal_exit": 0},
+        ]
+    )
+
+    with client.stream(
+        "POST",
+        "/start",
+        json={"profile_id": "qwen3.6-35b-a3b", "variant": "v3.1-default"},
+    ) as r:
+        assert r.status_code == 200
+        _consume_sse(r)
+
+    # Orchestrator MUST have been called (no short-circuit).
+    assert len(spy.calls) == 1, f"expected one orchestrator call, got {spy.calls}"
+    # Cold-start argv: from_path=None (the recovery resets _current_* and
+    # treats the operation as a fresh cold-start).
+    call = spy.calls[0]
+    assert call["from_path"] is None, f"expected from_path=None (cold-start), got {call}"
+    assert call["to_path"] == "profiles/qwen3.6-35b-a3b/v3.1-default"
+    # Final state should be READY, with bookkeeping repopulated.
+    assert _ctl.state.state == SidecarState.READY
+    assert _ctl._current_profile_id == "qwen3.6-35b-a3b"
+    assert _ctl._current_variant == "v3.1-default"
 
 
 # --- D-02 cold start --------------------------------------------------------

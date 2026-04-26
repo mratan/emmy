@@ -7,10 +7,17 @@ handler entry.
 D-07 LOCKED transition table (CONTEXT.md §D-07):
     stopped  → {starting, error}
     starting → {ready, error}
-    ready    → {swapping, draining, error}
+    ready    → {starting, swapping, draining, error}
     swapping → {ready, error}
     draining → {stopped, error}
     error    → {starting}                # recovery from error requires /start
+
+Phase 04.2 follow-up: READY → STARTING added for the "vLLM died externally"
+recovery path. Operator may `docker stop emmy-serve` (or container OOM, or
+host reboot mid-session) — the sidecar's `state` stays READY until the next
+/start, which now detects vllm_up=false and transitions READY → STARTING to
+recreate the container. Without this, /start would either short-circuit
+(misreporting success) or get stuck on InvalidTransitionError.
 
 Any state → ERROR is implicit (always allowed) — sidecar handlers must be able
 to record an error from any in-flight operation without first transitioning
@@ -53,7 +60,9 @@ class SidecarState(Enum):
 ALLOWED_TRANSITIONS: dict[SidecarState, set[SidecarState]] = {
     SidecarState.STOPPED:  {SidecarState.STARTING, SidecarState.ERROR},
     SidecarState.STARTING: {SidecarState.READY, SidecarState.ERROR},
-    SidecarState.READY:    {SidecarState.SWAPPING, SidecarState.DRAINING, SidecarState.ERROR},
+    # READY → STARTING: Phase 04.2 follow-up — see module docstring for the
+    # "vLLM died externally" recovery rationale.
+    SidecarState.READY:    {SidecarState.STARTING, SidecarState.SWAPPING, SidecarState.DRAINING, SidecarState.ERROR},
     SidecarState.SWAPPING: {SidecarState.READY, SidecarState.ERROR},
     SidecarState.DRAINING: {SidecarState.STOPPED, SidecarState.ERROR},
     SidecarState.ERROR:    {SidecarState.STARTING},
