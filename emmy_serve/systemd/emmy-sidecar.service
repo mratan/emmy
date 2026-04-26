@@ -16,6 +16,14 @@ Environment=PYTHONUNBUFFERED=1
 Environment=VLLM_NO_USAGE_STATS=1
 Environment=VLLM_LOAD_FORMAT=fastsafetensors
 Environment=HF_HOME=%h/.cache/huggingface
+# Phase 04.2 follow-up — the sidecar spawns subprocesses (orchestrator, docker)
+# that need `uv` on PATH. systemd's user units inherit a minimal PATH that does
+# NOT include ~/.local/bin (where uv lives by default), so without this the
+# orchestrator launch dies with [Errno 2] No such file or directory and /start
+# silently fails (the SSE stream emits an error frame but the slash command's
+# default exit=0 gate masks it as success). Include /usr/local/bin and
+# /usr/sbin too — docker, nvidia-smi, and other subprocess targets live there.
+Environment=PATH=%h/.local/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 StandardOutput=journal
 StandardError=journal
 
