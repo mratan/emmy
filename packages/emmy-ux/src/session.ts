@@ -583,6 +583,7 @@ export async function createEmmySession(
 	runtime: PiRuntime;
 	assembledPrompt: AssembledPrompt;
 	spOkOk: boolean;
+	spOkSkipped: boolean;
 	transcriptPath: string;
 }> {
 	// 1. SP_OK canary (Pitfall #6 fail-loud).
@@ -592,13 +593,58 @@ export async function createEmmySession(
 	// routes through pi's before_provider_request hook (which would overwrite
 	// the canary's deliberately-terse system prompt with Emmy's 3-layer
 	// assembled prompt). RESEARCH Pitfall #7 / 03-CONTEXT T-03-01-02 guard.
-	const spOk = await runSpOk(opts.baseUrl, opts.profile.serving.engine.served_model_name);
-	if (!spOk.ok) throw new SpOkCanaryError(spOk.responseText);
-	emitEvent({
-		event: "session.sp_ok.pass",
-		ts: new Date().toISOString(),
-		profile: opts.profile.ref,
-	});
+	//
+	// Phase 04.2 follow-up — SKIP when remote-client mode is on AND the
+	// sidecar reports vllm_up=false. The canary's purpose is to detect SP_OK
+	// system-prompt delivery breakage (Pitfall #6), NOT to verify vLLM is
+	// alive (the prereq probe upstream owns that check now). Running the
+	// canary against a dead vLLM produces a misleading
+	// "ERROR (runtime): provider.network 502" instead of letting the operator
+	// into the TUI to /start vLLM through the sidecar. Skip with a loud
+	// SKIPPED log + telemetry event so future first-prompt SP_OK breakage
+	// (if any) still surfaces — the canary is one of two SP_OK guards (the
+	// other is per-benchmark-loop in eval/), this one is just session-boot.
+	let spOkSkipped = false;
+	if (process.env.EMMY_REMOTE_CLIENT === "1") {
+		const sidecarUrl = process.env.EMMY_SERVE_URL;
+		if (sidecarUrl && sidecarUrl.length > 0) {
+			try {
+				const statusResp = await fetch(
+					`${sidecarUrl.replace(/\/$/, "")}/status`,
+					{ signal: AbortSignal.timeout(3000) },
+				);
+				if (statusResp.ok) {
+					const status = (await statusResp.json()) as { vllm_up?: boolean };
+					if (status.vllm_up === false) {
+						spOkSkipped = true;
+						console.error(
+							`pi-emmy SP_OK canary: SKIPPED (remote-client mode + sidecar reports vllm_up=false; ` +
+								`run /start <profile>[@<variant>] from the TUI to bring vLLM up)`,
+						);
+						emitEvent({
+							event: "session.sp_ok.skipped",
+							ts: new Date().toISOString(),
+							profile: opts.profile.ref,
+							reason: "remote_client_vllm_down",
+						});
+					}
+				}
+			} catch {
+				// Sidecar unreachable for /status — fall through to canary which
+				// will surface the real network error. Don't mask sidecar issues.
+			}
+		}
+	}
+
+	if (!spOkSkipped) {
+		const spOk = await runSpOk(opts.baseUrl, opts.profile.serving.engine.served_model_name);
+		if (!spOk.ok) throw new SpOkCanaryError(spOk.responseText);
+		emitEvent({
+			event: "session.sp_ok.pass",
+			ts: new Date().toISOString(),
+			profile: opts.profile.ref,
+		});
+	}
 	// Plan 03-02: first event in the session carries the session-scope
 	// metadata so downstream JSONL readers + Langfuse traces have a
 	// self-describing header row.
@@ -946,5 +992,5 @@ export async function createEmmySession(
 		path: transcriptPath,
 	});
 
-	return { runtime: pi, assembledPrompt, spOkOk: true, transcriptPath };
+	return { runtime: pi, assembledPrompt, spOkOk: true, spOkSkipped, transcriptPath };
 }

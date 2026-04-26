@@ -400,9 +400,14 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
 			telemetryEnabled,
 		};
 		if (args.prompt !== undefined) sessionOpts.userPrompt = args.prompt;
-		const { runtime, assembledPrompt, transcriptPath } = await createEmmySession(sessionOpts);
+		const { runtime, assembledPrompt, spOkSkipped, transcriptPath } =
+			await createEmmySession(sessionOpts);
 
-		console.error(`pi-emmy SP_OK canary: OK`);
+		// session.ts logs "SP_OK canary: SKIPPED (...)" inline when remote-client
+		// mode + sidecar reports vllm_up=false. Don't double-log "OK" here.
+		if (!spOkSkipped) {
+			console.error(`pi-emmy SP_OK canary: OK`);
+		}
 		console.error(
 			`pi-emmy session ready (prompt.sha256=${assembledPrompt.sha256}, layers=${assembledPrompt.layers
 				.filter((l) => l.present)
