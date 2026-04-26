@@ -138,6 +138,70 @@ async function probeVllm(baseUrl: string): Promise<void> {
 	}
 }
 
+/**
+ * Phase 04.2 follow-up — sidecar liveness probe for remote-client mode.
+ *
+ * In remote-client mode (EMMY_REMOTE_CLIENT=1), the sidecar is the always-on
+ * control plane and is the right boot-time source of truth: even if vLLM is
+ * currently down, the user can /start it from the TUI. Without this probe,
+ * pi-emmy's startup dies on the vLLM probe (502 from Tailscale Serve when
+ * vLLM is down) and the user has no path to recover except curl-ing /start
+ * from outside the TUI.
+ *
+ * Local-mode boot path is unchanged — probeVllm still runs when
+ * EMMY_REMOTE_CLIENT is unset. Sidecar is loopback-only locally and isn't
+ * required for the daily-driver workflow.
+ */
+async function probeSidecar(serveUrl: string): Promise<void> {
+	const ctl = new AbortController();
+	const timeout = setTimeout(() => {
+		try {
+			ctl.abort(new Error("timeout"));
+		} catch {
+			ctl.abort();
+		}
+	}, 5000);
+	try {
+		const url = `${serveUrl.replace(/\/$/, "")}/healthz`;
+		const r = await fetch(url, { signal: ctl.signal });
+		if (!r.ok) throw new Error(`status ${r.status}`);
+	} finally {
+		clearTimeout(timeout);
+	}
+}
+
+/**
+ * Resolve which prereq probe to run with documented precedence:
+ *   - EMMY_REMOTE_CLIENT=1 + EMMY_SERVE_URL set → probe sidecar /healthz
+ *   - otherwise → probe vLLM /v1/models (legacy local-mode behavior)
+ *
+ * Returns a {kind, target} pair so the caller can produce a kind-specific
+ * error message ("cannot reach sidecar at ..." vs "cannot reach emmy-serve
+ * at ...") when the probe fails.
+ *
+ * Exported for unit tests (test/pi-emmy-prereq.test.ts).
+ */
+export function resolvePrereqProbe(args: { baseUrl: string }): {
+	kind: "sidecar" | "vllm";
+	target: string;
+	probe: () => Promise<void>;
+} {
+	const isRemoteClient = process.env.EMMY_REMOTE_CLIENT === "1";
+	const serveUrl = process.env.EMMY_SERVE_URL;
+	if (isRemoteClient && serveUrl && serveUrl.length > 0) {
+		return {
+			kind: "sidecar",
+			target: serveUrl,
+			probe: () => probeSidecar(serveUrl),
+		};
+	}
+	return {
+		kind: "vllm",
+		target: args.baseUrl,
+		probe: () => probeVllm(args.baseUrl),
+	};
+}
+
 export async function main(argv: string[] = process.argv.slice(2)): Promise<number> {
 	const args = parseArgs(argv);
 	if (args.help) {
@@ -208,15 +272,24 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
 		return 4;
 	}
 
-	// Pre-flight 2: vLLM reachable.
+	// Pre-flight 2: control-plane reachable.
+	// Phase 04.2 follow-up — probe the sidecar in remote-client mode (its
+	// /healthz is independent of vLLM), so a stopped vLLM doesn't trap the
+	// user outside the TUI where they can't /start it. See resolvePrereqProbe.
+	const prereqProbe = resolvePrereqProbe({ baseUrl: args.baseUrl });
 	try {
-		await probeVllm(args.baseUrl);
+		await prereqProbe.probe();
 	} catch (e) {
-		console.error(
-			`pi-emmy: ERROR (prereq): cannot reach emmy-serve at ${args.baseUrl}: ${
-				e instanceof Error ? e.message : String(e)
-			} (try: scripts/start_emmy.sh)`,
-		);
+		const errMsg = e instanceof Error ? e.message : String(e);
+		if (prereqProbe.kind === "sidecar") {
+			console.error(
+				`pi-emmy: ERROR (prereq): cannot reach sidecar at ${prereqProbe.target}: ${errMsg} (try on Spark: systemctl --user status emmy-sidecar)`,
+			);
+		} else {
+			console.error(
+				`pi-emmy: ERROR (prereq): cannot reach emmy-serve at ${prereqProbe.target}: ${errMsg} (try: scripts/start_emmy.sh)`,
+			);
+		}
 		return 4;
 	}
 
