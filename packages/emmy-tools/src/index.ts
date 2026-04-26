@@ -53,4 +53,32 @@ export {
 	type PiToolDefinitionShape,
 	type RegisterWebSearchToolOpts,
 } from "./web-search";
+// Plan 04.4-01: filesystem memory tool (Anthropic memory_20250818 adapted).
+export {
+	memoryTool,
+	buildMemoryTool,
+	MEMORY_TOOL_DESCRIPTION,
+	type MemoryToolOpts,
+} from "./memory/index";
+export {
+	MemoryToolInput,
+	DEFAULT_MEMORY_CONFIG,
+	MemoryError,
+	type MemoryConfig,
+	type MemoryResult,
+	type MemoryToolErrorResult,
+	type MemoryToolOkResult,
+	type MemoryOpEvent,
+	type MemoryOpResult,
+	type MemoryErrorCode,
+} from "./memory/types";
+export {
+	resolveMemoryPath,
+	type ResolvedPath,
+} from "./memory/path-resolver";
+export {
+	checkFileQuota,
+	checkScopeQuota,
+	walkScopeBytes,
+} from "./memory/quotas";
 export const PACKAGE_VERSION = "0.1.0";
