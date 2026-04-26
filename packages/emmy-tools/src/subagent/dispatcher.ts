@@ -27,6 +27,7 @@ import {
 } from "@mariozechner/pi-coding-agent";
 import type { CreateSubAgentToolOpts, SubAgentSpec } from "./types";
 import { runOneTurnReturningText } from "./run-one-turn";
+import { withSubagentSpan } from "./otel";
 
 // Test-only seam (Plan 04.5-01 dispose suite): when set, replaces the
 // real createAgentSessionFromServices call. Production code paths NEVER set
@@ -65,6 +66,23 @@ export interface DispatchSubAgentResult {
  *   6. dispose() in finally on every exit path (success, throw, abort).
  */
 export async function dispatchSubAgent(
+	opts: CreateSubAgentToolOpts,
+	persona: SubAgentSpec,
+	params: DispatchSubAgentParams,
+): Promise<DispatchSubAgentResult> {
+	// Plan 04.5-03 — wrap in subagent span (Level 3 of the LOCKED 4-level trace tree).
+	return await withSubagentSpan(
+		{ name: persona.name, pattern: persona.pattern },
+		opts.parentSessionId,
+		async (span) => {
+			const result = await dispatchSubAgentInner(opts, persona, params);
+			span.setAttribute("emmy.subagent.final_text_chars", result.output.length);
+			return result;
+		},
+	);
+}
+
+async function dispatchSubAgentInner(
 	opts: CreateSubAgentToolOpts,
 	persona: SubAgentSpec,
 	params: DispatchSubAgentParams,

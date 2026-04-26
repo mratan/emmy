@@ -16,6 +16,7 @@
 import { defineTool } from "@mariozechner/pi-coding-agent";
 import { Type } from "@mariozechner/pi-ai";
 import { dispatchSubAgent } from "./dispatcher";
+import { withAgentToolSpan } from "./otel";
 import type { CreateSubAgentToolOpts } from "./types";
 
 /**
@@ -85,12 +86,18 @@ export function createSubAgentTool(opts: CreateSubAgentToolOpts) {
 				};
 			}
 			try {
-				const result = await dispatchSubAgent(opts, persona, {
-					description: params.description,
-					prompt: params.prompt,
-					model: params.model,
-					signal,
-				});
+				// Plan 04.5-03 (W1) — wrap dispatcher in agent.tool.Agent span (Level 2 of LOCKED 4-level tree).
+				const result = await withAgentToolSpan(
+					persona.name,
+					opts.parentSessionId,
+					async () =>
+						dispatchSubAgent(opts, persona, {
+							description: params.description,
+							prompt: params.prompt,
+							model: params.model,
+							signal,
+						}),
+				);
 				return {
 					content: [{ type: "text" as const, text: result.output }],
 					details: result.details,

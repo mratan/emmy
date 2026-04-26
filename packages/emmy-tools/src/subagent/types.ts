@@ -41,4 +41,9 @@ export interface CreateSubAgentToolOpts {
 	personas: Record<string, SubAgentSpec>;
 	/** Resolves a model id (e.g. "default", or persona.modelOverride) to a Model<any> the child uses. */
 	modelResolver: (id: string) => unknown;
+	/**
+	 * Parent's pi AgentSession id (Plan 04.5-03). Stamped on OTel spans as `gen_ai.conversation.id`
+	 * so the trace tree carries the parent's conversation context downstream.
+	 */
+	parentSessionId?: string;
 }
