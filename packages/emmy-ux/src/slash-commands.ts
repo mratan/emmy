@@ -26,6 +26,8 @@
 //   which triggers pi's session-boot hook sequence (Pitfall #6 preserved).
 
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+// Plan 04.4-08 — telemetry emission for /compact and /clear (V5).
+import { emitEvent } from "@emmy/telemetry";
 
 import type { ProfileIndex } from "./profile-index";
 import type { SwapResult } from "./profile-swap-runner";
@@ -96,7 +98,11 @@ export function buildCompactInstructions(
  */
 export function registerCompactCommand(
 	pi: ExtensionAPI,
-	opts: { compactPromptText: string | null },
+	opts: {
+		compactPromptText: string | null;
+		/** Plan 04.4-08 — optional session-id getter for emmy.compaction.trigger. */
+		getSessionId?: () => string;
+	},
 ): void {
 	pi.registerCommand("compact", {
 		description:
@@ -104,6 +110,26 @@ export function registerCompactCommand(
 		handler: async (args: string, ctx: unknown) => {
 			const cmdCtx = ctx as CompactCmdCtx;
 			const trimmed = args.trim();
+
+			// Plan 04.4-08 — emit emmy.compaction.trigger BEFORE the round-trip
+			// so post-mortem traces include the attempt even if compact() throws.
+			// Args preview truncated to 80 chars to avoid bloating OTel payload.
+			const argsPreview =
+				trimmed.length > 80 ? trimmed.slice(0, 80) + "…" : trimmed;
+			try {
+				emitEvent({
+					event: "emmy.compaction.trigger",
+					ts: new Date().toISOString(),
+					trigger_kind: "manual",
+					args_preview: argsPreview,
+					session_id: opts.getSessionId
+						? opts.getSessionId()
+						: "unknown",
+				});
+			} catch {
+				// Best-effort. Telemetry hiccups never block /compact.
+			}
+
 			const customInstructions = buildCompactInstructions(
 				opts.compactPromptText,
 				trimmed,
@@ -126,7 +152,13 @@ export function registerCompactCommand(
  * newSession. SP_OK canary re-fires on the new session because pi's
  * newSession() invokes the session-boot hook sequence.
  */
-export function registerClearCommand(pi: ExtensionAPI): void {
+export function registerClearCommand(
+	pi: ExtensionAPI,
+	opts?: {
+		/** Plan 04.4-08 — optional getter for emmy.session.cleared.session_id_prior. */
+		getPriorSessionId?: () => string;
+	},
+): void {
 	pi.registerCommand("clear", {
 		description:
 			"Start a fresh session. Transcript stays on disk; agent loses all context.",
@@ -149,6 +181,21 @@ export function registerClearCommand(pi: ExtensionAPI): void {
 				"This will start a fresh session. Unsaved work in the transcript will remain on disk but the agent will lose all context. Continue?",
 			);
 			if (!confirmed) return;
+
+			// Plan 04.4-08 — emit emmy.session.cleared BEFORE abort so the
+			// trace captures the prior session_id even if abort or newSession
+			// throws partway through. Best-effort emit; never blocks /clear.
+			try {
+				emitEvent({
+					event: "emmy.session.cleared",
+					ts: new Date().toISOString(),
+					session_id_prior: opts?.getPriorSessionId
+						? opts.getPriorSessionId()
+						: "unknown",
+				});
+			} catch {
+				// Telemetry hiccups never block /clear.
+			}
 
 			// 3. Abort any in-flight turn.
 			cmdCtx.abort();
