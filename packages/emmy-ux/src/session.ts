@@ -545,6 +545,27 @@ async function buildRealPiRuntimeTui(
 }
 
 /**
+ * Resolve the SearxNG base URL with documented precedence:
+ *   1. EMMY_SEARXNG_URL env var (Plan 04.2-05 — remote-client escape hatch)
+ *   2. profile.harness.tools.web_search.base_url (per-profile config)
+ *   3. literal loopback default "http://127.0.0.1:8888" (D-33 LOCKED)
+ *
+ * Phase 04.2 follow-up — Plan 04.2-05 added the env getter inside
+ * web-search.ts but session.ts was passing the profile URL explicitly,
+ * shadowing the env override on the live call path. The env var only fired
+ * when the profile config was missing entirely (never the case in v1+
+ * profiles). This helper makes the precedence work in BOTH the prompt-
+ * layer description text the model reads AND the runtime URL the call
+ * actually hits — so Mac client and local Spark agree on the URL.
+ *
+ * Exported for unit tests (precedence assertions live in
+ * test/session-resolveSearxngBaseUrl.test.ts).
+ */
+export function resolveSearxngBaseUrl(profileBaseUrl: string | undefined): string {
+	return process.env.EMMY_SEARXNG_URL ?? profileBaseUrl ?? "http://127.0.0.1:8888";
+}
+
+/**
  * Ensure `~/.emmy/agent/` exists (T-03-08-06 air-gap discipline).
  * Creates the directory tree if absent; no-op if present. Returns the
  * absolute path that pi 0.68's AgentSessionRuntime will write settings /
@@ -637,7 +658,7 @@ export async function createEmmySession(
 	if (webSearchActiveInPrompt) {
 		toolDefLines.push(
 			"- web_search(query, max_results?): search the open web via local SearxNG at " +
-				(_ws?.base_url ?? "http://127.0.0.1:8888") +
+				resolveSearxngBaseUrl(_ws?.base_url) +
 				". Returns {title, url, snippet, engine}[] with upstream-engine fallback. Use before web_fetch to look up current info / latest versions / docs.",
 		);
 	}
@@ -712,7 +733,7 @@ export async function createEmmySession(
 		(opts.profile.harness.tools as { web_search?: WebSearchProfileBlock }).web_search;
 	const webSearchConfig = webSearchProfile
 		? {
-				baseUrl: webSearchProfile.base_url ?? "http://127.0.0.1:8888",
+				baseUrl: resolveSearxngBaseUrl(webSearchProfile.base_url),
 				maxResultsDefault: webSearchProfile.max_results_default ?? 10,
 				rateLimitPerTurn: webSearchProfile.rate_limit_per_turn ?? 10,
 				timeoutMs: webSearchProfile.timeout_ms ?? 10000,
