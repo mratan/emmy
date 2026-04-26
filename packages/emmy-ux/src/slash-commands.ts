@@ -681,3 +681,53 @@ export function registerStatusCommand(
 		},
 	});
 }
+
+/**
+ * Phase 04.2 follow-up — operator escape hatch.
+ *
+ * Force-resets the sidecar's state machine to STOPPED and kills any orphan
+ * orchestrator subprocesses. Use this when /start or /profile/swap returns
+ * 409 with "currently=starting" or "currently=swapping" — the SSE consumer
+ * disconnect bug leaves the state machine stuck mid-transition; /reset
+ * is the recovery primitive.
+ *
+ * SAFETY: does NOT touch the running vLLM container. Only resets sidecar
+ * bookkeeping. After /reset, /status shows state=stopped + vllm_up=true if
+ * vLLM is still serving externally.
+ */
+export interface RegisterResetCommandOpts {
+	/** POST /reset on the sidecar; returns the prior state + killed PIDs. */
+	runReset: () => Promise<{
+		ok: boolean;
+		prior_state: string;
+		current_state: string;
+		killed_orchestrator_pids: number[];
+	}>;
+}
+
+export function registerResetCommand(
+	pi: ExtensionAPI,
+	opts: RegisterResetCommandOpts,
+): void {
+	pi.registerCommand("reset", {
+		description:
+			"Force-reset sidecar state to stopped (recovery for stuck STARTING/SWAPPING). Doesn't touch vLLM.",
+		handler: async (_args: string, ctx: unknown) => {
+			const cmdCtx = ctx as StatusCmdCtx;
+			try {
+				const result = await opts.runReset();
+				const killedSuffix =
+					result.killed_orchestrator_pids.length > 0
+						? ` (killed ${result.killed_orchestrator_pids.length} orphan orchestrator subprocess${result.killed_orchestrator_pids.length === 1 ? "" : "es"})`
+						: "";
+				cmdCtx.ui.notify(
+					`sidecar reset: ${result.prior_state} → ${result.current_state}${killedSuffix}`,
+					"info",
+				);
+			} catch (err) {
+				const msg = err instanceof Error ? err.message : String(err);
+				cmdCtx.ui.notify(`reset failed: ${msg}`, "error");
+			}
+		},
+	});
+}

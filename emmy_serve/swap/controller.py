@@ -382,6 +382,21 @@ async def post_start(req: StartRequest, request: Request) -> EventSourceResponse
             else:
                 _record_error(f"orchestrator exit {exit_rc}")
                 await state.transition_to(SidecarState.ERROR)
+        except asyncio.CancelledError:
+            # Phase 04.2 follow-up — SSE consumer disconnected mid-stream
+            # (e.g. Mac client Ctrl-C, network drop, Bun fetch timeout).
+            # The orchestrator subprocess already gets SIGTERM via the
+            # generator's finally (run_orchestrator_subprocess). We must
+            # ALSO transition the state machine to ERROR so the next /start
+            # can recover (state machine permits ERROR → STARTING).
+            # Without this, state stays stuck at STARTING and every
+            # subsequent /start returns 409 "currently=starting".
+            _record_error("client disconnected mid-stream during /start")
+            try:
+                await state.transition_to(SidecarState.ERROR)
+            except InvalidTransitionError:
+                pass
+            raise  # CancelledError MUST propagate
         except Exception as e:
             _record_error(f"start handler exception: {e}")
             try:
@@ -498,6 +513,16 @@ async def post_stop(req: StopRequest, request: Request) -> EventSourceResponse:
             _vllm_pid = None
             await state.transition_to(SidecarState.STOPPED)
             yield {"data": json.dumps({"state": "stopped", "exit": 0})}
+        except asyncio.CancelledError:
+            # Phase 04.2 follow-up — same recovery pattern as /start and
+            # /profile/swap. /stop is mid-drain; force ERROR so /reset
+            # or another /stop can recover.
+            _record_error("client disconnected mid-stream during /stop")
+            try:
+                await state.transition_to(SidecarState.ERROR)
+            except InvalidTransitionError:
+                pass
+            raise
         except Exception as e:
             _record_error(f"stop handler exception: {e}")
             try:
@@ -511,6 +536,86 @@ async def post_stop(req: StopRequest, request: Request) -> EventSourceResponse:
         ping=15,
         send_timeout=10,
     )
+
+
+# ----------------------------------------------------------------------------
+# POST /reset — Phase 04.2 follow-up — operator escape hatch.
+# ----------------------------------------------------------------------------
+
+
+@app.post("/reset")
+async def post_reset() -> dict:
+    """Force-reset the sidecar state machine to STOPPED.
+
+    Recovery hatch for state stuck at STARTING / SWAPPING / DRAINING /
+    ERROR due to client disconnect mid-stream OR any other unrecoverable
+    condition. Kills any orphan orchestrator subprocesses; clears
+    `_last_error`, `_current_profile_id`, `_current_variant`, `_vllm_pid`.
+
+    SAFETY: this does NOT touch the running vLLM container — only resets
+    the SIDECAR's state-machine bookkeeping. Use `/stop` (or `docker stop
+    emmy-serve` directly) to actually shut down vLLM. After /reset, a
+    /status will report `state=stopped` but `vllm_up=true` if vLLM is
+    still serving — which is the correct externally-started shape.
+
+    Bypasses ALLOWED_TRANSITIONS by mutating SidecarState directly through
+    the StateMachine's `_state` attribute under its asyncio.Lock — this
+    is the operator-explicit recovery path; the lock keeps it consistent
+    with concurrent handlers.
+    """
+    global _current_profile_id, _current_variant, _vllm_pid, _last_error
+
+    prior_state = state.state.value
+
+    # Kill any orphan orchestrator subprocesses. Best-effort — there's no
+    # central registry, but the orchestrator's argv is distinctive enough
+    # to find via pgrep.
+    killed_pids: list[int] = []
+    try:
+        result = await asyncio.create_subprocess_exec(
+            "pgrep", "-f", "emmy_serve.swap.orchestrator",
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.DEVNULL,
+        )
+        stdout_bytes, _ = await result.communicate()
+        for line in stdout_bytes.decode(errors="replace").splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                pid = int(line)
+            except ValueError:
+                continue
+            try:
+                os.kill(pid, signal.SIGTERM)
+                killed_pids.append(pid)
+            except ProcessLookupError:
+                pass
+    except FileNotFoundError:
+        # pgrep not on PATH; skip orphan cleanup. State reset still happens.
+        pass
+    except Exception:
+        # Best-effort — never let a cleanup error prevent the reset.
+        pass
+
+    async with state._lock:  # type: ignore[attr-defined]
+        # Direct mutation under the lock — bypasses ALLOWED_TRANSITIONS by
+        # design. This is the recovery primitive; the state machine's normal
+        # transitions don't permit "any → STOPPED" because that's not a
+        # legitimate workflow path, only an operator-explicit recovery.
+        state._state = SidecarState.STOPPED  # type: ignore[attr-defined]
+
+    _current_profile_id = None
+    _current_variant = None
+    _vllm_pid = None
+    _last_error = None
+
+    return {
+        "ok": True,
+        "prior_state": prior_state,
+        "current_state": "stopped",
+        "killed_orchestrator_pids": killed_pids,
+    }
 
 
 # ----------------------------------------------------------------------------
@@ -583,6 +688,15 @@ async def profile_swap(req: SwapRequest, request: Request) -> EventSourceRespons
             else:
                 _record_error(f"orchestrator exit {exit_rc}")
                 await state.transition_to(SidecarState.ERROR)
+        except asyncio.CancelledError:
+            # Phase 04.2 follow-up — same pattern as /start: client disconnect
+            # → cancel state machine recovery so the next swap can run.
+            _record_error("client disconnected mid-stream during /profile/swap")
+            try:
+                await state.transition_to(SidecarState.ERROR)
+            except InvalidTransitionError:
+                pass
+            raise
         except Exception as e:
             _record_error(f"swap handler exception: {e}")
             try:

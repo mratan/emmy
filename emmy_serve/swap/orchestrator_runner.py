@@ -92,9 +92,35 @@ async def run_orchestrator_subprocess(
                 # profile-swap-runner.ts:138-140 "ignore per contract").
                 continue
     finally:
-        # Ensure the subprocess is reaped even on cancellation (e.g. client
-        # SSE disconnect). proc.wait() in finally guarantees no zombies.
-        rc = await proc.wait()
+        # Phase 04.2 follow-up — actively terminate the subprocess on
+        # cancellation. Pre-fix: bare `await proc.wait()` blocked the finally
+        # waiting for the orchestrator (which could be mid-warmup, ~3 min away
+        # from exiting), and the consumer's CancelledError propagated through
+        # an event loop that was blocked. Net effect: SSE consumer disconnect
+        # → controller's async for cancelled → generator's GeneratorExit fires
+        # → finally's proc.wait() blocks → controller never reaches its
+        # post-subprocess state transition → state stuck at STARTING.
+        #
+        # Post-fix: if the subprocess hasn't exited, send SIGTERM (gives the
+        # orchestrator ~10s to clean up — `docker stop --time 15` calls inside
+        # need finalization), then SIGKILL on timeout. proc.wait() then returns
+        # immediately with the actual exit code (or -SIGTERM/-SIGKILL).
+        if proc.returncode is None:
+            try:
+                proc.terminate()
+            except ProcessLookupError:
+                # Already exited between the check and terminate; harmless.
+                pass
+            try:
+                rc = await asyncio.wait_for(proc.wait(), timeout=10)
+            except asyncio.TimeoutError:
+                try:
+                    proc.kill()
+                except ProcessLookupError:
+                    pass
+                rc = await proc.wait()
+        else:
+            rc = await proc.wait()
 
     yield {"_internal_exit": rc}
 

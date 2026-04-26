@@ -99,6 +99,7 @@ import { runSwapAndStreamProgress } from "./profile-swap-runner";
 import {
 	registerClearCommand,
 	registerProfileCommand,
+	registerResetCommand,
 	registerStartCommand,
 	registerStatusCommand,
 	registerStopCommand,
@@ -858,6 +859,22 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 					"./sidecar-status-client"
 				);
 				return getSidecarStatus(sidecarBaseUrl);
+			},
+		});
+		// Phase 04.2 follow-up — /reset operator escape hatch.
+		registerResetCommand(pi, {
+			runReset: async () => {
+				const url = `${sidecarBaseUrl.replace(/\/$/, "")}/reset`;
+				const resp = await fetch(url, { method: "POST" });
+				if (!resp.ok) {
+					throw new Error(`reset failed: HTTP ${resp.status}`);
+				}
+				return (await resp.json()) as {
+					ok: boolean;
+					prior_state: string;
+					current_state: string;
+					killed_orchestrator_pids: number[];
+				};
 			},
 		});
 
