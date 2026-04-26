@@ -215,6 +215,43 @@ class CompactionConfig(BaseModel):
     preserve_tool_results: Literal["error_only", "none", "all"] = "error_only"
 
 
+class MemoryConfig(BaseModel):
+    """Per-profile filesystem-memory tool config (Phase 04.4 plan 03).
+
+    See `.planning/pre-phase/04.4-memory-compaction/MEMORY-TOOL-SPEC.md` §3.2
+    for design + defaults rationale. The runtime tool lives at
+    `packages/emmy-tools/src/memory/`; this schema is the only validated
+    contract between profile bundles and that runtime.
+
+    Fields:
+      - enabled: master switch. False → tool not registered; description omitted.
+      - project_root: relative-to-cwd dir for /memories/project/...; null = scope disabled.
+      - global_root: ~-prefixed or absolute dir for /memories/global/...; null = scope disabled.
+      - read_at_session_start: whether the instinct prompt fires at session boot.
+      - max_file_bytes: per-file write cap (deliberate; forces consolidation).
+      - max_total_bytes: per-scope cap (deliberate; prevents unbounded growth).
+      - blocked_extensions: belt-and-braces secret-accumulation guard.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    enabled: bool = True
+    project_root: Optional[str] = ".emmy/notes"
+    global_root: Optional[str] = "~/.emmy/memory"
+    read_at_session_start: bool = True
+    max_file_bytes: int = Field(default=65536, gt=0)
+    max_total_bytes: int = Field(default=10_485_760, gt=0)
+    blocked_extensions: list[str] = Field(default_factory=lambda: [".env", ".key", ".pem"])
+
+    @model_validator(mode="after")
+    def _scope_cap_at_least_file_cap(self) -> "MemoryConfig":
+        if self.max_total_bytes < self.max_file_bytes:
+            raise ValueError(
+                f"max_total_bytes ({self.max_total_bytes}) must be >= max_file_bytes "
+                f"({self.max_file_bytes}) — a single max-size file must fit in the scope"
+            )
+        return self
+
+
 class ContextConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     max_input_tokens: int = Field(gt=0)
@@ -224,6 +261,10 @@ class ContextConfig(BaseModel):
     # D-15 — optional per-profile compaction policy. v1/v2 validate without it;
     # v3 ships the block. Presence is opt-in; absence means compaction disabled.
     compaction: Optional[CompactionConfig] = None
+    # Phase 04.4 plan 03 — optional per-profile memory tool config. Profiles
+    # without the block validate (None); the four shipped profiles (v3.1, v1.1,
+    # v2, v1.1) ship the block. Runtime in packages/emmy-tools/src/memory/.
+    memory: Optional[MemoryConfig] = None
 
 
 class GrammarConfig(BaseModel):
@@ -417,6 +458,7 @@ __all__ = [
     "ServingConfig",
     "PromptsConfig",
     "CompactionConfig",
+    "MemoryConfig",
     "ContextConfig",
     "GrammarConfig",
     "WebFetchConfig",
