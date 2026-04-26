@@ -53,4 +53,8 @@ export {
 	type PiToolDefinitionShape,
 	type RegisterWebSearchToolOpts,
 } from "./web-search";
+// Phase 04.5 Plan 01 — Sub-agent dispatch (`Agent` tool).
+export { createSubAgentTool, subagentTool, dispatchSubAgent } from "./subagent";
+export type { SubAgentSpec, CreateSubAgentToolOpts } from "./subagent/types";
+
 export const PACKAGE_VERSION = "0.1.0";

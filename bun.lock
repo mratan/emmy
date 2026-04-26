@@ -57,6 +57,7 @@
       "version": "0.1.0",
       "dependencies": {
         "@emmy/telemetry": "workspace:*",
+        "@mariozechner/pi-ai": "0.68.0",
         "@mariozechner/pi-coding-agent": "0.68.0",
         "@modelcontextprotocol/sdk": "1.0.4",
         "diff": "7.0.0",
