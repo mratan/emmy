@@ -25,9 +25,29 @@ import {
 	SessionManager,
 	type AgentSessionServices,
 } from "@mariozechner/pi-coding-agent";
+import { context as otelContext } from "@opentelemetry/api";
 import type { CreateSubAgentToolOpts, SubAgentSpec } from "./types";
 import { runOneTurnReturningText } from "./run-one-turn";
 import { withSubagentSpan } from "./otel";
+import { createConcurrencyGovernor, type ConcurrencyGovernor } from "./governor";
+
+// Plan 04.5-04 — LOCKED governor defaults (CONTEXT.md §decisions). Lazily
+// constructed when opts.governor is undefined so each Agent tool instance gets
+// its own governor (one per parent session).
+let __defaultGovernorCache = new WeakMap<object, ConcurrencyGovernor>();
+function resolveGovernor(opts: CreateSubAgentToolOpts): ConcurrencyGovernor {
+	if (opts.governor) return opts.governor;
+	let g = __defaultGovernorCache.get(opts);
+	if (!g) {
+		g = createConcurrencyGovernor({
+			maxConcurrent: 2,
+			longContextSerializeThresholdTokens: 40000,
+			rejectOverCap: true, // I3 LOCKED default
+		});
+		__defaultGovernorCache.set(opts, g);
+	}
+	return g;
+}
 
 // Test-only seam (Plan 04.5-01 dispose suite): when set, replaces the
 // real createAgentSessionFromServices call. Production code paths NEVER set
@@ -70,16 +90,40 @@ export async function dispatchSubAgent(
 	persona: SubAgentSpec,
 	params: DispatchSubAgentParams,
 ): Promise<DispatchSubAgentResult> {
-	// Plan 04.5-03 — wrap in subagent span (Level 3 of the LOCKED 4-level trace tree).
-	return await withSubagentSpan(
-		{ name: persona.name, pattern: persona.pattern },
-		opts.parentSessionId,
-		async (span) => {
-			const result = await dispatchSubAgentInner(opts, persona, params);
-			span.setAttribute("emmy.subagent.final_text_chars", result.output.length);
-			return result;
-		},
-	);
+	// Plan 04.5-04 — concurrency governor BEFORE the OTel span so queueing wait
+	// time does not inflate span duration. acquire() may REJECT (I3 over-cap path)
+	// — we let the rejection propagate up through index.ts's try/catch which
+	// turns it into a structured tool-error result.
+	//
+	// CONTEXT CAPTURE: snapshot the OTel context BEFORE governor.acquire's await
+	// boundary. Bun's AsyncHooks does NOT preserve OTel ALS state across some
+	// awaits (verified empirically — child trace IDs diverge). We re-attach the
+	// captured parent context inside withSubagentSpan so the subagent span is
+	// correctly parented to agent.tool.Agent regardless of what happened during
+	// the governor's queue wait.
+	const parentCtx = otelContext.active();
+	const governor = resolveGovernor(opts);
+	const parentInputTokens = opts.parentInputTokens?.();
+	const { release, serialized } = await governor.acquire({ parentInputTokens });
+	try {
+		// Plan 04.5-03 — wrap in subagent span (Level 3 of the LOCKED 4-level trace tree).
+		// Re-attach captured parent context so withSubagentSpan's startActiveSpan picks
+		// agent.tool.Agent as parent (works even if Bun AsyncHooks lost the active span).
+		return await otelContext.with(parentCtx, async () =>
+			withSubagentSpan(
+				{ name: persona.name, pattern: persona.pattern },
+				opts.parentSessionId,
+				async (span) => {
+					span.setAttribute("emmy.subagent.serialized", serialized);
+					const result = await dispatchSubAgentInner(opts, persona, params);
+					span.setAttribute("emmy.subagent.final_text_chars", result.output.length);
+					return result;
+				},
+			),
+		);
+	} finally {
+		release();
+	}
 }
 
 async function dispatchSubAgentInner(

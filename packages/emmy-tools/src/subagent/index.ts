@@ -122,3 +122,10 @@ export { createSubAgentTool as subagentTool };
 
 // Re-export dispatcher for tests that want to drive it without going through the tool wrapper.
 export { dispatchSubAgent } from "./dispatcher";
+
+// Plan 04.5-04 — concurrency governor.
+export {
+	createConcurrencyGovernor,
+	type ConcurrencyGovernor,
+	type ConcurrencyGovernorConfig,
+} from "./governor";

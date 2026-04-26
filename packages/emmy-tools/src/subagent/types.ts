@@ -6,6 +6,7 @@
 // `createSubAgentTool` (./index.ts)).
 
 import type { AgentSessionServices } from "@mariozechner/pi-coding-agent";
+import type { ConcurrencyGovernor } from "./governor";
 
 export type SubAgentSpec = {
 	/** Persona key, e.g. "research". Doubles as the `subagent_type` literal in the parent's TypeBox schema. */
@@ -46,4 +47,16 @@ export interface CreateSubAgentToolOpts {
 	 * so the trace tree carries the parent's conversation context downstream.
 	 */
 	parentSessionId?: string;
+	/**
+	 * Plan 04.5-04 — getter for parent's input token count, evaluated per-dispatch.
+	 * When the returned value exceeds the governor's `longContextSerializeThresholdTokens`,
+	 * concurrency is reduced to 1 (`agent.dispatch.serialized` event fires).
+	 */
+	parentInputTokens?: () => number;
+	/**
+	 * Plan 04.5-04 — concurrency governor instance. When undefined, the dispatcher
+	 * lazily creates one with LOCKED defaults: maxConcurrent=2,
+	 * longContextSerializeThresholdTokens=40000, rejectOverCap=true (I3).
+	 */
+	governor?: ConcurrencyGovernor;
 }

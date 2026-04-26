@@ -56,5 +56,8 @@ export {
 // Phase 04.5 Plan 01 — Sub-agent dispatch (`Agent` tool).
 export { createSubAgentTool, subagentTool, dispatchSubAgent } from "./subagent";
 export type { SubAgentSpec, CreateSubAgentToolOpts } from "./subagent/types";
+// Phase 04.5 Plan 04 — concurrency governor.
+export { createConcurrencyGovernor } from "./subagent";
+export type { ConcurrencyGovernor, ConcurrencyGovernorConfig } from "./subagent";
 
 export const PACKAGE_VERSION = "0.1.0";
