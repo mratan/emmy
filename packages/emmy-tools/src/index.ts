@@ -88,4 +88,16 @@ export {
 	MemoryTelemetryCounters,
 	type MemoryTelemetryCountersSnapshot,
 } from "./memory/telemetry";
+// Plan 04.4-05: memory tool reproducibility hooks.
+export {
+	resolveMemoryConfig,
+	createSnapshot,
+	restoreSnapshot,
+	applyMemorySnapshot,
+	revertMemorySnapshot,
+	type SnapshotHandle,
+	type ApplyMemorySnapshotArgs,
+	type ApplyMemorySnapshotResult,
+	type ResolveMemoryConfigArgs,
+} from "./memory/repro";
 export const PACKAGE_VERSION = "0.1.0";

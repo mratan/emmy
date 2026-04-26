@@ -48,13 +48,21 @@ import {
 	type EmmyToolRegistration,
 } from "@emmy/telemetry";
 import {
+	applyMemorySnapshot,
+	type ApplyMemorySnapshotResult,
 	buildMcpToolDefs,
+	buildMemoryTelemetryHook,
+	buildMemoryTool,
 	buildNativeToolDefs,
 	getOrCreateDefaultStore,
 	loadMcpServersConfig,
+	MemoryTelemetryCounters,
 	NATIVE_TOOL_NAMES,
 	registerMcpServers,
 	registerNativeTools,
+	resolveMemoryConfig,
+	revertMemorySnapshot,
+	type MemoryConfig,
 	type RecentSearchUrlStore,
 	type ToolDefinitionLike,
 } from "@emmy/tools";
@@ -139,6 +147,12 @@ interface CreateEmmySessionOpts {
 	cwd: string;
 	mode: "tui" | "print" | "json";
 	userPrompt?: string;
+	/** Plan 04.4-05: --no-memory disables memory tool registration. */
+	noMemory?: boolean;
+	/** Plan 04.4-05: --memory-snapshot DIR mirrors DIR/{project,global} into
+	 *  live memory roots before the session and reverts after.  Used by eval
+	 *  workers; D-3X invariant unaffected (the prefix doesn't reference memory). */
+	memorySnapshot?: string;
 	/**
 	 * Plan 03-05: emmy-owned session identifier propagated into the turn_id
 	 * scheme `${sessionId}:${turnIndex}`. pi-emmy.ts computes this as
@@ -829,7 +843,59 @@ export async function createEmmySession(
 		// re-throw so pi-emmy's CLI handler can print the named diagnostic.
 		throw e;
 	}
-	const customTools: ToolDefinitionLike[] = [...nativeTools, ...mcpTools];
+	// Plan 04.4-05 — resolve memory config with precedence env > profile > flag.
+	// The pre-existing harness type doesn't expose context.memory; defensive
+	// unknown-cast (pattern matched from compaction config readMaxInputTokens).
+	const profileMemory = (
+		opts.profile.harness as unknown as {
+			context?: { memory?: MemoryConfig };
+		}
+	).context?.memory;
+	const resolvedMemoryConfig = resolveMemoryConfig({
+		profileMemory,
+		noMemory: opts.noMemory ?? false,
+	});
+
+	// Plan 04.4-05 — apply memory snapshot if --memory-snapshot supplied.
+	let memorySnapshotHandle: ApplyMemorySnapshotResult | null = null;
+	if (
+		opts.memorySnapshot !== undefined &&
+		resolvedMemoryConfig.enabled
+	) {
+		const projDir = join(opts.memorySnapshot, "project");
+		const globDir = join(opts.memorySnapshot, "global");
+		memorySnapshotHandle = applyMemorySnapshot({
+			projectSnapshotDir: existsSync(projDir) ? projDir : undefined,
+			globalSnapshotDir: existsSync(globDir) ? globDir : undefined,
+			resolvedConfig: resolvedMemoryConfig,
+			cwd: opts.cwd,
+			home: homedir(),
+		});
+	}
+
+	// Plan 04.4-05 — build memory tool ONLY if enabled. Plan 04.4-04 telemetry
+	// hook routes ops through emitEvent (auto-stamped by EmmyProfileStampProcessor).
+	const memoryCounters = new MemoryTelemetryCounters();
+	const memoryTools: ToolDefinitionLike[] = resolvedMemoryConfig.enabled
+		? [
+				buildMemoryTool({
+					config: resolvedMemoryConfig,
+					cwd: opts.cwd,
+					onOp: buildMemoryTelemetryHook({
+						emitEvent: (rec) => emitEvent(rec),
+						counters: memoryCounters,
+						blockedExtensions:
+							resolvedMemoryConfig.blocked_extensions,
+					}),
+				}) as unknown as ToolDefinitionLike,
+			]
+		: [];
+
+	const customTools: ToolDefinitionLike[] = [
+		...nativeTools,
+		...mcpTools,
+		...memoryTools,
+	];
 
 	// 7b. Plan 03-06 (UX-03): boot-time offline audit (D-26). Runs AFTER
 	// native + MCP tool defs are assembled so the audit sees the full
