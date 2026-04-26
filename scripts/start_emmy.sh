@@ -45,7 +45,13 @@ done
 # as a setup step, not coupled to a vLLM run.
 if [[ "$INSTALL_SIDECAR" = "1" ]]; then
   mkdir -p "$HOME/.config/systemd/user"
-  cp -f "$ROOT_DIR/emmy_serve/systemd/emmy-sidecar.service" "$HOME/.config/systemd/user/"
+  # Substitute WorkingDirectory with the actual repo location at install time.
+  # The template uses %h/code/emmy as the conventional Mac client-install layout,
+  # but Spark hosts (and any non-default checkout) live elsewhere — without this
+  # rewrite systemd would exit 200/CHDIR on start.
+  sed -e "s|^WorkingDirectory=.*|WorkingDirectory=${ROOT_DIR}|" \
+      "$ROOT_DIR/emmy_serve/systemd/emmy-sidecar.service" \
+      > "$HOME/.config/systemd/user/emmy-sidecar.service"
   systemctl --user daemon-reload
   systemctl --user enable --now emmy-sidecar
   if ! loginctl show-user --property=Linger 2>/dev/null | grep -q "Linger=yes"; then
