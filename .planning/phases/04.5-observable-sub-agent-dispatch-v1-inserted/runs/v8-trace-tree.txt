@@ -1,0 +1,18 @@
+[V8 trace tree placeholder — pending operator-gated SC walkthrough]
+
+This file will be overwritten when the operator runs:
+  $ bash start_emmy.sh
+  $ bun run packages/emmy-ux/scripts/v8-real-deal-e2e.ts
+
+The expected LOCKED 4-level shape (W1 — Plan 04.5-03 fix):
+
+  parent_session  [trace=<id> span=<id>]
+    agent.tool.Agent  [trace=<id> span=<id>]
+      subagent.research  [trace=<id> span=<id>]
+        child_invoke_agent  [trace=<id> span=<id>]
+          child_chat_completion  [trace=<id> span=<id>]   # POST /v1/chat/completions
+          child_tool_call.grep   [trace=<id> span=<id>]
+          child_tool_call.read   [trace=<id> span=<id>]
+
+All 5 spans MUST share the same trace prefix; each adjacent pair's
+parentSpanId MUST match the parent's spanId.

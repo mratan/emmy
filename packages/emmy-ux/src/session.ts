@@ -50,6 +50,8 @@ import {
 import {
 	buildMcpToolDefs,
 	buildNativeToolDefs,
+	createConcurrencyGovernor,
+	createSubAgentTool,
 	getOrCreateDefaultStore,
 	loadMcpServersConfig,
 	NATIVE_TOOL_NAMES,
@@ -58,6 +60,7 @@ import {
 	type RecentSearchUrlStore,
 	type ToolDefinitionLike,
 } from "@emmy/tools";
+import { loadPersonaConfig } from "./persona-loader";
 
 // W2 FIX (Phase 2): real import of pi 0.68.0's createAgentSession. Phase 2
 // wires the provider + session fully (SC-1 walkthrough demands it) via
@@ -253,15 +256,63 @@ async function buildRealPiRuntime(
 		},
 	});
 	const sessionManager = SessionManager.inMemory(cwd);
+
+	// Phase 04.5 — wire the SubAgent (Agent) tool into customTools when the
+	// active profile has `subagents.enabled: true`. The tool reuses the parent's
+	// services + cwd; persona registry is loaded from the profile bundle path.
+	// `parentInputTokens` is a late-bound closure over `_sessionRef` so it can
+	// read the parent's running message log (which doesn't exist until after
+	// session creation below).
+	let _sessionRef: { messages?: unknown[] } | null = null;
+	let extendedCustomTools: ToolDefinitionLike[] = customTools;
+	try {
+		const personas = await loadPersonaConfig(profile.ref.path);
+		if (Object.keys(personas).length > 0) {
+			const governor = createConcurrencyGovernor({
+				maxConcurrent: 2,
+				longContextSerializeThresholdTokens: 40000,
+				rejectOverCap: true, // I3 LOCKED default per Plan 04.5-04
+			});
+			const agentTool = createSubAgentTool({
+				parentServices: services,
+				parentCwd: cwd,
+				personas,
+				modelResolver: (_id: string) => emmyModel, // v1 single-model
+				parentSessionId: sessionId,
+				parentSessionDir: undefined, // pi 0.68 doesn't expose; sidecar NO-OPs cleanly
+				parentInputTokens: () => {
+					// Coarse char-count / 3 estimate — V6 long-context rule triggers above ~120K chars.
+					try {
+						const msgs = _sessionRef?.messages ?? [];
+						const chars = JSON.stringify(msgs).length;
+						return Math.floor(chars / 3);
+					} catch {
+						return 0;
+					}
+				},
+				governor,
+			});
+			extendedCustomTools = [...customTools, agentTool as unknown as ToolDefinitionLike];
+		}
+	} catch (err) {
+		// Profile lacks subagents block, or yaml parse error — fall through without Agent tool.
+		// loadPersonaConfig returns {} cleanly when block absent; only rethrows on traversal/etc.
+		// We log to stderr (per @emmy/telemetry pattern) but do NOT block session boot.
+		console.error(
+			`[session] subagents wiring skipped: ${(err as Error).message}`,
+		);
+	}
+
 	// 5. Session — with the Phase-3 customTools flip landed.
 	const { session } = await createAgentSessionFromServices({
 		services,
 		sessionManager,
 		model: emmyModel,
-		customTools: customTools as unknown as Parameters<
+		customTools: extendedCustomTools as unknown as Parameters<
 			typeof createAgentSessionFromServices
 		>[0]["customTools"],
 	});
+	_sessionRef = session as unknown as { messages?: unknown[] };
 
 	// 6. Event dispatch table (emmy's on() → pi's subscribe()).
 	const handlers: Record<string, Array<(...args: unknown[]) => void>> = {};
@@ -330,7 +381,7 @@ async function buildRealPiRuntime(
 	// from NO-OP to introspectable collectors so wire-through regression tests
 	// can verify the Wave-1 work landed.
 	const _registeredProviders: Array<{ name: string; impl: unknown }> = [];
-	const _registeredCustomTools: Array<{ name: string }> = customTools.map((t) => ({ name: t.name }));
+	const _registeredCustomTools: Array<{ name: string }> = extendedCustomTools.map((t) => ({ name: t.name }));
 	const adapter: PiRuntime = {
 		registerProvider: (name: string, impl: unknown) => {
 			_registeredProviders.push({ name, impl });
