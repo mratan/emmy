@@ -6,7 +6,7 @@ profile:
   description: "Qwen3.6-35B-A3B-FP8 primary coding profile, v3.1 operational polish\
     \ \u2014 RAM headroom + live compaction (D-29, D-30, D-31, D-32)"
   created: '2026-04-22'
-  hash: sha256:f9dcabd1dbee8f29b7ee8439140da83d84e9784dab08a1304474e1d06901fc73
+  hash: sha256:a3716a86b2b97fe46482e75cc46a23b52f466784fbbd760e95e8a4f19110a272
   hash_algorithm: sha256
   hash_manifest_version: 1
   tags:

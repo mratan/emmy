@@ -44,8 +44,44 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_PROFILE = "qwen3.6-35b-a3b/v3"
 
+# Phase 04.4 plan 04 — memory tool air-gap subcheck (V5).
+MEMORY_AIRGAP_SCRIPT = REPO_ROOT / "tests" / "smoke" / "verify_memory_airgap.sh"
+
 # Phase 1 + Phase 3 required helpers for a full-run path.
 REQUIRED_BINARIES_FULL = ("docker", "ss", "bash")
+
+
+def verify_memory_airgap(dry_run: bool = False) -> int:
+    """V5 verifier: runs the 100-op memory tool stress under strace.
+
+    Phase 04.4 plan 04. Returns 0 on clean run; 1 on any failure (script
+    missing, non-loopback connect detected, bun test failure).
+    """
+    if not MEMORY_AIRGAP_SCRIPT.exists():
+        print(
+            f"[ci_verify_phase3] ERROR: memory air-gap script not found at "
+            f"{MEMORY_AIRGAP_SCRIPT}",
+            file=sys.stderr,
+        )
+        return 1
+    if not os.access(MEMORY_AIRGAP_SCRIPT, os.X_OK):
+        print(
+            f"[ci_verify_phase3] ERROR: memory air-gap script not executable: "
+            f"{MEMORY_AIRGAP_SCRIPT}",
+            file=sys.stderr,
+        )
+        return 1
+    if dry_run:
+        print(
+            "[ci_verify_phase3] memory subcheck: script present + executable (dry-run)"
+        )
+        return 0
+    result = subprocess.run(
+        [str(MEMORY_AIRGAP_SCRIPT)], capture_output=True, text=True
+    )
+    sys.stdout.write(result.stdout)
+    sys.stderr.write(result.stderr)
+    return result.returncode
 # Dry-run has no binary requirements beyond Python.
 
 
@@ -175,10 +211,33 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="assert config + prereqs only; do NOT bring up docker or run replay",
     )
+    # Phase 04.4 plan 04 — memory subcheck (V5).
+    ap.add_argument(
+        "--include-memory",
+        dest="include_memory",
+        action="store_true",
+        default=True,
+        help="Run the Phase 04.4 memory tool air-gap subcheck (V5). Default: enabled.",
+    )
+    ap.add_argument(
+        "--skip-memory-subcheck",
+        dest="include_memory",
+        action="store_false",
+        help="Skip the memory tool air-gap subcheck (legacy callers without the script).",
+    )
     args = ap.parse_args(argv)
+    rc = 0
     if args.dry_run:
-        return _dry_run(args.profile)
-    return _full_run(args.profile)
+        rc = _dry_run(args.profile)
+    else:
+        rc = _full_run(args.profile)
+    if rc != 0:
+        return rc
+    if args.include_memory:
+        rc = verify_memory_airgap(dry_run=args.dry_run)
+        if rc != 0:
+            return rc
+    return 0
 
 
 if __name__ == "__main__":  # pragma: no cover

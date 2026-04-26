@@ -175,6 +175,97 @@ export async function loadProfile(profileDir: string): Promise<ProfileSnapshot> 
 			? (agentLoopRaw.retry_on_unparseable_tool_call as number)
 			: 2;
 
+	// Plan 04.4-03 — parse harness.context.memory block (Phase-04.4 field; older
+	// profile bundles validate without it → memorySnapshot stays undefined → tool
+	// not registered at session build time).
+	const contextRaw =
+		((harnessYaml as Record<string, unknown> | null)?.context as
+			| Record<string, unknown>
+			| undefined) ?? {};
+	const memoryRaw = contextRaw.memory as Record<string, unknown> | undefined;
+	let memorySnapshot:
+		| {
+				enabled: boolean;
+				project_root: string | null;
+				global_root: string | null;
+				read_at_session_start: boolean;
+				max_file_bytes: number;
+				max_total_bytes: number;
+				blocked_extensions: readonly string[];
+		  }
+		| undefined = undefined;
+	if (memoryRaw !== undefined) {
+		const enabled = memoryRaw.enabled;
+		if (typeof enabled !== "boolean") {
+			throw new ProfileLoadError(
+				`${harnessYamlPath}:context.memory.enabled`,
+				"must be boolean",
+			);
+		}
+		const projectRoot = memoryRaw.project_root;
+		if (projectRoot !== null && typeof projectRoot !== "string") {
+			throw new ProfileLoadError(
+				`${harnessYamlPath}:context.memory.project_root`,
+				"must be string or null",
+			);
+		}
+		const globalRoot = memoryRaw.global_root;
+		if (globalRoot !== null && typeof globalRoot !== "string") {
+			throw new ProfileLoadError(
+				`${harnessYamlPath}:context.memory.global_root`,
+				"must be string or null",
+			);
+		}
+		const readAtSessionStart = memoryRaw.read_at_session_start;
+		if (typeof readAtSessionStart !== "boolean") {
+			throw new ProfileLoadError(
+				`${harnessYamlPath}:context.memory.read_at_session_start`,
+				"must be boolean",
+			);
+		}
+		const maxFileBytes = memoryRaw.max_file_bytes;
+		if (
+			typeof maxFileBytes !== "number" ||
+			maxFileBytes <= 0 ||
+			!Number.isFinite(maxFileBytes)
+		) {
+			throw new ProfileLoadError(
+				`${harnessYamlPath}:context.memory.max_file_bytes`,
+				"must be positive integer",
+			);
+		}
+		const maxTotalBytes = memoryRaw.max_total_bytes;
+		if (
+			typeof maxTotalBytes !== "number" ||
+			maxTotalBytes <= 0 ||
+			!Number.isFinite(maxTotalBytes)
+		) {
+			throw new ProfileLoadError(
+				`${harnessYamlPath}:context.memory.max_total_bytes`,
+				"must be positive integer",
+			);
+		}
+		const blocked = memoryRaw.blocked_extensions;
+		if (
+			!Array.isArray(blocked) ||
+			!blocked.every((e) => typeof e === "string")
+		) {
+			throw new ProfileLoadError(
+				`${harnessYamlPath}:context.memory.blocked_extensions`,
+				"must be array of strings",
+			);
+		}
+		memorySnapshot = {
+			enabled,
+			project_root: projectRoot as string | null,
+			global_root: globalRoot as string | null,
+			read_at_session_start: readAtSessionStart,
+			max_file_bytes: maxFileBytes,
+			max_total_bytes: maxTotalBytes,
+			blocked_extensions: blocked as string[],
+		};
+	}
+
 	const snap: ProfileSnapshot = {
 		ref: { id, version, hash, path: profileDir },
 		serving: {
@@ -207,6 +298,10 @@ export async function loadProfile(profileDir: string): Promise<ProfileSnapshot> 
 			agent_loop: {
 				retry_on_unparseable_tool_call: retryOnUnparseableToolCall,
 			},
+			// Plan 04.4-03 — memory config snapshot (absent if profile lacks block).
+			...(memorySnapshot !== undefined
+				? { context: { memory: memorySnapshot } }
+				: {}),
 		},
 	};
 	return snap;

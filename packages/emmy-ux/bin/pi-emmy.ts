@@ -74,6 +74,13 @@ interface ParsedArgs {
 	 *  artifact from ~/.emmy/telemetry/feedback.jsonl. When present, pi-emmy
 	 *  runs the exporter and exits without starting a session. */
 	exportHf?: string;
+	/** Plan 04.4-05: `--no-memory` disables memory tool registration. */
+	noMemory?: boolean;
+	/** Plan 04.4-05: `--memory-snapshot DIR` mirrors DIR into live memory roots
+	 *  before the session and reverts after. Used by eval workers. */
+	memorySnapshot?: string;
+	/** Plan 04.4-05: usage-error sentinel for `--memory-snapshot` without arg. */
+	memorySnapshotError?: boolean;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
@@ -84,6 +91,9 @@ function parseArgs(argv: string[]): ParsedArgs {
 	let printEnvironment = false;
 	let help = false;
 	let exportHf: string | undefined;
+	let noMemory = false;
+	let memorySnapshot: string | undefined;
+	let memorySnapshotError = false;
 	for (let i = 0; i < argv.length; i++) {
 		const a = argv[i]!;
 		if (a === "--profile") {
@@ -100,6 +110,15 @@ function parseArgs(argv: string[]): ParsedArgs {
 			printEnvironment = true;
 		} else if (a === "--export-hf") {
 			exportHf = argv[++i];
+		} else if (a === "--no-memory") {
+			noMemory = true;
+		} else if (a === "--memory-snapshot") {
+			const next = argv[++i];
+			if (next === undefined || next.startsWith("--")) {
+				memorySnapshotError = true;
+			} else {
+				memorySnapshot = next;
+			}
 		} else if (a === "-h" || a === "--help") {
 			help = true;
 		}
@@ -109,14 +128,19 @@ function parseArgs(argv: string[]): ParsedArgs {
 	if (printEnvironment) args.printEnvironment = true;
 	if (help) args.help = true;
 	if (exportHf !== undefined) args.exportHf = exportHf;
+	if (noMemory) args.noMemory = true;
+	if (memorySnapshot !== undefined) args.memorySnapshot = memorySnapshot;
+	if (memorySnapshotError) args.memorySnapshotError = true;
 	return args;
 }
 
 function usage(): string {
 	return `pi-emmy — Emmy harness (daily-driver)
-  Usage: pi-emmy [--profile <dir>] [--base-url <url>] [--print <prompt>|--json <prompt>|--print-environment|--export-hf <out_dir>]
+  Usage: pi-emmy [--profile <dir>] [--base-url <url>] [--print <prompt>|--json <prompt>|--print-environment|--export-hf <out_dir>] [--no-memory|--memory-snapshot <dir>]
   Defaults: --profile <emmy-install>/profiles/qwen3.6-35b-a3b/v3.1 (override via $EMMY_PROFILE_ROOT or --profile), --base-url http://127.0.0.1:8002
   --export-hf <out_dir>: export ~/.emmy/telemetry/feedback.jsonl as a HuggingFace datasets-loadable artifact (TELEM-02) and exit.
+  --no-memory: disable filesystem memory tool registration (eval-baseline mode).
+  --memory-snapshot <dir>: mirror <dir>/{project,global} into live memory roots before run; revert after (eval reproducibility, V6).
   Exit codes: 0=ready, 1=runtime failure (SP_OK/MCP), 2=usage error (e.g. --export-hf without <out_dir>), 4=prerequisite missing (profile dir, vLLM, or emmy profile validate failed)`;
 }
 
@@ -207,6 +231,11 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
 	if (args.help) {
 		console.log(usage());
 		return 0;
+	}
+	// Plan 04.4-05: surface --memory-snapshot usage error before any prereq probe.
+	if (args.memorySnapshotError) {
+		console.error("pi-emmy: --memory-snapshot requires a <dir> argument");
+		return 2;
 	}
 	if (args.printEnvironment) {
 		console.log(
@@ -400,6 +429,11 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
 			telemetryEnabled,
 		};
 		if (args.prompt !== undefined) sessionOpts.userPrompt = args.prompt;
+		// Plan 04.4-05 — thread memory flags through to session.
+		if (args.noMemory) sessionOpts.noMemory = true;
+		if (args.memorySnapshot !== undefined) {
+			sessionOpts.memorySnapshot = args.memorySnapshot;
+		}
 		const { runtime, assembledPrompt, spOkSkipped, transcriptPath } =
 			await createEmmySession(sessionOpts);
 

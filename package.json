@@ -6,7 +6,7 @@
   "engines": { "bun": ">=1.1" },
   "scripts": {
     "typecheck": "bun run --filter '*' typecheck",
-    "test": "bun test",
+    "test": "bun test --isolate",
     "lint": "biome check packages/"
   },
   "devDependencies": {

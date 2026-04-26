@@ -59,6 +59,7 @@
         "@emmy/telemetry": "workspace:*",
         "@mariozechner/pi-coding-agent": "0.68.0",
         "@modelcontextprotocol/sdk": "1.0.4",
+        "@sinclair/typebox": "^0.34.49",
         "diff": "7.0.0",
         "js-yaml": "4.1.0",
         "turndown": "7.2.0",

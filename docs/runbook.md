@@ -655,6 +655,48 @@ Rename or delete `profiles/routes.yaml`. The harness silently falls back to defa
 
 ---
 
+## Append-only-prefix invariant (D-3X)
+
+Phase 04.4 codifies a project-level invariant: **the system-prompt prefix sent to vLLM never mutates within a session**. Compaction replaces the conversation BODY; the system message + tool catalog + leading project preamble (CLAUDE.md / AGENTS.md) stay byte-stable from turn 0 to turn N.
+
+### Why we have this
+
+- **vLLM automatic prefix caching** is the largest free-money win in long-context inference. Any prefix mutation invalidates the cached prefix blocks → full recompute on the next request → KV pressure → preemption risk.
+- **Cognition's 2026 "clean context for verifiers" lesson** — a stable prefix keeps the verifier turn close to the original task framing rather than a rewritten amalgam.
+- **Reproducibility** — prefix mutations interleaved with compactions create non-deterministic histories, breaking eval replay.
+
+### How to audit
+
+Static check (greps the @emmy/* sources for forbidden mutation patterns):
+
+```bash
+bun run packages/emmy-ux/scripts/audit_prefix_mutations.ts
+# → "AUDIT GREEN — N site(s) reviewed; 0 forbidden." (exit 0)
+```
+
+### How to query telemetry for hash drift
+
+Every wire request emits `compaction.prefix_hash` with `emmy.prefix.hash = sha256(system_prompt_prefix_bytes)` plus `emmy.session.id` and `emmy.turn.id`. Within a single session_id the hash MUST be byte-equal across all turns:
+
+```bash
+grep '"event":"compaction.prefix_hash"' ~/.emmy/telemetry/*.jsonl \
+  | jq '."emmy.session.id" + " " + ."emmy.prefix.hash"' \
+  | sort -u
+```
+
+Each session_id should appear exactly once (one unique hash). If a session_id shows two different hashes, an upstream call site mutated the prefix mid-session — D-3X violation. The `audit_prefix_mutations.ts` static check should catch the call site at CI time.
+
+### Architecture-aware enforcement (Pitfall #22)
+
+vLLM's automatic prefix caching is silently 0% hit-rate on **Mamba-hybrid** Qwen 3.6 35B-A3B and Gemma 4 26B-A4B even with `enable_prefix_caching: True` (vLLM marks it "experimental" for Mamba layers). V4 of the compaction verification protocol therefore gates per-profile family:
+
+- **Attention-only profiles** (Qwen 3.6 27B dense, Gemma 4 31B dense) — hard ≥ 80% prefix-cache hit rate after compaction.
+- **Mamba-hybrid profiles** (Qwen 3.6 35B-A3B, Gemma 4 26B-A4B) — "measure and acknowledge": record the metric, do NOT fail the gate. Detected via vLLM boot-log warning text.
+
+The classifier lives in `packages/emmy-ux/tests/v4-prefix-cache-arch-aware.test.ts`; the live-eval forcing-function is the Phase 04.4 V8 smoke run.
+
+---
+
 ## Reference: where phase deferrals live
 
 - Phase 1 operator-gated items → `.planning/phases/01-serving-foundation-profile-schema/01-CLOSEOUT.md § Deferrals`
