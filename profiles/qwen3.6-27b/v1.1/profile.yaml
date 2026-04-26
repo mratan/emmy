@@ -8,7 +8,7 @@ profile:
     \ gmu=0.86; v1.1 is the operational variant at gmu=0.55 mirroring Qwen 35B-A3B\
     \ v3.1's daily-driver lock-in (>40 GiB system headroom on 128 GiB UMA)."
   created: '2026-04-25'
-  hash: sha256:658f38cbe98df44a7209f7468f667b47c226f4d0d07cf0c035d9dd1b54d12524
+  hash: sha256:cfcfeb97f666eee0d4c347358d27c442b5a81933f5619248cc4a94cc9088254f
   hash_algorithm: sha256
   hash_manifest_version: 1
   tags:
