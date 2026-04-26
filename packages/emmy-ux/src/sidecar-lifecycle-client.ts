@@ -88,7 +88,15 @@ async function _streamSseHelper(args: _SseHelperArgs): Promise<_SseHelperResult>
 	}
 
 	let envelope: SwapResult["envelope"];
-	let exitCode = 0;
+	// Phase 04.2 follow-up — default exit=1 (fail-loud). Without this, an SSE
+	// stream that ends WITHOUT an explicit {exit:N} frame (e.g. controller-side
+	// exception emits only a {phase:"error"} frame and closes) would be
+	// misreported as success (exit=0). Now: only an explicit {exit:0} frame
+	// from the controller is treated as success; everything else is failure.
+	// Pairs with controller.py emitting {exit:0} on idempotent short-circuit
+	// and {exit:1} on handler exceptions so the contract is symmetric.
+	let exitCode = 1;
+	let sawExitFrame = false;
 
 	// eventsource-parser v3 API: createParser({ onEvent: fn }).
 	const parser = createParser({
@@ -101,11 +109,26 @@ async function _streamSseHelper(args: _SseHelperArgs): Promise<_SseHelperResult>
 					rollback_succeeded?: unknown;
 					exit?: unknown;
 					state?: unknown;
+					details?: unknown;
 				};
 				if (typeof rec.phase === "string") {
 					const pct =
 						typeof rec.pct === "number" ? rec.pct : undefined;
 					args.onProgress(rec.phase, pct);
+					// Phase 04.2 follow-up — surface the controller's
+					// {phase:"error", details:{msg}} frame as a progress callback
+					// AND lock exitCode at non-zero so a follow-up exit frame
+					// (or its absence) can't accidentally promote to success.
+					if (rec.phase === "error") {
+						const msg =
+							rec.details && typeof rec.details === "object"
+								? (rec.details as { msg?: unknown }).msg
+								: undefined;
+						if (typeof msg === "string") {
+							args.onProgress(`error: ${msg}`);
+						}
+						// Stays exitCode=1; if a real {exit:N} follows, that wins.
+					}
 					return;
 				}
 				if ("rolled_back" in rec) {
@@ -123,6 +146,7 @@ async function _streamSseHelper(args: _SseHelperArgs): Promise<_SseHelperResult>
 				}
 				if (typeof rec.exit === "number") {
 					exitCode = rec.exit;
+					sawExitFrame = true;
 					return;
 				}
 			} catch {
@@ -137,7 +161,16 @@ async function _streamSseHelper(args: _SseHelperArgs): Promise<_SseHelperResult>
 			parser.feed(decoder.decode(chunk, { stream: true }));
 		}
 	} catch {
-		// Mid-stream abort — return what we have.
+		// Mid-stream abort — return what we have. exitCode stays at its
+		// default (1) unless an exit frame was already received, so partial
+		// streams fail closed.
+	}
+
+	// Phase 04.2 follow-up — if the stream completed cleanly but never emitted
+	// an exit frame, surface that as a separate progress signal so the operator
+	// can tell "controller is broken" from "controller said exit:N".
+	if (!sawExitFrame) {
+		args.onProgress("warning: no exit frame from sidecar (treating as failure)");
 	}
 
 	return { exit: exitCode, envelope };
