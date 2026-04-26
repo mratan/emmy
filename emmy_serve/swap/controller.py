@@ -12,7 +12,9 @@ LOCKED contracts:
            cold-start argv has no --from; cross-variant runs swap orchestrator
            emitting the same Phase-4 D-02 progress sequence
     D-03 — GET /status is GET-only JSON (NEVER SSE)
-    D-06 — FastAPI + uvicorn + sse-starlette + Pydantic v2; bound 0.0.0.0:8003
+    D-06 — FastAPI + uvicorn + sse-starlette + Pydantic v2; bound 127.0.0.1:8003 by default
+           (tailnet exposure is opt-in via `tailscale serve --bg --https=8003 http://127.0.0.1:8003`,
+            never via direct 0.0.0.0 bind — see CLAUDE.md two-hard-boundaries principle)
     D-07 — Status payload schema (state + 10 nullable fields); 1s metric cache;
            state-machine transitions enforced
     C-05 — Trust-on-tailnet (no auth, no token)
@@ -566,13 +568,27 @@ def _parse_profile_path(path: str) -> tuple[str | None, str | None]:
 
 
 def run() -> None:
-    """Boot uvicorn on 0.0.0.0:8003 (Phase 04.2 Plan 02 wires this to systemd)."""
+    """Boot uvicorn on 127.0.0.1:8003 (Phase 04.2 Plan 02 wires this to systemd).
+
+    Loopback-only by design: Tailscale Serve (`tailscale serve --bg --https=8003
+    http://127.0.0.1:8003`) is the single, explicit tailnet-exposure path. A
+    direct 0.0.0.0 bind would shadow the tailscale daemon's per-IP listeners
+    and produce EADDRINUSE — and would also violate CLAUDE.md's air-gap thesis
+    by exposing the sidecar to whatever non-tailnet interfaces are present.
+
+    Override via EMMY_SIDECAR_HOST / EMMY_SIDECAR_PORT for non-default
+    deployments (e.g. a second host bound to a private VLAN where loopback
+    isn't the right boundary). Leave both unset for the default Spark layout.
+    """
     import uvicorn
+
+    host = os.environ.get("EMMY_SIDECAR_HOST", "127.0.0.1")
+    port = int(os.environ.get("EMMY_SIDECAR_PORT", "8003"))
 
     uvicorn.run(
         "emmy_serve.swap.controller:app",
-        host="0.0.0.0",
-        port=8003,
+        host=host,
+        port=port,
         log_level="info",
         access_log=False,
     )
