@@ -24,6 +24,15 @@ export interface FooterValues {
 	specAccept?: string;
 	tokPerS?: number;
 	tokDegraded?: boolean;
+	/**
+	 * Phase 04.2 follow-up — GPU temperature in °C. Populated in remote-client
+	 * mode from the sidecar's `gpu_temp_c` field (sampled via `nvidia-smi
+	 * --query-gpu=temperature.gpu`). When set, the footer renders
+	 * `GPU NN°C` INSTEAD of `GPU NN%`. Local mode keeps the legacy gpuPct
+	 * (utilization) rendering. Mutually exclusive with gpuPct in practice.
+	 */
+	gpuTempC?: number;
+	gpuTempDegraded?: boolean;
 }
 
 /**
@@ -42,7 +51,13 @@ export interface FooterValues {
  *     retained (GPU --% / tok/s --).
  */
 export function formatFooter(v: FooterValues): string {
-	const gpu = renderPct(v.gpuPct, v.gpuDegraded);
+	// Phase 04.2 follow-up — prefer gpuTempC when set (remote-client mode
+	// reads temperature from the sidecar; utilization isn't exposed by the
+	// sidecar's /status v1). Local mode keeps gpuPct.
+	const gpu =
+		v.gpuTempC !== undefined
+			? renderTemp(v.gpuTempC, v.gpuTempDegraded)
+			: renderPct(v.gpuPct, v.gpuDegraded);
 	const kv = renderPct(v.kvPct, v.kvDegraded);
 	const spec = v.specAccept ?? "-";
 	const tok = renderScalar(v.tokPerS, v.tokDegraded);
@@ -59,4 +74,10 @@ function renderScalar(value: number | undefined, degraded: boolean | undefined):
 	if (value === undefined) return "--";
 	const rounded = Math.round(value);
 	return degraded ? `${rounded}?` : `${rounded}`;
+}
+
+function renderTemp(value: number | undefined, degraded: boolean | undefined): string {
+	if (value === undefined) return "--°C";
+	const rounded = Math.round(value);
+	return degraded ? `${rounded}°C?` : `${rounded}°C`;
 }

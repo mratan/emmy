@@ -101,10 +101,14 @@ export function startFooterPoller(opts: FooterPollerOpts): FooterPollerHandle {
 		});
 
 	const tokTracker = new TokRateTracker();
-	const fields: Record<"gpu" | "kv" | "tok", FieldState> = {
+	const fields: Record<"gpu" | "kv" | "tok" | "gpuTemp", FieldState> = {
 		gpu: { lastValue: undefined, failCount: 0 },
 		kv: { lastValue: undefined, failCount: 0 },
 		tok: { lastValue: undefined, failCount: 0 },
+		// Phase 04.2 follow-up — separate tracker for sidecar-sourced GPU
+		// temperature (°C). Local mode never populates it; remote-client mode
+		// uses it INSTEAD of gpuPct (utilization isn't available from /status v1).
+		gpuTemp: { lastValue: undefined, failCount: 0 },
 	};
 
 	function applyDegrade(field: FieldState, values: Record<string, unknown>, valueKey: string, degradeKey: string): void {
@@ -168,18 +172,31 @@ export function startFooterPoller(opts: FooterPollerOpts): FooterPollerHandle {
 					"kvDegraded",
 				);
 			}
-			// gpu_temp_c is temperature, not utilization — not directly mappable
-			// to the existing gpuPct field. For v1 remote mode we leave gpuPct
-			// undefined → renders as `--%` via the existing degrade pipeline.
-			// tokPerS likewise unset (no tok-rate source in /status v1; revisit
-			// when sidecar exposes a derived rate).
-			fields.gpu.failCount++;
-			applyDegrade(
-				fields.gpu,
-				values as Record<string, unknown>,
-				"gpuPct",
-				"gpuDegraded",
-			);
+			// Phase 04.2 follow-up — render gpu_temp_c via the new gpuTempC
+			// footer field (footer.ts prefers it over gpuPct when both are
+			// set). Sidecar exposes temperature, not utilization — utilization
+			// would require nvidia-smi on Spark to expose `--query-gpu=
+			// utilization.gpu` in /status v2. For v1 remote mode, temperature
+			// is the closest single-number signal.
+			if (
+				status !== null &&
+				status.gpu_temp_c !== null &&
+				Number.isFinite(status.gpu_temp_c)
+			) {
+				values.gpuTempC = status.gpu_temp_c;
+				fields.gpuTemp.lastValue = values.gpuTempC;
+				fields.gpuTemp.failCount = 0;
+			} else {
+				fields.gpuTemp.failCount++;
+				applyDegrade(
+					fields.gpuTemp,
+					values as Record<string, unknown>,
+					"gpuTempC",
+					"gpuTempDegraded",
+				);
+			}
+			// tokPerS unset (no tok-rate source in /status v1; revisit when
+			// sidecar exposes a derived rate).
 			fields.tok.failCount++;
 			applyDegrade(
 				fields.tok,

@@ -217,7 +217,15 @@ async def get_status() -> StatusResponse:
     try:
         metrics = await fetch_vllm_metrics_cached(_VLLM_BASE_URL)
         vllm_up = True
-        if "vllm:gpu_cache_usage_perc" in metrics:
+        # Phase 04.2 follow-up — metric name renamed in vLLM v0.17:
+        #   OLD (v0.16-): vllm:gpu_cache_usage_perc
+        #   NEW (v0.17+): vllm:kv_cache_usage_perc
+        # Read both for backward/forward compat across containers (NGC's
+        # 26.03.post1 ships the v0.17 series; older eval matrices may still
+        # be on v0.16 builds).
+        if "vllm:kv_cache_usage_perc" in metrics:
+            kv_used_pct = float(metrics["vllm:kv_cache_usage_perc"])
+        elif "vllm:gpu_cache_usage_perc" in metrics:
             kv_used_pct = float(metrics["vllm:gpu_cache_usage_perc"])
         if "vllm:num_requests_running" in metrics:
             in_flight = int(metrics["vllm:num_requests_running"])
