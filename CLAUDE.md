@@ -77,6 +77,7 @@ profiles/<name>/v<N>/
 - **MCP via pi extension, not a fork** — pi has a "no MCP" stance; emmy overrides via extension because MCP became LF-governed infrastructure in late 2025.
 - **Bash-first tools** — pi's minimal floor (read/write/edit/bash + grep/find/ls + web_fetch + MCP). Building 20+ specialized tools burns context tokens for no benefit.
 - **YOLO defaults + denylist** — pi-mono's correct insight: once an agent has read+write+bash, real isolation is impossible inside the loop. ~40% slowdown for false safety. Use git for undo.
+- **URL config precedence: env > profile > literal default** — every endpoint URL the harness consumes (SearxNG, sidecar, vLLM base, Langfuse, MCP servers) MUST resolve in this order. Env wins so a wrapper can override per-machine without touching profile bytes (Phase 04.2's Mac client `EMMY_SERVE_URL` / `EMMY_SEARXNG_URL` / `EMMY_REMOTE_CLIENT` are the canonical case). Profile wins next so a self-hosted Spark deployment can pin a non-default URL without env gymnastics. Literal default is the D-33 LOCKED loopback (`127.0.0.1:<port>`) — never a public hostname. **Anti-pattern caught in Phase 04.2-followup:** session.ts read the profile URL eagerly and passed it explicitly into the runtime config, shadowing the env getter inside the tool module — env override silently no-op'd. Resolution helpers (e.g. `resolveSearxngBaseUrl(profileBaseUrl)` in `packages/emmy-ux/src/session.ts`) keep the precedence in one place; new URL config should follow the same pattern.
 
 ## Workflow
 
