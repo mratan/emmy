@@ -266,11 +266,15 @@ async def post_start(req: StartRequest, request: Request) -> EventSourceResponse
     # so a malformed request is rejected with 400 regardless of state).
     variant = _validate_profile_id_and_variant(req.profile_id, req.variant)
 
-    # State guard (409 if not in {STOPPED, READY}).
-    if state.state not in {SidecarState.STOPPED, SidecarState.READY}:
+    # State guard. ALLOWED_TRANSITIONS permits ERROR → STARTING so the operator
+    # can retry after a transient orchestrator failure (docker port conflict,
+    # warmup timeout, etc.) without manually restarting the sidecar systemd
+    # unit. The handler maps ERROR to a cold-start path (no _current_*
+    # tracking to consult, so from_path stays None below).
+    if state.state not in {SidecarState.STOPPED, SidecarState.READY, SidecarState.ERROR}:
         raise HTTPException(
             status_code=409,
-            detail=f"start requires state in (stopped,ready), currently={state.state.value}",
+            detail=f"start requires state in (stopped,ready,error), currently={state.state.value}",
         )
 
     # D-02 idempotent same-variant short-circuit (READY + same profile + same variant).
@@ -295,10 +299,11 @@ async def post_start(req: StartRequest, request: Request) -> EventSourceResponse
 
     # Determine paths + cold-vs-cross-variant.
     to_path = f"profiles/{req.profile_id}/{variant}"
-    cold_start = state.state == SidecarState.STOPPED
+    # STOPPED and ERROR both map to cold-start (no prior engine to swap from).
+    cold_start = state.state in {SidecarState.STOPPED, SidecarState.ERROR}
     if cold_start:
         from_path: str | None = None
-        target_state = SidecarState.STARTING  # STOPPED → STARTING → READY
+        target_state = SidecarState.STARTING  # STOPPED|ERROR → STARTING → READY
     else:
         # READY with different variant → cross-variant swap.
         if _current_profile_id is None or _current_variant is None:
