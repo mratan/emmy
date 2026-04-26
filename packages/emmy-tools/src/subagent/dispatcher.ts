@@ -25,11 +25,17 @@ import {
 	SessionManager,
 	type AgentSessionServices,
 } from "@mariozechner/pi-coding-agent";
-import { context as otelContext } from "@opentelemetry/api";
+import { context as otelContext, trace } from "@opentelemetry/api";
+import { randomUUID } from "node:crypto";
 import type { CreateSubAgentToolOpts, SubAgentSpec } from "./types";
 import { runOneTurnReturningText } from "./run-one-turn";
 import { withSubagentSpan } from "./otel";
 import { createConcurrencyGovernor, type ConcurrencyGovernor } from "./governor";
+import {
+	resolveChildSessionManager,
+	writeSidecarEntry,
+	type SidecarEntry,
+} from "./jsonl";
 
 // Plan 04.5-04 — LOCKED governor defaults (CONTEXT.md §decisions). Lazily
 // constructed when opts.governor is undefined so each Agent tool instance gets
@@ -104,25 +110,75 @@ export async function dispatchSubAgent(
 	const parentCtx = otelContext.active();
 	const governor = resolveGovernor(opts);
 	const parentInputTokens = opts.parentInputTokens?.();
-	const { release, serialized } = await governor.acquire({ parentInputTokens });
+
+	// Plan 04.5-06 — sidecar JSONL state captured for both success and failure paths.
+	const started_at = new Date().toISOString();
+	let child_session_id = ""; // populated inside dispatchSubAgentInner
+	let child_jsonl_path: string | undefined;
+	let parent_span_id: string | undefined;
+	let trace_id: string | undefined;
+
+	let acquireOk = false;
+	let release: (() => void) | undefined;
+	let serialized = false;
+
 	try {
+		const acq = await governor.acquire({ parentInputTokens });
+		release = acq.release;
+		serialized = acq.serialized;
+		acquireOk = true;
+
 		// Plan 04.5-03 — wrap in subagent span (Level 3 of the LOCKED 4-level trace tree).
-		// Re-attach captured parent context so withSubagentSpan's startActiveSpan picks
-		// agent.tool.Agent as parent (works even if Bun AsyncHooks lost the active span).
-		return await otelContext.with(parentCtx, async () =>
+		const result = await otelContext.with(parentCtx, async () =>
 			withSubagentSpan(
 				{ name: persona.name, pattern: persona.pattern },
 				opts.parentSessionId,
 				async (span) => {
 					span.setAttribute("emmy.subagent.serialized", serialized);
-					const result = await dispatchSubAgentInner(opts, persona, params);
-					span.setAttribute("emmy.subagent.final_text_chars", result.output.length);
-					return result;
+					parent_span_id = span.spanContext().spanId;
+					trace_id = span.spanContext().traceId;
+					const inner = await dispatchSubAgentInner(opts, persona, params, (sid, jsonlPath) => {
+						child_session_id = sid;
+						child_jsonl_path = jsonlPath;
+					});
+					span.setAttribute("emmy.subagent.final_text_chars", inner.output.length);
+					return inner;
 				},
 			),
 		);
+
+		// Sidecar entry (success path).
+		writeSidecarEntry(opts.parentSessionDir, opts.parentSessionId, {
+			parent_span_id,
+			child_session_id,
+			persona: persona.name,
+			pattern: persona.pattern,
+			started_at,
+			ended_at: new Date().toISOString(),
+			child_jsonl_path,
+			trace_id,
+			ok: true,
+		});
+		return result;
+	} catch (err) {
+		// Sidecar entry (failure path) — only if we had time to assign anything meaningful.
+		// Skip if acquire failed (over-cap rejection BEFORE child instantiation).
+		if (acquireOk) {
+			writeSidecarEntry(opts.parentSessionDir, opts.parentSessionId, {
+				parent_span_id,
+				child_session_id: child_session_id || "<no-session>",
+				persona: persona.name,
+				pattern: persona.pattern,
+				started_at,
+				ended_at: new Date().toISOString(),
+				child_jsonl_path,
+				trace_id,
+				ok: false,
+			});
+		}
+		throw err;
 	} finally {
-		release();
+		release?.();
 	}
 }
 
@@ -130,6 +186,7 @@ async function dispatchSubAgentInner(
 	opts: CreateSubAgentToolOpts,
 	persona: SubAgentSpec,
 	params: DispatchSubAgentParams,
+	onChildIdentified: (childSessionId: string, childJsonlPath: string | undefined) => void,
 ): Promise<DispatchSubAgentResult> {
 	let services: AgentSessionServices;
 	if (persona.pattern === "persona") {
@@ -159,7 +216,17 @@ async function dispatchSubAgentInner(
 		services = opts.parentServices; // SHARED — Pattern A
 	}
 
-	const sessionManager = SessionManager.inMemory(opts.parentCwd);
+	// Plan 04.5-06 — route via resolveChildSessionManager so persistTranscript: true
+	// flips to SessionManager.create with a per-instance subdir. childSessionIdSeed
+	// is a pre-generated id used for the dirname suffix; the actual SDK-assigned
+	// child.sessionId may differ and is captured AFTER the session is built so the
+	// sidecar entry stamps the real one.
+	const childSessionIdSeed = randomUUID();
+	const { sm: sessionManager, childJsonlPath } = resolveChildSessionManager(
+		persona,
+		opts.parentCwd,
+		childSessionIdSeed,
+	);
 
 	const modelId = params.model ?? persona.modelOverride ?? "default";
 	if (params.model && persona.modelOverride && params.model !== persona.modelOverride) {
@@ -176,6 +243,11 @@ async function dispatchSubAgentInner(
 		model: model as any,
 		tools: persona.toolAllowlist, // V3: pi enforces at registration time
 	} as any);
+
+	// Plan 04.5-06 — stamp child id + jsonl path on the sidecar entry the outer
+	// dispatchSubAgent owns. SDK assigns sessionId at construct time; pull it now.
+	const childSessionId = (child as any).sessionId ?? childSessionIdSeed;
+	onChildIdentified(childSessionId, childJsonlPath);
 
 	child.setAutoCompactionEnabled(false);
 

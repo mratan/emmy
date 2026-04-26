@@ -59,4 +59,11 @@ export interface CreateSubAgentToolOpts {
 	 * longContextSerializeThresholdTokens=40000, rejectOverCap=true (I3).
 	 */
 	governor?: ConcurrencyGovernor;
+	/**
+	 * Plan 04.5-06 — parent's pi session directory. When provided alongside
+	 * `parentSessionId`, the dispatcher appends a sidecar JSONL entry per
+	 * dispatch at `<parentSessionDir>/session-<parentSessionId>.subagents.jsonl`.
+	 * NO-OP when undefined (testing contexts).
+	 */
+	parentSessionDir?: string;
 }
