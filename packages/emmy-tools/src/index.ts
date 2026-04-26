@@ -81,4 +81,11 @@ export {
 	checkScopeQuota,
 	walkScopeBytes,
 } from "./memory/quotas";
+// Plan 04.4-04: memory tool telemetry hook + redaction + counters.
+export {
+	buildMemoryTelemetryHook,
+	redactBlockedArgs,
+	MemoryTelemetryCounters,
+	type MemoryTelemetryCountersSnapshot,
+} from "./memory/telemetry";
 export const PACKAGE_VERSION = "0.1.0";
