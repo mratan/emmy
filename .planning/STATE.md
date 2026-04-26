@@ -3,7 +3,7 @@ gsd_state_version: 1.0
 milestone: v0.68.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-04-26T22:14:17.534Z"
+last_updated: "2026-04-26T22:34:44.061Z"
 progress:
   total_phases: 13
   completed_phases: 6
@@ -23,7 +23,7 @@ progress:
 
 **Project:** Emmy — fully-local coding agent on NVIDIA DGX Spark
 **Core Value:** A local coding agent good enough to be the author's daily driver, structured rigorously enough to be a public research artifact others can reproduce — with no cloud dependency anywhere in the loop.
-**Current Focus:** Phase 04.2 — CLOSURE PENDING (operator-gated SC-1/SC-2/SC-3 phase4.2 walkthroughs)
+**Current Focus:** Phase 04.4 — filesystem-memory-tool-append-only-prefix-compaction-polish-
 
 **Authoritative documents:**
 
@@ -40,8 +40,8 @@ progress:
 
 ## Current Position
 
-Phase: 04.2 — CLOSURE PENDING (awaiting SC-1/SC-2/SC-3 phase4.2 operator gates; paperwork landed Plan 06 on 2026-04-26)
-Plan: 6 of 6 (paperwork complete)
+Phase: 04.4 (filesystem-memory-tool-append-only-prefix-compaction-polish-) — EXECUTING
+Plan: 1 of 9
 **Phase 1:** Serving Foundation + Profile Schema — closed 2026-04-21 with 3 documented deferrals; see `.planning/phases/01-serving-foundation-profile-schema/01-CLOSEOUT.md`
 **Phase 2:** Pi-Harness MVP — Daily-Driver Baseline — closed 2026-04-21 with SC-1 green + SC-2/3/4/5 pass; 5 Phase-3 wire-through deferrals; see `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-CLOSEOUT.md`
 **Phase 3:** Observability + Agent-Loop Hardening + Lived-Experience — closed 2026-04-22 with SC-1 phase3 green + SC-2/3/4/5 pass; v3 profile hash `sha256:2beb99c7...d4d3718`; 8 Phase-3 REQ-IDs + 5 Phase-2 Done† promoted to Done (13 total flipped; cumulative 36); 5 operator-gated evidence items deferred (not blockers); see `.planning/phases/03-observability-agent-loop-hardening-lived-experience/03-CLOSEOUT.md`
@@ -143,6 +143,31 @@ Current: Phase 4.2 CLOSURE PENDING 2026-04-26 — paperwork landed (runbook SC w
 - **v2 profile hash re-recompute at Phase 2 close** (Plan 02-08). `sha256:0025799f3bbbb802ebed207791e5e0b39624fa93f0ad6b315d7c488e3153fa41` → `sha256:24be3eea0067102f1f61bd32806a875d019fe02cb114697cd5f3ca4e39985d8b` (PROFILE_NOTES.md validation_runs extended with 6 Phase-2 SC entries; content hash changed accordingly). This is Phase 2's certified-at-close v2 hash; Plan 02-09 CLOSEOUT cites it in the addendum.
 - **SC-4 in-process MCP server instead of external @modelcontextprotocol/server-filesystem** (Plan 02-08). `eval/phase2/sc4/test_mcp_fs_server.ts` is a 60-line file using MCP SDK's Server + StdioServerTransport directly. Avoids an additional external npm dependency while exercising identical bridge wiring. Pattern reusable for any future SC-4-class MCP bridge test.
 - **Corpus backfill-first disclosure discipline** (Plan 02-08 / D-13). `runs/phase2-sc3-capture/` was empty at plan-execute time (no daily-driver sessions captured); `corpus_fill.ts` backfilled via 50 single-turn postChat calls. Each entry's `source:` field records natural-capture vs backfill-postChat; the README.md declares the 0/50 ratio explicitly. Pattern applies to any future parse-rate corpus.
+
+### D-3X (Phase 04.4): Append-only-prefix invariant
+
+**Decision:** The system-prompt prefix sent to vLLM never mutates within a session. Compaction replaces conversation-body turns; never edits system prompt, tool descriptions, project preamble (CLAUDE.md / AGENTS.md), or any pre-turn content.
+
+**Rationale:**
+- vLLM automatic prefix caching is the largest free-money win in long-context. Any prefix mutation invalidates blocks → full recompute → KV pressure → preemption.
+- Cognition's 2026 "clean context for verifiers" lesson — stable prefix is closer to clean than rewriting.
+- Reproducibility: prefix mutations interleaved with compactions create non-deterministic histories.
+
+**Allowed:**
+- `before_provider_request` payload mutations (thinking-disable, reactive grammar) — per-request payload, not conversation prefix.
+- Compaction body replacement — pi's existing behavior.
+- Custom messages appended AFTER system prompt — appending, not mutating.
+
+**Forbidden:**
+- Re-rendering system prompt mid-session
+- Re-ordering tool descriptions mid-session
+- Mutating CLAUDE.md / AGENTS.md and re-loading
+- Adding "session summary so far" to system prompt at compaction time
+
+**Enforcement:**
+1. One-time audit (Phase 04.4 plan 06): `bun run packages/emmy-ux/scripts/audit_prefix_mutations.ts` — exits 0 if zero FORBIDDEN findings.
+2. Per-request OTel attribute `emmy.prefix.hash = sha256(system_prompt_prefix_bytes)` — V3 test asserts hash equality at turn 0 and turn N within one session.
+3. V4 architecture-aware (per Pitfall #22): attention-only profiles gate at ≥80% prefix-cache hit rate post-compaction; Mamba-hybrid profiles use "measure-and-acknowledge" (boot-log warning detection).
 
 ### Key Constraints Carried Forward
 
