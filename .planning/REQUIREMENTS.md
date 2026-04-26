@@ -224,7 +224,7 @@ Which phases cover which requirements. Updated by roadmapper 2026-04-20.
 | UX-01 | Phase 2 | Done |
 | UX-02 | Phase 3 | Done (Plan 03-04; 2026-04-22) |
 | UX-03 | Phase 3 | Done (Plan 03-06; 2026-04-22) |
-| UX-04 | Phase 4 | Done † (Plans 04-03 + 04-06; 2026-04-23 — live walkthrough pending sc1 phase4 green) |
+| UX-04 | Phase 4 + Phase 04.2 | Done † (Phase 4 Plans 04-03 + 04-06; 2026-04-23 — live walkthrough pending sc1 phase4 green) + extended for remote-client mode (Phase 04.2 Plans 04.2-01 + 04.2-03 + 04.2-04 + 04.2-06; 2026-04-25 — SSE wraps Phase-4 D-02 LOCKED contract verbatim per C-06; same 4-phase footer progress in both local and remote modes; live walkthrough pending sc3 phase4.2 green) |
 | UX-05 | Phase 2 | Done |
 | UX-06 | Phase 5 | Pending |
 | REPRO-01 | Phase 1 | Pending |
@@ -265,8 +265,8 @@ Which phases cover which requirements. Updated by roadmapper 2026-04-20.
 
 Phase 3.1 (operational polish — inserted between Phase 3 and Phase 4) added two REQ-IDs:
 
-- **TOOLS-10** (P3.1) — `web_search(query, max_results?)` tool hitting a self-hosted SearxNG loopback instance. Rotates Google + DuckDuckGo + Brave + Bing + Startpage upstreams with automatic rate-limit fallback. **Done** — Plan 03.1-02 commit `d3afe7d` + walkthrough fix `cd435c9`; live-tested on Spark (agent grounded "Bun 1.3.13" from real SearxNG results).
-- **UX-07** (P3.1) — Three-state offline badge: `OFFLINE OK` (green, stricter posture), `LOCAL LLM · WEB` (yellow, SearxNG up + web_search active), `CLOUD INFERENCE` (red, reserved — never fires today). Replaces the Phase 3 two-state badge while preserving the `NETWORK USED` red-flip for non-allowlisted web_fetch. **Done** — Plan 03.1-02 commit `891f6bd`.
+- **TOOLS-10** (P3.1 + P04.2) — `web_search(query, max_results?)` tool hitting a self-hosted SearxNG loopback instance. Rotates Google + DuckDuckGo + Brave + Bing + Startpage upstreams with automatic rate-limit fallback. **Done (Phase 03.1)** — Plan 03.1-02 commit `d3afe7d` + walkthrough fix `cd435c9`; live-tested on Spark (agent grounded "Bun 1.3.13" from real SearxNG results). **Extended for remote-client mode (Phase 04.2)** — Plan 04.2-05 commits `71f7390` + `0a40aea` add `EMMY_SEARXNG_URL` env override (live getter pattern; D-33 LOCKED loopback default preserved when unset; air-gap regression smoke `tests/smoke/verify_airgap_local_mode.sh` green). Status: **Done†** pending operator-gated SC-1 phase4.2 walkthrough confirms web_search tool fires over Tailscale (resume signal `sc1 phase4.2 green` flips Done† → Done).
+- **UX-07** (P3.1 + P04.2) — Three-state offline badge: `OFFLINE OK` (green, stricter posture), `LOCAL LLM · WEB` (yellow, SearxNG up + web_search active), `CLOUD INFERENCE` (red, reserved — never fires today). Replaces the Phase 3 two-state badge while preserving the `NETWORK USED` red-flip for non-allowlisted web_fetch. **Done (Phase 03.1)** — Plan 03.1-02 commit `891f6bd`. **Preserved through Phase 04.2 remote-mode** — Plan 04.2-04 commits `c802987` + `c5ece2a` add the metrics-poller D-09 LOCKED remote branch that feeds the same UNCHANGED state machine in `offline-badge.ts` (zero bytes modified in `offline-badge.ts`); badge logic is unaware of which dispatcher path produced its inputs. Status: **Done†** pending operator-gated SC-2 phase4.2 walkthrough observes badge state under the remote dispatcher (resume signal `sc2 phase4.2 green` flips Done† → Done).
 
 Additional Phase 3.1 advances (existing REQ-IDs):
 
@@ -279,3 +279,22 @@ Additional Phase 3.1 advances (existing REQ-IDs):
 - Mapped to phases: **68 / 68** ✓
 
 *Updated 2026-04-23 — Phase 3.1 close*
+
+---
+
+## Phase 04.2 additions (2026-04-25 → paperwork landed 2026-04-26)
+
+Phase 04.2 (remote-client mode parity — inserted between Phase 4 and Phase 5) extends three existing REQ-IDs for remote-client mode without adding new ones. All three flip to **Done†** at this paperwork close, pending the operator-gated SC walkthroughs:
+
+- **TOOLS-10** — extended via `EMMY_SEARXNG_URL` override (Plan 04.2-05) — see entry above. **Done (P3.1) → Done† (P04.2 pending sc1 phase4.2 green)**.
+- **UX-04** — extended over SSE+Tailscale via the dual-path dispatcher (Plans 04.2-01 + 04.2-03 + 04.2-04) — see traceability table entry. **Done† (P4) → Done† (P04.2 pending sc3 phase4.2 green)**. The C-06 LOCKED contract preserves the Phase-4 D-02 4-phase progress sequence verbatim over the SSE wire.
+- **UX-07** — preserved UNCHANGED through Phase 04.2 remote-mode (Plan 04.2-04 D-09 LOCKED remote branch) — see entry above. **Done (P3.1) → Done† (P04.2 pending sc2 phase4.2 green)**.
+
+**Cumulative v1 totals after Phase 04.2 paperwork (Plan 04.2-06):**
+- Total: **68 v1 REQ-IDs** (unchanged — no new REQ-IDs added in Phase 04.2)
+- Done (with operator-deferred evidence folded as "Done†" per Phase 2/3/4 precedent): **43 / 68** (unchanged from Phase 04.1; Phase 04.2 ships extensions to existing REQ-IDs, not new ones)
+- Mapped to phases: **68 / 68** ✓
+
+**Promotion path:** After all 3 SC walkthroughs land green (`sc1 phase4.2 green` + `sc2 phase4.2 green` + `sc3 phase4.2 green`), the † markers on TOOLS-10 / UX-04 / UX-07 are removed (full Done) and `04.2-CLOSEOUT.md` is optionally written per the Phase 4 precedent. The walkthrough scripts are reproducibly documented in `docs/runbook.md § Phase 04.2 SC walkthroughs`.
+
+*Updated 2026-04-26 — Phase 04.2 paperwork close*

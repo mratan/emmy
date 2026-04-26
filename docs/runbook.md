@@ -246,6 +246,210 @@ If `loginctl enable-linger` was not run, the sidecar dies on logout and `systemc
 
 ---
 
+## Phase 04.2 SC walkthroughs
+
+> Reproducible operator scripts for the 3 SC walkthroughs (D-08 LOCKED).
+>
+> These walkthroughs are operator-gated and require the live tailnet (Mac → Spark over Tailscale). Plans 01-05 ship the code + unit/integration tests; the walkthroughs below are the live-rig confirmations that flip TOOLS-10 / UX-04 / UX-07 from Done† to Done in REQUIREMENTS.md.
+>
+> Placeholder hostname convention: examples below use `spark.example.ts.net`. Substitute your real Tailscale tailnet hostname (set `EMMY_SPARK_HOST=<your-spark>.<your-tailnet>.ts.net` in your shell, or use `${EMMY_SPARK_HOST}` literally if your wrapper exports it).
+
+### SC-1 phase4.2: Mac client one-shot through Tailscale
+
+**Purpose:** Validate Mac → Tailscale → Spark vLLM round-trip + EMMY_SEARXNG_URL override (TOOLS-10 remote-mode extension; Pitfall #6 SP_OK canary alive on the remote path).
+
+**Pre-flight (operator does these first):**
+
+1. Confirm sidecar unit installed + running on Spark:
+   ```bash
+   ssh ${EMMY_SPARK_HOST} 'systemctl --user status emmy-sidecar'
+   # Expected: Active: active (running)
+   ```
+
+2. Confirm 3 Tailscale Serve routes on Spark:
+   ```bash
+   ssh ${EMMY_SPARK_HOST} 'tailscale serve status'
+   # Expected: routes for :8002 (vLLM), :8003 (sidecar), :8888 (SearxNG)
+   ```
+
+3. Confirm Mac wrapper installed:
+   ```bash
+   cat ~/.local/bin/emmy | grep -E 'EMMY_REMOTE_CLIENT|EMMY_SERVE_URL|EMMY_SEARXNG_URL'
+   # Expected: 3 lines matching all three env vars
+   ```
+
+4. Confirm vLLM is up on Spark (otherwise /start it first):
+   ```bash
+   ssh ${EMMY_SPARK_HOST} 'curl -sf http://127.0.0.1:8002/v1/models | head -c 100'
+   # Expected: JSON with current model
+   ```
+
+**Walkthrough (run from Mac terminal):**
+
+```bash
+# Step 1 — sanity check sidecar reachability over Tailscale:
+curl -sf "https://${EMMY_SPARK_HOST}:8003/healthz"
+# Expected: {"ok":true,"version":"0.4.2"}
+
+# Step 2 — sanity check sidecar /status:
+curl -sf "https://${EMMY_SPARK_HOST}:8003/status" | python3 -m json.tool
+# Expected: JSON with state="ready", vllm_up=true, profile_id+profile_variant populated
+
+# Step 3 — one-shot inference through emmy wrapper:
+emmy --print "Reply with: SP_OK_PHASE4_2_GREEN"
+# Expected: Output contains "SP_OK_PHASE4_2_GREEN" (Pitfall #6 SP_OK canary alive on remote path)
+# This proves the full Mac → TS → Spark vLLM round-trip works.
+
+# Step 4 — web_search smoke (only if SearxNG is up on Spark):
+emmy --print "Use web_search to find: bun 1.3.13 release date"
+# Expected: agent uses web_search tool, gets results from Spark-hosted SearxNG via Tailscale
+# Proves EMMY_SEARXNG_URL override path works.
+```
+
+**Resume signal:** Type `sc1 phase4.2 green` if all 4 steps pass.
+
+**Failure-mode triage:**
+- Step 1 fails → sidecar systemd unit problem; `journalctl --user -u emmy-sidecar -f` on Spark
+- Step 2 fails → Pydantic schema mismatch or state machine race; check sidecar logs
+- Step 3 fails → SP_OK delivery broken on remote path (Pitfall #6 regression); diagnose with TUI footer trace
+- Step 4 fails → EMMY_SEARXNG_URL not picked up OR SearxNG TS Serve route missing; confirm via `curl -sf "https://${EMMY_SPARK_HOST}:8888/search?q=test&format=json"` from Mac
+
+Type `sc1 phase4.2 red: <one-line reason>` if any step fails irrecoverably.
+
+### SC-2 phase4.2: /start /stop /status round-trip with graceful drain
+
+**Purpose:** Validate D-01 LOCKED graceful drain + D-02 LOCKED start variants + D-03 LOCKED status poll-only operating together. Demonstrates the in-flight-generation-during-stop case completes cleanly without corrupting the user's session.
+
+**Pre-flight:** SC-1 green (or at least Steps 1-3 of SC-1 green). Sidecar healthy.
+
+**Walkthrough (run from Mac terminal in interactive pi-emmy TUI):**
+
+```bash
+emmy   # opens interactive pi-emmy TUI
+```
+
+In the TUI:
+
+```
+# Step 1 — /status from cold:
+/status
+# Expected (footer notify): "sidecar: state=ready vllm=qwen3.6-35b-a3b@v3.1-default kv=N% temp=N°C"
+# (or state=stopped if Spark vLLM was already stopped)
+
+# Step 2 — /stop while idle (no in-flight requests):
+/stop
+# Confirm dialog appears; choose Yes
+# Expected (footer setStatus): "emmy.swap: draining" then "emmy.swap: <empty>" then notify "emmy-serve stopped"
+# Expected (Spark side): vLLM container stops gracefully within ~2 seconds (no in-flight requests)
+
+# Step 3 — /status after /stop:
+/status
+# Expected: "sidecar: state=stopped vllm_up=false ..." (the underlying httpx probe to vLLM fails, vllm_up flips false)
+
+# Step 4 — /start to bring back vLLM:
+/start qwen3.6-35b-a3b@v3.1-default
+# Expected (footer setStatus): "emmy.swap: stopping vLLM" → "loading weights 0%" → "loading weights 50%" → "warmup" → "ready"
+# Then notify: "started qwen3.6-35b-a3b@v3.1-default"
+
+# Step 5 — long-generation drain test (the D-01 30s drain semantic):
+# In a SECOND Mac terminal, kick off a long generation:
+#   emmy --print "Write a 4000-word essay about the history of the Fortran programming language"
+# Within 5 seconds (while it's still generating), in the FIRST terminal's TUI:
+/stop
+# Confirm dialog → Yes
+# Expected (footer): "emmy.swap: draining {in_flight: 1}" — visible within 1 second
+# Expected (second terminal): generation either completes (if it finishes in <30s) OR truncates with SIGTERM (if >30s)
+# Expected (footer after drain): "emmy.swap: <empty>" then notify "emmy-serve stopped"
+# CRITICAL: vLLM did NOT crash mid-stream uncleanly; the drain SSE event fired; SIGTERM is the deadline cleanup.
+
+# Step 6 — restart for downstream tests:
+/start qwen3.6-35b-a3b@v3.1-default
+# Restore the running state.
+```
+
+**Resume signal:** Type `sc2 phase4.2 green` if all 6 steps pass. Specifically verify:
+- /stop drain UI shows "draining" with in_flight count
+- /stop on long-gen does NOT corrupt the second terminal's session beyond truncation
+- /start restores fully; subsequent /status shows state=ready
+
+**Failure-mode triage:** `sc2 phase4.2 red: <reason>`. Common modes:
+- Drain SSE event never fires → metrics-poller's `vllm:num_requests_running` parsing broken; check controller.py /stop event_generator
+- vLLM doesn't actually stop after SIGKILL deadline → controller.py _vllm_pid not tracked correctly; the systemd unit doesn't own vLLM directly so this needs investigation
+- /start cold-start argv missing --from on a from-stopped state → orchestrator subprocess fails; check Plan 01 Task 3 acceptance criteria for `test_cold_start_argv`
+
+### SC-3 phase4.2: /profile swap from Mac (C-06 SSE wire format end-to-end)
+
+**Purpose:** Validate C-06 LOCKED Phase-4 D-02 progress contract preserved over SSE+Tailscale; A1 risk (SSE idle timeout exceeding sse-starlette ping=15) absent in real-world ≥10-min weight loads.
+
+**Pre-flight:** SC-1 + SC-2 both green. vLLM running on Spark (state=ready). At least 2 profiles registered on Spark (e.g. `qwen3.6-35b-a3b@v3.1-default` and `gemma-4-26b-a4b-it@v2-default`).
+
+**Walkthrough (run from Mac terminal in interactive pi-emmy TUI):**
+
+```bash
+emmy   # opens interactive pi-emmy TUI
+```
+
+In the TUI:
+
+```
+# Step 1 — confirm starting profile:
+/status
+# Expected: "sidecar: state=ready vllm=qwen3.6-35b-a3b@v3.1-default ..."
+
+# Step 2 — /profile swap to a different model:
+/profile gemma-4-26b-a4b-it@v2-default
+# Confirm dialog appears; choose Yes
+# Expected (footer setStatus, in this exact order — the C-06 LOCKED contract):
+#   "emmy.swap: stopping vLLM"
+#   "emmy.swap: loading weights 0%"
+#   "emmy.swap: loading weights 50%"
+#   "emmy.swap: warmup"
+#   "emmy.swap: ready"
+# Final notify: "swapped to gemma-4-26b-a4b-it@v2-default"
+# Total wall time: ~3-8 minutes (weight load dominates)
+
+# Step 3 — verify swap completed correctly:
+/status
+# Expected: "sidecar: state=ready vllm=gemma-4-26b-a4b-it@v2-default ..."
+
+# Step 4 — confirm inference works on the new model:
+emmy --print "Reply with: SP_OK_GEMMA4_VIA_TAILSCALE_GREEN"
+# (Open new terminal — the TUI is still in the swap session)
+# Expected: response contains "SP_OK_GEMMA4_VIA_TAILSCALE_GREEN"
+# Proves the new model is loaded and serving inference.
+
+# Step 5 — swap back to verify symmetry:
+/profile qwen3.6-35b-a3b@v3.1-default
+# Confirm; observe same 4-phase progress; expect ~3-5 min wall time.
+
+# Step 6 — D-02 idempotent same-variant short-circuit test:
+/start qwen3.6-35b-a3b@v3.1-default
+# Confirm dialog (if /start has confirm)
+# Expected: nearly instant return — single "ready" phase fires; notify "started ..."
+# This proves the D-02 idempotent-same-variant code path on the sidecar fires correctly.
+```
+
+**Resume signal:** Type `sc3 phase4.2 green` if all 6 steps pass. Specifically verify:
+- The 4-phase sequence renders verbatim (no extra phases, no shape drift) in the footer (C-06 LOCKED proven over the wire)
+- A 10+ minute idle SSE stream survives without disconnect (RESEARCH Risk A1 — sse-starlette ping=15 keepalive validated on real tailnet)
+- /profile back-and-forth swaps both succeed
+- D-02 idempotent same-variant short-circuit returns within ~1 second (no orchestrator subprocess fired)
+
+**Failure-mode triage:** `sc3 phase4.2 red: <reason>`. Common modes:
+- Phase shape drift in footer (e.g. "stopping vllm" lowercase instead of "stopping vLLM") → SSE re-framing in controller.py corrupted the JSON; check Plan 01 `test_sse_frames_match_phase4_d02`
+- SSE drops mid-load → Tailscale Serve idle timeout exceeded the 15s ping; lower ping in controller.py and re-test (RESEARCH §2 fallback)
+- /profile fails with "swap pre-flight failed" → variant string parsing differs from local mode; verify routes-loader.ts:86 and Plan 01 controller.py StartRequest variant resolution
+
+### After all 3 SCs green
+
+Once the operator records `sc1 phase4.2 green`, `sc2 phase4.2 green`, AND `sc3 phase4.2 green`:
+
+1. Promote REQUIREMENTS.md TOOLS-10 / UX-04 / UX-07 from **Done†** → **Done**.
+2. Update ROADMAP.md Phase 04.2 row from "Closure pending" → "Closed YYYY-MM-DD".
+3. Optionally write `.planning/phases/04.2-remote-client-mode-parity/04.2-CLOSEOUT.md` per Phase 4 precedent (small file with the green-verdict commit hashes + a 1-paragraph narrative).
+
+---
+
 ## Feedback corpus and HF export
 
 Press `Ctrl-Shift-Up` (Phase 3.1 chord; was Alt+Up in earlier docs — pi built-in collision) on the most-recent completed turn:

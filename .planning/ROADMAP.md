@@ -222,7 +222,7 @@ Plans:
 
 ---
 
-### Phase 04.2: Remote-client mode parity (INSERTED)
+### Phase 04.2: Remote-client mode parity (INSERTED) — Closure pending (operator-gated SC walkthroughs)
 
 **Goal:** Make `/profile`, `/start`, `/stop`, `/status`, and `web_search` work from a Mac/laptop client over Tailscale by adding a Spark-side always-on FastAPI sidecar (`emmy_serve.swap.controller`) and a Mac-side dual-path dispatcher in `profile-swap-runner.ts`. Local mode (no `EMMY_REMOTE_CLIENT`) MUST be byte-stable.
 
@@ -235,15 +235,15 @@ Plans:
   2. **SC-2 phase4.2** — /start /stop /status round-trip with graceful drain: D-01 LOCKED 30s drain + SIGTERM + 5s SIGKILL semantics work; in-flight long generation either completes or truncates cleanly without corrupting the session.
   3. **SC-3 phase4.2** — /profile swap from Mac: 4-phase progress sequence (`stopping vLLM` → `loading weights` 0/50/90 → `warmup` → `ready`) renders verbatim in footer (C-06 LOCKED Phase-4 D-02 contract preserved over SSE); D-02 idempotent same-variant short-circuit fires within ~1s; SSE survives ≥10-min idle (RESEARCH Risk A1 negative).
 
-**Plans:** 6 plans
+**Plans:** 6 plans (all 6 LANDED 2026-04-25; 3 operator-gated SC walkthroughs deferred per Phase 1/Phase 4 closeout precedent — see `docs/runbook.md` § "Phase 04.2 SC walkthroughs" for reproducible scripts)
 
 Plans:
-- [ ] 04.2-01-PLAN.md — Sidecar core: state machine + orchestrator_runner + sidecar_metrics + FastAPI controller.py + 5 unit-test files (Wave 1)
-- [ ] 04.2-02-PLAN.md — Sidecar lifecycle: systemd user unit + start_emmy.sh --install-sidecar-unit + integration test (no real vLLM) + runbook Remote-client posture section (Wave 2)
-- [ ] 04.2-03-PLAN.md — TS dual-path dispatcher: profile-swap-runner-http.ts + profile-swap-runner.ts dispatcher branch + spawn-argv snapshot test (D-04 BYTE-STABLE canary) (Wave 1)
-- [ ] 04.2-04-PLAN.md — TS slash commands + footer remote branch: /start /stop /status + sidecar-status-client + metrics-poller D-09 branch + pi-emmy-extension wiring (Wave 2)
-- [ ] 04.2-05-PLAN.md — Install + posture: install-client.sh wrapper env vars + tailscale serve reminders + web-search.ts EMMY_SEARXNG_URL override + README + air-gap regression smoke (D-33 LOCKED canary) (Wave 2)
-- [ ] 04.2-06-PLAN.md — Operator-gated SC walkthroughs (SC-1/SC-2/SC-3 phase4.2) + ROADMAP/STATE/REQUIREMENTS backfill + closeout (Wave 3)
+- [x] 04.2-01-PLAN.md — Sidecar core: state machine + orchestrator_runner + sidecar_metrics + FastAPI controller.py + 5 unit-test files (Wave 1) ✓ 2026-04-25 (commits `1f01934` + `6313472` + `cf13e99` + `3c95d2c`; 62 sidecar unit tests green)
+- [x] 04.2-02-PLAN.md — Sidecar lifecycle: systemd user unit + start_emmy.sh --install-sidecar-unit + integration test (no real vLLM) + runbook Remote-client posture section (Wave 2) ✓ 2026-04-25 (commits `633c2cb` + `f504063` + `757d072` + `2f8c06e` + `880422a`; 6 integration tests + smoke gate)
+- [x] 04.2-03-PLAN.md — TS dual-path dispatcher: profile-swap-runner-http.ts + profile-swap-runner.ts dispatcher branch + spawn-argv snapshot test (D-04 BYTE-STABLE canary) (Wave 1) ✓ 2026-04-25 (commits `b22e550` + `7f460a5` + `4ebdee8` + `315e66f` + `1057252` + `697238d`; 23 dispatcher tests; spawn-argv snapshot pinned)
+- [x] 04.2-04-PLAN.md — TS slash commands + footer remote branch: /start /stop /status + sidecar-status-client + metrics-poller D-09 branch + pi-emmy-extension wiring (Wave 2) ✓ 2026-04-25 (commits `4dcd5af` + `9aeef79` + `c802987` + `c5ece2a` + `91e67a5`; +48 tests; 322/322 emmy-ux suite green)
+- [x] 04.2-05-PLAN.md — Install + posture: install-client.sh wrapper env vars + tailscale serve reminders + web-search.ts EMMY_SEARXNG_URL override + README + air-gap regression smoke (D-33 LOCKED canary) (Wave 2) ✓ 2026-04-25 (commits `71f7390` + `0a40aea` + `87e8c24` + `7ead216` + `7a907f4`; 4 env-override tests; D-33 LOCKED canary green)
+- [x] 04.2-06-PLAN.md — Operator-gated SC walkthroughs (SC-1/SC-2/SC-3 phase4.2) + ROADMAP/STATE/REQUIREMENTS backfill + closeout (Wave 3) ✓ 2026-04-26 paperwork landed; 3 SC walkthroughs DEFERRED operator-gated per Phase 1/Phase 4 closeout precedent (resume signals `sc1 phase4.2 green` / `sc2 phase4.2 green` / `sc3 phase4.2 green` flip Done† → Done)
 
 ### Phase 04.1: Dense-variant model profiles — Qwen3.6-27B-FP8 + Gemma-4-31B-it dense siblings for Phase 5 A/B (INSERTED) ✓ COMPLETE 2026-04-25
 
@@ -341,8 +341,11 @@ Plans:
 | 1. Serving Foundation + Profile Schema | 8/8 | Closed (with 3 documented deferrals) | 2026-04-21 |
 | 2. Pi-Harness MVP — Daily-Driver Baseline | 9/9 | Closed (with 5 Phase-3 wire-through deferrals) | 2026-04-21 |
 | 3. Observability + Agent-Loop Hardening + Lived-Experience | 7/7 | Closed (with 5 operator-gated evidence items deferred) | 2026-04-22 |
-| 4. Gemma 4 Profile + Profile System Maturity | 0/? | Not started | - |
-| 5. Eval Harness + Reproducible Benchmark Suite | 0/? | Not started | - |
+| 03.1. Operational polish (RAM fit + live compaction + SearxNG + 3-state badge) | 3/3 | Closed | 2026-04-23 |
+| 4. Gemma 4 Profile + Profile System Maturity | 6/6 | Closed (with 4 operator-gated evidence items; all resolved 2026-04-23 → 2026-04-24) | 2026-04-23 |
+| 04.1. Dense-variant model profiles (Qwen 27B + Gemma 31B siblings) | 3/3 | Closed | 2026-04-25 |
+| 04.2. Remote-client mode parity | 6/6 | Closure pending (3 operator-gated SC walkthroughs deferred — `sc1/sc2/sc3 phase4.2 green` flips REQ-IDs Done† → Done) | TBD |
+| 5. Eval Harness + Reproducible Benchmark Suite | 0/7 | Not started | - |
 | 6. Speculative Decoding + Latency Polish | 0/? | Not started | - |
 | 7. Research-Grade Publication | 0/? | Not started | - |
 
@@ -413,3 +416,4 @@ Plans:
 *Updated: 2026-04-21 — Phase 1 extended with 3 gap-closure plans (01-06/07/08) from VERIFICATION.md*
 *Updated: 2026-04-21 — Phase 2 closed; SC-1 green; 23 REQ-IDs flipped to Done in REQUIREMENTS.md; v2 profile hash sha256:24be3eea...85d8b certified-at-close*
 *Updated: 2026-04-22 — Phase 3 closed; 5/5 SCs green; 8 Phase-3 REQ-IDs flipped to Done + 5 Phase-2 Done† promoted to Done (13 REQ-IDs total; cumulative 36); v3 profile hash sha256:2beb99c7...d4d3718 certified-at-close; see 03-CLOSEOUT.md*
+*Updated: 2026-04-26 — Phase 04.2 paperwork landed (Plan 06): all 6 plans LANDED 2026-04-25; runbook gains "Phase 04.2 SC walkthroughs" reproducible scripts; ROADMAP/STATE/REQUIREMENTS backfilled; TOOLS-10 + UX-04 + UX-07 flipped to Done† (operator-gated SC pending) per Phase 1/Phase 4 closeout precedent; promotion to Done after `sc1/sc2/sc3 phase4.2 green` resume signals*
