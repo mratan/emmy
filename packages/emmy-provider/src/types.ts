@@ -79,6 +79,23 @@ export interface ProfileSnapshot {
 			// wire-format parse failures. This field is observed but not consumed here.
 			retry_on_unparseable_tool_call: number;
 		};
+		/**
+		 * Plan 04.4-03 — optional snapshot of `harness.context.memory` for the
+		 * filesystem memory tool. Profiles without the block (older bundles)
+		 * leave this undefined → tool not registered. Runtime in
+		 * `packages/emmy-tools/src/memory/`.
+		 */
+		context?: {
+			memory?: {
+				enabled: boolean;
+				project_root: string | null;
+				global_root: string | null;
+				read_at_session_start: boolean;
+				max_file_bytes: number;
+				max_total_bytes: number;
+				blocked_extensions: readonly string[];
+			};
+		};
 	};
 }
 
