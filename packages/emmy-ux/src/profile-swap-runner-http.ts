@@ -26,6 +26,37 @@ import { createParser } from "eventsource-parser";
 import type { SwapResult } from "./profile-swap-runner";
 
 /**
+ * Strip an absolute profile path down to the portion the sidecar can resolve
+ * relative to its own filesystem. Returns the path unchanged if it doesn't
+ * contain a `/profiles/` segment (already-relative paths or paths the
+ * sidecar happens to share with the client).
+ *
+ * Examples:
+ *   "/Users/me/code/emmy/profiles/qwen3.6-35b-a3b/v3.1-default"
+ *     → "profiles/qwen3.6-35b-a3b/v3.1-default"
+ *   "/data/projects/emmy/profiles/gemma-4-26b-a4b-it/v2-default"
+ *     → "profiles/gemma-4-26b-a4b-it/v2-default"
+ *   "profiles/qwen3.6-35b-a3b/v3.1-default" (already relative)
+ *     → "profiles/qwen3.6-35b-a3b/v3.1-default"
+ *   "" (empty — cold-start has no `from` path)
+ *     → ""
+ *
+ * Exported for unit testing.
+ */
+export function _relativizeProfilePath(p: string): string {
+	if (!p) return p;
+	const idx = p.lastIndexOf("/profiles/");
+	if (idx < 0) {
+		// Already relative or non-standard layout — pass through as-is and
+		// let the sidecar surface a real error.
+		return p;
+	}
+	// Strip the leading slash too — keep "profiles/..." as the canonical
+	// relative root the sidecar joins against its WorkingDirectory.
+	return p.slice(idx + 1);
+}
+
+/**
  * DI-friendly fetch signature for SSE consumption. Mirrors the spawnFn
  * pattern from profile-swap-runner.ts: production callers omit it and get
  * Bun's native fetch; unit tests inject a fake that returns a Response
@@ -70,6 +101,16 @@ export async function runSwapAndStreamProgressHttp(args: {
 
 	let resp: Response;
 	try {
+		// Phase 04.2 follow-up — relativize profile paths before sending.
+		// The local-mode dispatcher receives ABSOLUTE paths from
+		// profileIndex.resolve() (e.g. "/Users/x/code/emmy/profiles/qwen.../v3.1").
+		// In local mode that's fine (Mac runs the orchestrator on Mac paths).
+		// In remote mode (this dispatcher), the sidecar runs on Spark and
+		// CANNOT resolve "/Users/x/..." — schema validation fails with exit 5
+		// "prior model still serving". Strip everything up to and including
+		// the parent of "profiles/" so the sidecar resolves
+		// "profiles/<name>/<variant>" against its own cwd (/data/projects/emmy
+		// per the systemd unit's WorkingDirectory).
 		resp = await fetchSse(url, {
 			method: "POST",
 			headers: {
@@ -77,8 +118,8 @@ export async function runSwapAndStreamProgressHttp(args: {
 				accept: "text/event-stream",
 			},
 			body: JSON.stringify({
-				from: args.from,
-				to: args.to,
+				from: _relativizeProfilePath(args.from),
+				to: _relativizeProfilePath(args.to),
 				port: args.port,
 			}),
 			signal: ctl.signal,

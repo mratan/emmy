@@ -822,6 +822,18 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 					onProgress,
 				});
 			},
+			// Phase 04.2 follow-up — /start swap-guard pre-check. Re-uses the
+			// same getSidecarStatus path /status uses; opts.getSidecarStatusImpl
+			// override (already plumbed for /status) wins for tests.
+			getStatus: async () => {
+				if (opts.getSidecarStatusImpl) {
+					return opts.getSidecarStatusImpl(sidecarBaseUrl);
+				}
+				const { getSidecarStatus } = await import(
+					"./sidecar-status-client"
+				);
+				return getSidecarStatus(sidecarBaseUrl);
+			},
 		});
 		registerStopCommand(pi, {
 			runStop: async ({ onProgress }) => {

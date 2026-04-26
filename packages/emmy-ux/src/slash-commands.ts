@@ -404,6 +404,20 @@ export interface RegisterStartCommandOpts {
 		variant?: string;
 		onProgress: (phase: string, pct?: number) => void;
 	}) => Promise<SwapResult>;
+	/**
+	 * Phase 04.2 follow-up — sidecar /status fetcher used by the swap-guard
+	 * pre-check. /start refuses to swap to a different profile/variant when
+	 * vLLM is already running a different one (operator should use /profile
+	 * instead — that path also reloads the harness state, which /start does
+	 * NOT). Production wires this to getSidecarStatus from
+	 * sidecar-status-client.ts; tests inject a fake.
+	 */
+	getStatus: () => Promise<{
+		state: string;
+		profile_id: string | null;
+		profile_variant: string | null;
+		vllm_up: boolean;
+	}>;
 }
 
 export interface RegisterStopCommandOpts {
@@ -494,6 +508,46 @@ export function registerStartCommand(
 			const atIdx = trimmed.indexOf("@");
 			const profile_id = atIdx >= 0 ? trimmed.slice(0, atIdx) : trimmed;
 			const variant = atIdx >= 0 ? trimmed.slice(atIdx + 1) : undefined;
+
+			// Phase 04.2 follow-up — swap-guard. /start is for "bring vLLM up"
+			// not "switch to a different model". If vLLM is already running a
+			// different profile/variant, /start would trigger a swap on the
+			// sidecar but the harness state wouldn't update — the next
+			// inference request would 404 because the model field in the
+			// chat-completions POST still references the old profile's
+			// served_model_name. Defer the user to /profile, which atomically
+			// updates BOTH layers.
+			//
+			// Probe sidecar status; if it errors, fall through to runStart
+			// (the underlying call will produce the real error). Only block
+			// when we have a CONFIDENT mismatch.
+			let pre: Awaited<ReturnType<typeof opts.getStatus>> | null = null;
+			try {
+				pre = await opts.getStatus();
+			} catch {
+				// Sidecar unreachable — let runStart surface the network
+				// error rather than failing here with a misleading message.
+			}
+			if (
+				pre !== null &&
+				pre.state === "ready" &&
+				pre.vllm_up === true &&
+				pre.profile_id !== null &&
+				(pre.profile_id !== profile_id ||
+					(variant !== undefined && pre.profile_variant !== variant))
+			) {
+				const currentLabel =
+					pre.profile_variant !== null
+						? `${pre.profile_id}@${pre.profile_variant}`
+						: pre.profile_id;
+				cmdCtx.ui.notify(
+					`/start refused: vLLM is already running ${currentLabel}. ` +
+						`To switch models, use /profile ${trimmed} — it atomically swaps ` +
+						`both vLLM AND the harness state. /start only brings vLLM up.`,
+					"error",
+				);
+				return;
+			}
 
 			const { exit } = await opts.runStart({
 				profile_id,

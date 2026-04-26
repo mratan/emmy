@@ -246,6 +246,126 @@ describe("registerStartCommand", () => {
 		expect(notifyCalls.some(([t, m]) => t === "error" && /usage/.test(m ?? ""))).toBe(true);
 	});
 
+	// ---- Phase 04.2 follow-up: /start swap-guard ---------------------------
+
+	test("swap-guard: /start <other> when state=ready+vllm_up=true and profile differs → refuse with /profile hint, runStart NOT called", async () => {
+		const { registerStartCommand } = await import("../src/slash-commands");
+		const { pi, registered } = makeFakePi();
+		let runStartCalled = false;
+		registerStartCommand(pi, {
+			runStart: async () => {
+				runStartCalled = true;
+				return { exit: 0 };
+			},
+			getStatus: async () => ({
+				state: "ready",
+				profile_id: "qwen3.6-35b-a3b",
+				profile_variant: "v3.1-default",
+				vllm_up: true,
+			}),
+		});
+		const cmd = registered.find((r) => r.name === "start")!;
+		const { ctx, notifyCalls } = makeSidecarCtx();
+		await cmd.options.handler("gemma-4-26b-a4b-it@v2-default", ctx);
+		expect(runStartCalled).toBe(false);
+		expect(notifyCalls.length).toBe(1);
+		expect(notifyCalls[0]![0]).toBe("error");
+		expect(notifyCalls[0]![1]).toMatch(/already running qwen3\.6-35b-a3b@v3\.1-default/);
+		expect(notifyCalls[0]![1]).toMatch(/use \/profile gemma-4-26b-a4b-it@v2-default/);
+	});
+
+	test("swap-guard: /start <same> when state=ready+vllm_up=true → proceeds (idempotent path will short-circuit on the wire)", async () => {
+		const { registerStartCommand } = await import("../src/slash-commands");
+		const { pi, registered } = makeFakePi();
+		let runStartCalled = false;
+		registerStartCommand(pi, {
+			runStart: async () => {
+				runStartCalled = true;
+				return { exit: 0 };
+			},
+			getStatus: async () => ({
+				state: "ready",
+				profile_id: "qwen3.6-35b-a3b",
+				profile_variant: "v3.1-default",
+				vllm_up: true,
+			}),
+		});
+		const cmd = registered.find((r) => r.name === "start")!;
+		const { ctx, notifyCalls } = makeSidecarCtx();
+		await cmd.options.handler("qwen3.6-35b-a3b@v3.1-default", ctx);
+		expect(runStartCalled).toBe(true);
+		// Notified "started ..." (info), not "refused" (error).
+		expect(notifyCalls[0]![0]).toBe("info");
+	});
+
+	test("swap-guard: /start <other> when state=stopped → proceeds (cold-start, no swap concern)", async () => {
+		const { registerStartCommand } = await import("../src/slash-commands");
+		const { pi, registered } = makeFakePi();
+		let runStartCalled = false;
+		registerStartCommand(pi, {
+			runStart: async () => {
+				runStartCalled = true;
+				return { exit: 0 };
+			},
+			getStatus: async () => ({
+				state: "stopped",
+				profile_id: null,
+				profile_variant: null,
+				vllm_up: false,
+			}),
+		});
+		const cmd = registered.find((r) => r.name === "start")!;
+		const { ctx } = makeSidecarCtx();
+		await cmd.options.handler("gemma-4-26b-a4b-it@v2-default", ctx);
+		expect(runStartCalled).toBe(true);
+	});
+
+	test("swap-guard: /start when state=ready but vllm_up=false → proceeds (recovery path, not a swap)", async () => {
+		const { registerStartCommand } = await import("../src/slash-commands");
+		const { pi, registered } = makeFakePi();
+		let runStartCalled = false;
+		registerStartCommand(pi, {
+			runStart: async () => {
+				runStartCalled = true;
+				return { exit: 0 };
+			},
+			getStatus: async () => ({
+				state: "ready",
+				profile_id: "qwen3.6-35b-a3b",
+				profile_variant: "v3.1-default",
+				vllm_up: false,
+			}),
+		});
+		const cmd = registered.find((r) => r.name === "start")!;
+		const { ctx } = makeSidecarCtx();
+		// Even with a "different" profile_id requested, vllm_up=false means
+		// the controller will treat this as a cold-start (the recovery path)
+		// — NOT a swap-while-serving. Guard correctly stays out of the way.
+		await cmd.options.handler("gemma-4-26b-a4b-it@v2-default", ctx);
+		expect(runStartCalled).toBe(true);
+	});
+
+	test("swap-guard: /start when getStatus throws → falls through to runStart (don't mask sidecar errors)", async () => {
+		const { registerStartCommand } = await import("../src/slash-commands");
+		const { pi, registered } = makeFakePi();
+		let runStartCalled = false;
+		registerStartCommand(pi, {
+			runStart: async () => {
+				runStartCalled = true;
+				return { exit: 1 };
+			},
+			getStatus: async () => {
+				throw new Error("ECONNREFUSED");
+			},
+		});
+		const cmd = registered.find((r) => r.name === "start")!;
+		const { ctx } = makeSidecarCtx();
+		await cmd.options.handler("gemma-4-26b-a4b-it@v2-default", ctx);
+		expect(runStartCalled).toBe(true);
+	});
+
+	// ---- Original /start tests (continue) ----------------------------------
+
 	test("isIdle()===false → notify('deferred', 'warning'), runStart NOT called", async () => {
 		const { registerStartCommand } = await import("../src/slash-commands");
 		const { pi, registered } = makeFakePi();
