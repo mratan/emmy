@@ -128,15 +128,18 @@ describe("memoryTool surface (smoke)", () => {
 		expect(MEMORY_TOOL_DESCRIPTION).toContain("/memories/global");
 	});
 
-	test("dispatch returns memory.not_implemented (plan 02 fills body)", async () => {
+	test("dispatch on non-existent file returns memory.not_found (plan 02 wired)", async () => {
 		const r = (await memoryTool.execute(
 			"id",
-			{ command: "view", path: "/memories/project/ok.md" },
+			{
+				command: "view",
+				path: "/memories/project/zzz-nonexistent-99999.md",
+			},
 			undefined,
 			undefined,
 		)) as { code?: string; isError?: boolean };
 		expect(r.isError).toBe(true);
-		expect(r.code).toBe("memory.not_implemented");
+		expect(r.code).toBe("memory.not_found");
 	});
 
 	test("dispatch rejects hostile path BEFORE not_implemented (V4 guarantee)", async () => {
