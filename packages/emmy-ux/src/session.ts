@@ -846,11 +846,15 @@ export async function createEmmySession(
 	// Plan 04.4-05 — resolve memory config with precedence env > profile > flag.
 	// The pre-existing harness type doesn't expose context.memory; defensive
 	// unknown-cast (pattern matched from compaction config readMaxInputTokens).
+	// Memory tool registers ONLY when the profile explicitly declares the
+	// memory: block — same convention as web_search. Profiles WITHOUT the block
+	// (older bundles, test fixtures) skip registration cleanly.
 	const profileMemory = (
 		opts.profile.harness as unknown as {
 			context?: { memory?: MemoryConfig };
 		}
 	).context?.memory;
+	const memoryConfigured = profileMemory !== undefined;
 	const resolvedMemoryConfig = resolveMemoryConfig({
 		profileMemory,
 		noMemory: opts.noMemory ?? false,
@@ -873,10 +877,12 @@ export async function createEmmySession(
 		});
 	}
 
-	// Plan 04.4-05 — build memory tool ONLY if enabled. Plan 04.4-04 telemetry
-	// hook routes ops through emitEvent (auto-stamped by EmmyProfileStampProcessor).
+	// Plan 04.4-05 — build memory tool ONLY if profile declares the block AND
+	// resolvedMemoryConfig.enabled is true. Plan 04.4-04 telemetry hook routes
+	// ops through emitEvent (auto-stamped by EmmyProfileStampProcessor).
 	const memoryCounters = new MemoryTelemetryCounters();
-	const memoryTools: ToolDefinitionLike[] = resolvedMemoryConfig.enabled
+	const memoryTools: ToolDefinitionLike[] =
+		memoryConfigured && resolvedMemoryConfig.enabled
 		? [
 				buildMemoryTool({
 					config: resolvedMemoryConfig,
