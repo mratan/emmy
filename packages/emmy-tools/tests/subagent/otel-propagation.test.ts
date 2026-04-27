@@ -124,7 +124,7 @@ describe("OTel propagation — withSubagentSpan + withAgentToolSpan helpers (Tas
 
 	test("Test 6 (W1) — withAgentToolSpan creates agent.tool.Agent span with W1 attributes", async () => {
 		clearSpans();
-		await withAgentToolSpan("research", "sid-2", async () => {
+		await withAgentToolSpan("research", "sid-2", undefined, async () => {
 			// no-op
 		});
 		const tool = exporter.getFinishedSpans().find((s) => s.name === "agent.tool.Agent");
@@ -138,7 +138,7 @@ describe("OTel propagation — withSubagentSpan + withAgentToolSpan helpers (Tas
 		clearSpans();
 		const tracer = trace.getTracer(SUBAGENT_TRACER_NAME);
 		await tracer.startActiveSpan("parent_session", async (parent) => {
-			await withAgentToolSpan("research", "sid-3", async () => {
+			await withAgentToolSpan("research", "sid-3", undefined, async () => {
 				await withSubagentSpan({ name: "research", pattern: "lean" }, "sid-3", async () => {
 					// no-op inner
 				});

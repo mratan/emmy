@@ -16,7 +16,7 @@
 // under the hood (H5 confirms this works through pi's tool dispatch). We do NOT add a redundant
 // `context.with(parentCtx, ...)` wrapper — startActiveSpan does the right thing.
 
-import { context, trace, SpanStatusCode, type Span } from "@opentelemetry/api";
+import { context, trace, SpanStatusCode, type Context, type Span } from "@opentelemetry/api";
 
 export const SUBAGENT_TRACER_NAME = "emmy-subagent";
 
@@ -29,38 +29,48 @@ export const SUBAGENT_TRACER_NAME = "emmy-subagent";
  *
  * @param personaName  the resolved persona key (e.g. "research")
  * @param parentSessionId  the parent pi AgentSession id, when known (stamped on `gen_ai.conversation.id`)
+ * @param parentContext  optional explicit parent OTel context (Phase 04.5-followup W1 fix
+ *   — caller threads `context.active()` captured inside the parent_session active-span
+ *   callback, bypassing AsyncLocalStorage which is unreliable across pi's HTTP boundary).
+ *   When undefined, falls back to `context.active()` at call time (legacy faux-friendly path).
  * @param inner  the callback to run inside the activated span
  */
 export async function withAgentToolSpan<T>(
 	personaName: string,
 	parentSessionId: string | undefined,
+	parentContext: Context | undefined,
 	inner: (span: Span) => Promise<T>,
 ): Promise<T> {
 	const tracer = trace.getTracer(SUBAGENT_TRACER_NAME);
-	return await tracer.startActiveSpan(
-		"agent.tool.Agent",
-		{
-			attributes: {
-				"gen_ai.tool.name": "Agent",
-				"gen_ai.tool.persona": personaName,
-				"gen_ai.conversation.id": parentSessionId ?? "<unknown>",
-			},
+	const spanOptions = {
+		attributes: {
+			"gen_ai.tool.name": "Agent",
+			"gen_ai.tool.persona": personaName,
+			"gen_ai.conversation.id": parentSessionId ?? "<unknown>",
 		},
-		async (span: Span) => {
-			try {
-				return await inner(span);
-			} catch (err) {
-				span.recordException(err as Error);
-				span.setStatus({
-					code: SpanStatusCode.ERROR,
-					message: (err as Error)?.message ?? String(err),
-				});
-				throw err;
-			} finally {
-				span.end();
-			}
-		},
-	);
+	};
+	const handler = async (span: Span): Promise<T> => {
+		try {
+			return await inner(span);
+		} catch (err) {
+			span.recordException(err as Error);
+			span.setStatus({
+				code: SpanStatusCode.ERROR,
+				message: (err as Error)?.message ?? String(err),
+			});
+			throw err;
+		} finally {
+			span.end();
+		}
+	};
+	// 4-arg startActiveSpan(name, opts, ctx, fn) overload uses `ctx` as the
+	// explicit parent. When parentContext is undefined the 3-arg overload
+	// uses context.active() (legacy ALS-based behavior — preserved so faux
+	// in-process tests remain green without rewiring).
+	if (parentContext) {
+		return await tracer.startActiveSpan("agent.tool.Agent", spanOptions, parentContext, handler);
+	}
+	return await tracer.startActiveSpan("agent.tool.Agent", spanOptions, handler);
 }
 
 /**

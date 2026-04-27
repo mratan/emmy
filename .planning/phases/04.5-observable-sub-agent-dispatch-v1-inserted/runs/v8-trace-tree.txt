@@ -1,3 +1,3 @@
-agent.tool.Agent  [trace=46636a58 span=c1e18bcc]
-  subagent.research  [trace=46636a58 span=0e96f8d3]
-parent_session  [trace=b584da73 span=975ccc7e]
+parent_session  [trace=ab4ae54d span=22b4aebd]
+  agent.tool.Agent  [trace=ab4ae54d span=210bed48]
+    subagent.research  [trace=ab4ae54d span=cd76bc08]

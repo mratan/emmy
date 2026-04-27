@@ -87,9 +87,15 @@ export function createSubAgentTool(opts: CreateSubAgentToolOpts) {
 			}
 			try {
 				// Plan 04.5-03 (W1) — wrap dispatcher in agent.tool.Agent span (Level 2 of LOCKED 4-level tree).
+				// Phase 04.5-followup — parentContextProvider lets the caller thread an
+				// explicit OTel parent context across pi-coding-agent's HTTP boundary
+				// (AsyncLocalStorage is unreliable there). When undefined, falls back to
+				// context.active() (legacy faux-friendly path).
+				const explicitParentCtx = opts.parentContextProvider?.();
 				const result = await withAgentToolSpan(
 					persona.name,
 					opts.parentSessionId,
+					explicitParentCtx,
 					async () =>
 						dispatchSubAgent(opts, persona, {
 							description: params.description,

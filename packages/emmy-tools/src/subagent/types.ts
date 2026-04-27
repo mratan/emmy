@@ -5,6 +5,7 @@
 // the YAML loader; this is the in-memory shape consumed by
 // `createSubAgentTool` (./index.ts)).
 
+import type { Context } from "@opentelemetry/api";
 import type { AgentSessionServices } from "@mariozechner/pi-coding-agent";
 import type { ConcurrencyGovernor } from "./governor";
 
@@ -66,4 +67,24 @@ export interface CreateSubAgentToolOpts {
 	 * NO-OP when undefined (testing contexts).
 	 */
 	parentSessionDir?: string;
+	/**
+	 * Phase 04.5-followup — explicit parent OTel context provider for the W1
+	 * 4-level trace tree (`parent_session → agent.tool.Agent → subagent.<persona> → child`).
+	 *
+	 * Background: V8 surfaced that AsyncLocalStorage propagation breaks across
+	 * pi-coding-agent's HTTP provider boundary in `session.prompt()`. The H5
+	 * spike confirmed ALS through pi's IN-PROCESS tool dispatch; H9 explicitly
+	 * did not exercise the real-HTTP provider chain (SPIKE-RESULTS.md
+	 * § "What was not tested in H9"). When ALS-via-HTTP is unreliable, the
+	 * caller can thread the parent context explicitly: capture
+	 * `context.active()` from inside the `parent_session` active-span callback,
+	 * stash it in a mutable session-scoped holder, and pass a getter as this
+	 * field. `withAgentToolSpan` will use this context as the explicit parent
+	 * for `agent.tool.Agent` instead of relying on `context.active()`.
+	 *
+	 * When undefined (faux/test contexts where ALS works fine), the legacy
+	 * `context.active()`-based parent resolution is used — keeps unit tests
+	 * green without modification.
+	 */
+	parentContextProvider?: () => Context | undefined;
 }

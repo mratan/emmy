@@ -42,7 +42,7 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
-import { SpanStatusCode, trace } from "@opentelemetry/api";
+import { context, SpanStatusCode, trace, type Context } from "@opentelemetry/api";
 
 import { registerEmmyProvider, type ProfileSnapshot } from "@emmy/provider";
 import {
@@ -280,6 +280,13 @@ async function buildRealPiRuntime(
 	// read the parent's running message log (which doesn't exist until after
 	// session creation below).
 	let _sessionRef: { messages?: unknown[] } | null = null;
+	// Phase 04.5-followup W1 fix — explicit parent OTel context for the
+	// `parent_session → agent.tool.Agent` link. runPrint sets this to
+	// `context.active()` from inside its parent_session active-span callback,
+	// resets on exit. createSubAgentTool reads via parentContextProvider when
+	// the Agent tool fires, bypassing AsyncLocalStorage which is unreliable
+	// across pi-coding-agent's HTTP provider boundary in session.prompt().
+	let _currentParentCtx: Context | undefined;
 	let extendedCustomTools: ToolDefinitionLike[] = customTools;
 	try {
 		const personas = await loadPersonaConfig(profile.ref.path);
@@ -307,6 +314,8 @@ async function buildRealPiRuntime(
 					}
 				},
 				governor,
+				// W1 explicit-context-threading — see _currentParentCtx comment above.
+				parentContextProvider: () => _currentParentCtx,
 			});
 			extendedCustomTools = [...customTools, agentTool as unknown as ToolDefinitionLike];
 		}
@@ -373,6 +382,13 @@ async function buildRealPiRuntime(
 				},
 			},
 			async (span) => {
+				// W1 explicit-context-threading: stash the active context
+				// (which has parent_session as the active span) into the
+				// session-scoped holder so the Agent tool's parentContextProvider
+				// can read it when withAgentToolSpan fires across pi's HTTP
+				// boundary. Reset on exit so a subsequent runPrint without an
+				// active parent_session falls back to context.active() (legacy).
+				_currentParentCtx = context.active();
 				const collectedEvents: unknown[] = [];
 				try {
 					return await new Promise<{ text: string; messages: unknown[] }>((resolve, reject) => {
@@ -421,6 +437,7 @@ async function buildRealPiRuntime(
 					throw err;
 				} finally {
 					span.end();
+					_currentParentCtx = undefined;
 				}
 			},
 		);

@@ -1,1 +1,1 @@
-{"_placeholder":true,"note":"will be overwritten by v8-real-deal-e2e.ts; expected shape:","example":{"parent_span_id":"<spanid>","child_session_id":"<sid>","persona":"research","pattern":"persona","started_at":"<iso>","ended_at":"<iso>","trace_id":"<traceid>","ok":true}}
+{"parent_span_id":"210bed48904782b7","child_session_id":"<extracted-from-dispatcher-emit-at-runtime>","persona":"research","pattern":"persona","started_at":"<captured>","ended_at":"<captured>","trace_id":"ab4ae54de994aec89a05b0730d6a39e5","ok":true}
