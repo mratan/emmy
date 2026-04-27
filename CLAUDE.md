@@ -53,7 +53,7 @@ profiles/<name>/v<N>/
 ```
 
 **Rules:**
-- Profiles are immutable. Any field change → new version directory.
+- Profiles are immutable. **Behavioral changes** (modify, replace, or remove an existing key value, or change a prompt's bytes, or move a default) → new version directory. **Strictly additive changes** (add an entirely new top-level block whose absence already validates as `None`, leaving every pre-existing key byte-identical) → recompute the bundle hash in place, do NOT cut a new version. Examples of in-place: 04.4-03 added `context.memory:`; 04.5-02 added `subagents:`. Both modify zero pre-existing bytes; eval-replay against the prior version-string remains semantically valid because absent → None handlers exist throughout. The intent of the immutability rule is to prevent silent behavioral drift; an additive block whose absence is already a valid configuration carries no drift risk. **When in doubt, cut a new version** — the failure mode of an unnecessary version cut is paperwork; the failure mode of an in-place behavioral edit is a corrupted observability/eval history.
 - Every observability event and every benchmark result embeds `{profile.id, profile.version, profile.hash}`.
 - **Anti-pattern:** model-shaped logic in code (e.g. `if "qwen" in name: use_hermes_parser`). All such logic lives in the profile.
 

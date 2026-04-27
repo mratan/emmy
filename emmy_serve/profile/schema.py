@@ -377,6 +377,71 @@ class VariantSamplingDefaults(BaseModel):
     repetition_penalty: Optional[float] = Field(default=None, gt=0.0)
 
 
+class PersonaConfig(BaseModel):
+    """One persona under harness.yaml `subagents.personas.<name>` (Phase 04.5 plan 02).
+
+    See `.planning/pre-phase/04.5-subagents/INTEGRATION-SKETCH.md` § persona schema
+    for design rationale; runtime in `packages/emmy-tools/src/subagent/`.
+
+    Fields:
+      - description: surfaced on the parent's tool description for `subagent_type` enum.
+      - pattern: "lean" reuses parent services; "persona" loads a persona_dir.
+      - persona_dir: REQUIRED when pattern == "persona"; relative to bundle root.
+      - tool_allowlist: subset of parent tools the child may call (V3).
+      - model_override: v1 single-model only — must be null for both patterns.
+      - max_turns: child agent-loop hard cap.
+      - persist_transcript: write child JSONL alongside parent's session dir.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    description: str
+    pattern: Literal["lean", "persona"]
+    persona_dir: Optional[str] = None
+    tool_allowlist: list[str] = []
+    model_override: Optional[str] = None
+    max_turns: int = Field(default=10, gt=0)
+    persist_transcript: bool = False
+
+    @model_validator(mode="after")
+    def _persona_pattern_needs_dir(self) -> "PersonaConfig":
+        if self.pattern == "persona" and not self.persona_dir:
+            raise ValueError("pattern='persona' requires persona_dir")
+        if self.pattern == "lean" and self.persona_dir:
+            raise ValueError("pattern='lean' must not declare persona_dir")
+        if self.model_override is not None:
+            raise ValueError(
+                "model_override must be null in v1 (single-model only); "
+                "cross-model dispatch deferred per 04.5 CONTEXT.md"
+            )
+        return self
+
+
+class SubagentsConfig(BaseModel):
+    """Per-profile sub-agent dispatch config (Phase 04.5 plan 02).
+
+    See `.planning/pre-phase/04.5-subagents/INTEGRATION-SKETCH.md` for design
+    rationale + LOCKED defaults. Runtime in `packages/emmy-tools/src/subagent/`.
+    Profile bundles without a subagents block validate (None at HarnessConfig);
+    the four shipped profiles (v3.1, v1.1, v2, v1.1) all ship the block.
+
+    Fields:
+      - enabled: master switch; false → Agent tool not registered.
+      - max_concurrent: hardware cap on simultaneous children (LOCKED 2 on Spark).
+      - long_context_serialize_threshold_tokens: parent input above which
+        children serialize instead of running concurrently (40K LOCKED per
+        04.5 CONTEXT.md V6 design).
+      - default_memory_scope: project | global | none — children's memory scope.
+      - personas: persona name → PersonaConfig.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    enabled: bool = True
+    max_concurrent: int = Field(default=2, gt=0)
+    long_context_serialize_threshold_tokens: int = Field(default=40000, gt=0)
+    default_memory_scope: Literal["project", "global", "none"] = "project"
+    personas: dict[str, PersonaConfig] = Field(default_factory=dict)
+
+
 class HarnessConfig(BaseModel):
     """Root of harness.yaml — Phase-2 placeholder values allowed as long as they type-check."""
 
@@ -399,6 +464,11 @@ class HarnessConfig(BaseModel):
     # "no-model-conditionals" D-19 audit ensures we don't branch on these
     # values in code.
     chat_template_kwargs: Optional[dict[str, Any]] = None
+    # Phase 04.5 plan 02 — optional per-profile sub-agent dispatch config.
+    # Profiles without the block validate (None); the four shipped profiles
+    # (v3.1, v1.1, v2, v1.1) ship the block. Runtime in
+    # packages/emmy-tools/src/subagent/.
+    subagents: Optional[SubagentsConfig] = None
 
 
 # --- profile.yaml manifest (01-RESEARCH.md §4) --------------------------------
