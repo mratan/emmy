@@ -5,6 +5,7 @@
 import { existsSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
 import { checkFileQuota, checkScopeQuota } from "../quotas";
+import { withLastUpdatedHeader } from "../staleness";
 import { MemoryError, type MemoryConfig, type MemoryResult } from "../types";
 
 export interface CreateArgs {
@@ -34,7 +35,12 @@ export async function createCommand(args: CreateArgs): Promise<MemoryResult> {
 			),
 		);
 	}
-	const bytes = Buffer.byteLength(args.fileText, "utf8");
+	// Phase 04.4-followup — auto-prepend `last_updated: <ISO>` header so
+	// future `view`s of this note can surface a staleness banner with
+	// concrete age. Always-on; the model's `file_text` body lands beneath
+	// the header.
+	const fileText = withLastUpdatedHeader(args.fileText);
+	const bytes = Buffer.byteLength(fileText, "utf8");
 	try {
 		checkFileQuota(bytes, args.config.max_file_bytes);
 	} catch (e) {
@@ -51,7 +57,7 @@ export async function createCommand(args: CreateArgs): Promise<MemoryResult> {
 	}
 
 	mkdirSync(dirname(args.absPath), { recursive: true });
-	writeFileSync(args.absPath, args.fileText, "utf8");
+	writeFileSync(args.absPath, fileText, "utf8");
 	return {
 		isError: false,
 		command: "create",

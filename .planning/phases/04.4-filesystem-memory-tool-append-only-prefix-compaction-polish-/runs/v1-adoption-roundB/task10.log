@@ -1,0 +1,14 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=ee3678b45c402727b177855164c3205a5a56cd4b39aba1ddd14091f4867c5b3a
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=ee3678b45c402727b177855164c3205a5a56cd4b39aba1ddd14091f4867c5b3a, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T04-26-14-193Z.jsonl
+Based on the tool definition provided, the memory tool does not emit any telemetry per operation. The tool definition describes its parameters and behavior (read/write notes that persist across sessions), but there's no mention of telemetry, logging, or metrics being emitted during operations.
+
+The tool simply performs CRUD operations on notes stored in two scopes:
+- `/memories/project/...` for repo-specific knowledge
+- `/memories/global/...` for cross-project preferences
+
+With six commands: view, create, str_replace, insert, delete, and rename.

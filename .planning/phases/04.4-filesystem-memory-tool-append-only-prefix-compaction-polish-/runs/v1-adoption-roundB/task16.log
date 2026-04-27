@@ -1,0 +1,10 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=15c7298b46b3897a63c26defa6b5589543769a8bcecffe6587f2b06e50cb27db
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=15c7298b46b3897a63c26defa6b5589543769a8bcecffe6587f2b06e50cb27db, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T04-27-40-445Z.jsonl
+I don't have any memory notes stored under `/memories/project` or `/memories/global` that reference "CONTEXT-04" or prompt layering order.
+
+Could you clarify what CONTEXT-04 refers to? Is it a document, a config file, or something else in this project? I can search the codebase for it if you'd like.

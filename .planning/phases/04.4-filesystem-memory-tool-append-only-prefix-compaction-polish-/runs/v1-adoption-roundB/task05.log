@@ -1,0 +1,21 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=3878cdac347243ee361fde4727649b43fb775441b6537b2f2decaa73a13f8ed6
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=3878cdac347243ee361fde4727649b43fb775441b6537b2f2decaa73a13f8ed6, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T04-17-45-546Z.jsonl
+Based on the tool descriptions, here's how the bypass mechanism works:
+
+1. **`web_fetch` is allowlist-gated** — it can only fetch URLs from hosts listed in `profile.harness.tools.web_fetch.allowlist` (plus loopback). Non-allowlisted hosts return an error.
+
+2. **`web_search` is not allowlist-gated** — it searches the open web via a local SearxNG instance and returns results with URLs.
+
+3. **The bypass**: After using `web_search` to find a URL, you can immediately use `web_fetch` on that URL **even if the host isn't in the allowlist**. The description says `web_fetch` is gated by "per-profile allowlist **PLUS recent-web_search-URL bypass**."
+
+In practice, this means:
+- You first call `web_search` with a query to discover relevant URLs.
+- Any URL returned by `web_search` is temporarily whitelisted for `web_fetch`, so you can follow up with `web_fetch(url)` to read the full content of that page.
+- This lets you research and fetch content from arbitrary sites without needing every possible host pre-approved in the allowlist.
+
+The intent is to balance security (restricting direct arbitrary fetching) with usability (allowing you to follow up on search results).

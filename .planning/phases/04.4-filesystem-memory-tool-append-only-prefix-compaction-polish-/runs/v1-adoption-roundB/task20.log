@@ -1,0 +1,58 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=687b6332c36dfd88efd4291f56955e2253d65b1ebd65704ed0a5e909c149b77b
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=687b6332c36dfd88efd4291f56955e2253d65b1ebd65704ed0a5e909c149b77b, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T04-31-11-568Z.jsonl
+Now I have a complete picture. Here's the answer:
+
+---
+
+## Registered Native Tools in `@emmy/tools`
+
+The native tool set is defined as a frozen const array `NATIVE_TOOL_NAMES` in `packages/emmy-tools/src/native-tools.ts`:
+
+```ts
+export const NATIVE_TOOL_NAMES = Object.freeze([
+  "read",
+  "write",
+  "edit",
+  "bash",
+  "grep",
+  "find",
+  "ls",
+  "web_fetch",
+  "web_search",  // conditional — only when profile enables it + kill-switches off
+] as const);
+```
+
+That's **9 tools** total, but **8 are always registered** and **1 (`web_search`) is conditional**:
+
+| # | Tool | Description |
+|---|------|-------------|
+| 1 | **read** | Read a file with 8-hex content hashes on each line (for hash-anchored edits). Supports optional `line_range`. |
+| 2 | **write** | Overwrite a file atomically (open → writeFile → fsync → close). |
+| 3 | **edit** | Hash-anchored edit (default). Edits reference line hashes from a prior `read`. Stale hashes are rejected. Also supports `inserts` after a hash. |
+| 4 | **bash** | Run a bash command via `bash -s` (stdin-fed to avoid `pkill -f` self-kill). Has a builtin denylist (`rm -rf /`, fork bombs) + user-extensible list. Output truncated to 50 lines head+tail. Default 60s timeout. |
+| 5 | **grep** | Run `grep` against a path. Defaults to `-rn` flags. |
+| 6 | **find** | Run `find` on a path with optional `-name` and `-type` filters. |
+| 7 | **ls** | List directory contents with optional `-l` and `-a` flags. |
+| 8 | **web_fetch** | HTTP GET → markdown. Allowlist-gated (UX-03): only hosts in `profile.harness.tools.web_fetch.allowlist` (plus loopback) are permitted. Violations flip the offline badge red. |
+| 9* | **web_search** | *Conditional* — searches via a local SearxNG instance at `http://127.0.0.1:8888`. Only registered when `opts.webSearchConfig` is set AND `opts.webSearchEnabled` is true AND neither env kill-switch (`EMMY_WEB_SEARCH=off`, `EMMY_TELEMETRY=off`) is engaged. |
+
+## How Discovery Happens at Runtime
+
+The discovery/registration flow is in `packages/emmy-ux/src/session.ts` (`createEmmySession`):
+
+1. **`buildNativeToolDefs(opts)`** is called with options from the profile (cwd, profileRef, web_fetch allowlist, web_search config, etc.). This function internally calls `registerNativeTools()` with a **collector shim** that captures each `PiToolSpec` as it's registered, then converts them to `ToolDefinitionLike[]` objects via `toolSpecToDefinition()`.
+
+2. The resulting `nativeTools` array (8 or 9 `ToolDefinitionLike` objects) is merged with any MCP tools (`buildMcpToolDefs`) and memory/subagent tools into the `customTools` array.
+
+3. This `customTools` array is passed to `createAgentSessionFromServices({ customTools: [...] })` from `@mariozechner/pi-coding-agent`, which becomes the **authoritative tool registry** for the session.
+
+4. `NATIVE_TOOL_NAMES` is also used as the **collision source of truth** — it's consumed by `mcp-bridge.ts` to prevent MCP tools from shadowing native tool names, and by the session for introspection/telemetry reporting.
+
+5. A **legacy path** also exists (line ~1146) where `registerNativeTools` is called directly with a real `registerTool` callback for stub-piFactory test paths.
+
+The key design principle: `registerNativeTools` is the **single source of truth** for both tool behavior and schema. `buildNativeToolDefs` reuses it via a collector shim rather than duplicating definitions, so any change to a tool's schema/behavior stays in one place.

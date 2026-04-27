@@ -1,0 +1,36 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=0a07fc3f6ef89ac140a066012b615221d91526d90253054399f46693000e409d
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=0a07fc3f6ef89ac140a066012b615221d91526d90253054399f46693000e409d, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T03-48-30-690Z.jsonl
+## Hash-Anchored Edit Pattern
+
+The hash-anchored edit pattern is a **stale-detection mechanism** for file modifications. Here's how it works:
+
+### The Pattern
+
+1. **Read** a file first (via the `read` tool), which outputs every line prefixed with an 8-hex-character content hash — essentially a checksum of that line's exact content.
+
+2. **Edit** by referencing those specific line hashes in the `edit` tool. You tell it: "on the line with hash `a1b2c3d4`, replace its content with X."
+
+3. **Validation**: If the file has changed since you read it (e.g., another agent, a concurrent edit, or even a subtle whitespace difference), the hash won't match and the edit is **rejected with a stale error**. You must re-read and try again.
+
+### How It Differs from Plain String-Replace
+
+| Aspect | Plain String-Replace | Hash-Anchored Edit |
+|---|---|---|
+| **Targeting** | Matches a raw string literal anywhere in the file | Targets a *specific line* by its content hash |
+| **Ambiguity** | A string like `"foo"` could match multiple lines — which one gets replaced? | Each hash is unique to one exact line at one exact position |
+| **Safety** | Could accidentally replace the wrong occurrence, or silently fail to find the string | Fails explicitly if the line content has drifted — no silent wrong edits |
+| **Concurrency** | No awareness of concurrent changes | Detects that the file changed since you last read it |
+| **Precision** | "Find this text, replace it" | "Replace *this exact line* (proven by its hash)" |
+
+### Analogy
+
+Think of it like **git's line-level tracking** vs. `sed`:
+- `sed 's/foo/bar/g'` is a plain string-replace — it blindly swaps text.
+- Hash-anchored editing is like saying "modify line 42" — but instead of relying on line numbers (which can shift), it relies on the *content fingerprint* of the line, so it's robust even if surrounding lines have changed.
+
+This pattern is especially valuable in collaborative or automated editing scenarios where you need **deterministic, safe, and unambiguous** file modifications.

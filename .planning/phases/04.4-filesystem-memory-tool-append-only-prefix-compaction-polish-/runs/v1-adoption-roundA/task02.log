@@ -1,0 +1,20 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=3e94ad16d32b99e82da9a1f0d295de58b7e80c0540a596adf95c1c7e6a94b2df
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=3e94ad16d32b99e82da9a1f0d295de58b7e80c0540a596adf95c1c7e6a94b2df, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T03-48-42-070Z.jsonl
+This is a TypeScript/JavaScript question about the `read` tool's line-hash computation. The `read` tool description says it outputs "tags each line with an 8-hex content hash for use by the edit tool." The hash is computed using `TextEncoder().encode(s)` before sha256. Let me reason through this.
+
+The question is about why the prefix-hash (the 8-hex prefix of the sha256 content hash on each line) uses `TextEncoder().encode(s)` before sha256. Here's why:
+
+1. **SHA-256 operates on bytes, not strings.** The SHA-256 algorithm (and the Web Crypto API's `subtle.digest`) takes a `BufferSource` (i.e., `ArrayBuffer` or `Uint8Array`) as input. JavaScript strings are sequences of UTF-16 code units, not raw bytes. You can't pass a string directly to a SHA-256 function — it must first be converted to a byte representation.
+
+2. **UTF-8 is the canonical encoding.** `TextEncoder().encode(s)` converts the JavaScript string to a `Uint8Array` using UTF-8 encoding. This is the standard, deterministic way to turn text into bytes. UTF-8 is a superset of ASCII (so plain ASCII text encodes identically to its byte values), and it correctly handles all Unicode characters by mapping them to 1–4 bytes each.
+
+3. **Determinism and correctness.** Without encoding, there would be ambiguity — different systems might use different default encodings (UTF-16, Latin-1, etc.), leading to different hashes for the same string. UTF-8 via `TextEncoder` is the well-defined, cross-platform standard.
+
+4. **The 8-hex prefix is just a short identifier.** The full SHA-256 produces a 64-character hex digest. The tool takes the first 8 hex characters (32 bits) as a compact, human-readable line identifier for the `edit` tool's hash-anchored matching. Using `TextEncoder` ensures this prefix is computed deterministically from the exact UTF-8 byte representation of each line.
+
+In short: **SHA-256 needs bytes, strings are not bytes, and `TextEncoder().encode()` is the standard way to deterministically convert a JavaScript string to UTF-8 bytes before hashing.**

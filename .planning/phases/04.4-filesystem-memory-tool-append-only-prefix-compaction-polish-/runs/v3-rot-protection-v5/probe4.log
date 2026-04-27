@@ -1,0 +1,20 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=6df7a98122f58a270476b4f3582a50d1e7915ea1abef525b2af8dc992b8d4f7d
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=6df7a98122f58a270476b4f3582a50d1e7915ea1abef525b2af8dc992b8d4f7d, layers=system.md,tool_defs,user)
+pi-emmy transcript=/tmp/v3-rot-test/runs/phase2-sc3-capture/session-2026-04-27T03-47-27-671Z.jsonl
+find: ‘/home/user’: No such file or directory
+grep: /home/user: No such file or directory
+Debug logging is controlled by the `DEBUG` environment variable. Set **`DEBUG=1`** when you start the app, and the logger will switch from the default `"info"` level down to `"debug"`.
+
+```bash
+DEBUG=1 node dist/index.js
+# or however you normally start the app:
+DEBUG=1 npm start
+```
+
+Under the hood (`src/config/logger.ts`):
+- Line 2 checks if `process.env.DEBUG === "1"`
+- Line 3 passes `"debug"` to pino's `level` option when it's set, otherwise falls back to `"info"`

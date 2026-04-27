@@ -1,0 +1,96 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=9cd81f89cd2bb429eadf080d58d109a1e488265eb41db215b501733b02a3507a
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=9cd81f89cd2bb429eadf080d58d109a1e488265eb41db215b501733b02a3507a, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T03-49-51-267Z.jsonl
+Now I have a complete picture. Here's the explanation:
+
+---
+
+## File: `/data/projects/emmy/emmy_serve/profile/schema.py`
+
+This file defines the Pydantic v2 schema for the entire profile bundle system, including both `serving.yaml` and `harness.yaml`.
+
+### The `sampling_defaults` block exists in **two** places with **two different purposes**:
+
+---
+
+### 1. `SamplingDefaults` — base profile defaults (in `serving.yaml`)
+
+```python
+class SamplingDefaults(BaseModel):
+    """Prior-sampling settings; harness per-tool sampling overrides these."""
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    temperature: float = Field(ge=0.0, le=2.0)
+    top_p: float = Field(gt=0.0, le=1.0)
+    top_k: int = Field(gt=0)
+    repetition_penalty: float = Field(gt=0.0)
+    max_tokens: int = Field(gt=0)
+    stop: list[str] = []
+```
+
+This is a **required** field on `ServingConfig` (the root of `serving.yaml`):
+
+```python
+class ServingConfig(BaseModel):
+    engine: EngineConfig
+    sampling_defaults: SamplingDefaults   # ← required
+    ...
+```
+
+These are the **base** sampling parameters that every variant inherits. They are loaded at profile boot time by `profile-loader.ts` and baked into the `ProfileSnapshot.serving.sampling_defaults` object.
+
+---
+
+### 2. `VariantSamplingDefaults` — optional variant-level overrides (in `harness.yaml`)
+
+```python
+class VariantSamplingDefaults(BaseModel):
+    """Phase 4 HARNESS-08 — variant-level sampling_defaults."""
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0)
+    top_p: Optional[float] = Field(default=None, gt=0.0, le=1.0)
+    top_k: Optional[int] = Field(default=None, gt=0)
+    max_tokens: Optional[int] = Field(default=None, gt=0)
+    repetition_penalty: Optional[float] = Field(default=None, gt=0.0)
+```
+
+This is an **optional** field on `HarnessConfig` (the root of `harness.yaml`):
+
+```python
+class HarnessConfig(BaseModel):
+    prompts: PromptsConfig
+    context: ContextConfig
+    tools: ToolsConfig
+    agent_loop: AgentLoopConfig
+    advanced_settings_whitelist: list[str] = []
+    sampling_defaults: Optional[VariantSamplingDefaults] = None  # ← optional
+    chat_template_kwargs: Optional[dict[str, Any]] = None
+    subagents: Optional[SubagentsConfig] = None
+```
+
+### How the variant-level `sampling_defaults` is wired at runtime:
+
+1. **Schema validation** — When a harness.yaml is loaded, Pydantic validates it against `HarnessConfig`. If the `sampling_defaults` block is present, it's parsed into a `VariantSamplingDefaults` instance; if absent, it's `None`.
+
+2. **Profile loading** — `profile-loader.ts` reads the raw YAML and builds a `ProfileSnapshot` with `harness.sampling_defaults` populated from the harness YAML.
+
+3. **Per-turn override** — The `before-request-hook.ts` (`handleBeforeProviderRequest`) receives an optional `variantSnapshot` argument. When a variant is active for the current turn, it checks `variantSnapshot.harness.sampling_defaults` and **directly mutates** the outgoing `payload` fields:
+
+   ```typescript
+   if (variantSnapshot) {
+       const sd = variantSnapshot.harness.sampling_defaults;
+       if (sd) {
+           if (typeof sd.temperature === "number") payload.temperature = sd.temperature;
+           if (typeof sd.top_p === "number") payload.top_p = sd.top_p;
+           if (typeof sd.top_k === "number") payload.top_k = sd.top_k;
+           if (typeof sd.max_tokens === "number") payload.max_tokens = sd.max_tokens;
+       }
+   }
+   ```
+
+### Key design insight:
+
+Sibling variants under the same profile share a **byte-identical** `serving.yaml` (enforced by CI). The variant-level `sampling_defaults` in `harness.yaml` lets different variants (e.g., `v3.1-default` vs `v3.1-reason`) diverge on per-turn sampling parameters **without restarting the vLLM engine**. All fields in `VariantSamplingDefaults` are `Optional` — absent fields fall through to the base `serving.yaml` `SamplingDefaults`, so a variant only needs to declare what it wants to change.

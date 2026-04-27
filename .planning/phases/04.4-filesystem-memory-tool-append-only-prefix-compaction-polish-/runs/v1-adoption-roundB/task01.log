@@ -1,0 +1,43 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=4a49d35454a0a719792c0e47ebb1b7b00f6965f3c9628ea4bcd757eae3e21f06
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=4a49d35454a0a719792c0e47ebb1b7b00f6965f3c9628ea4bcd757eae3e21f06, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T04-16-39-721Z.jsonl
+## Hash-Anchored Edit Pattern
+
+The hash-anchored edit pattern is a **version-control-inspired** approach to file editing that uses cryptographic hashes to precisely identify which lines to modify. Here's how it works:
+
+### The Mechanism
+
+1. **Read** a file → every line is prefixed with an 8-hex-character content hash (derived from the line's content).
+2. **Edit** by referencing those exact hashes — you say "replace the line with hash `a1b2c3d4` with this new content."
+3. The edit **fails if the hash doesn't match**, meaning the file has changed since you last read it.
+
+### How It Differs from Plain String-Replace
+
+| Aspect | Plain String-Replace | Hash-Anchored Edit |
+|---|---|---|
+| **Targeting** | Matches by string content (can match multiple lines, or none) | Matches by unique line identity (hash) |
+| **Ambiguity** | `"foo"` could appear 100 times — which one? | Each line has a unique hash — unambiguous |
+| **Safety** | Silent wrong replacement if string appears elsewhere | Fails if hash doesn't match — catches stale context |
+| **Precision** | Coarse — replaces all occurrences or first match | Fine-grained — targets exactly one line |
+| **Conflict detection** | None — blind to concurrent edits | Built-in — stale hash = rejected edit |
+
+### Concrete Example
+
+Imagine a file with:
+```
+name = "Alice"
+name = "Bob"
+```
+
+- **String-replace** `"name = \"Alice\""` → you can't easily target just one occurrence without context.
+- **Hash-anchored** → each line has a distinct hash. You say "replace line with hash `abc12345`" — guaranteed to hit exactly the right line.
+
+### Why It Matters
+
+This pattern prevents **silent bugs** where you intend to modify one instance of a repeated string but accidentally modify another. It also provides **optimistic concurrency control** — if someone else modified the file between your read and edit, the hash won't match and the edit is rejected, forcing you to re-read and retry.
+
+It's essentially **diff-style patching** but with content-addressable identification instead of line numbers (which shift when lines are inserted/deleted above).

@@ -1,0 +1,58 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=1b08ff4985b8fb589ba5ee2a9795b35735f11d01fe9fff89f9eae7acbae5bc8f
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=1b08ff4985b8fb589ba5ee2a9795b35735f11d01fe9fff89f9eae7acbae5bc8f, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T04-12-07-231Z.jsonl
+Now I have a complete picture. Here's the answer:
+
+## Registered Native Tools in `@emmy/tools`
+
+The native tools are defined in `packages/emmy-tools/src/native-tools.ts` and are the **8-tool "native floor"**:
+
+| # | Tool | Description |
+|---|------|-------------|
+| 1 | **`read`** | Read a file with 8-hex content hashes on each line (delegates to `readWithHashes`) |
+| 2 | **`write`** | Overwrite a file atomically (open → writeFile → fsync → close) |
+| 3 | **`edit`** | Hash-anchored edit (default mode) — edits reference line hashes from a prior `read`; stale hashes are rejected (delegates to `editHashline`) |
+| 4 | **`bash`** | Run a bash command (YOLO mode) with output truncation (50 lines head/tail), default 60s timeout, and a builtin denylist (`rm -rf /`, fork bombs) plus user-extensible patterns |
+| 5 | **`grep`** | Run `grep` against a path, returns stdout + exit_code |
+| 6 | **`find`** | Run `find` on a path, returns matching paths one per line |
+| 7 | **`ls`** | List directory contents |
+| 8 | **`web_fetch`** | HTTP GET → markdown, allowlist-gated (UX-03) — only hosts in the profile's `web_fetch.allowlist` (plus loopback) are permitted |
+
+Additionally, **`web_search`** is conditionally registered (Plan 03.1-02 D-34) when the profile enables it and kill-switches are off. It's listed in `NATIVE_TOOL_NAMES` but only wired up at runtime if `opts.webSearchConfig` and `opts.webSearchEnabled` are both truthy.
+
+The authoritative list is the frozen const:
+```ts
+export const NATIVE_TOOL_NAMES = Object.freeze([
+  "read", "write", "edit", "bash",
+  "grep", "find", "ls", "web_fetch",
+  "web_search",  // conditional
+] as const);
+```
+
+## How It's Discovered at Runtime
+
+There are **two registration paths**, both driven from `session.ts`:
+
+### Path 1: Phase-3 wire-through (`buildNativeToolDefs`) — the primary path
+In `session.ts` (around line 976), the session builder:
+
+1. Constructs a `NativeToolOpts` object from the profile (cwd, profileRef, web_fetch allowlist, web_search config, etc.)
+2. Calls **`buildNativeToolDefs(nativeToolOpts)`** which internally:
+   - Creates a collector shim that captures every `PiToolSpec` emitted by `registerNativeTools`
+   - Calls `registerNativeTools(collectorShim, opts)` — this registers all 8 tools into the shim
+   - Adapts each captured `PiToolSpec` to a `ToolDefinitionLike` via `toolSpecToDefinition`
+   - Returns the array of 8 (or 9) tool definitions
+3. These `ToolDefinitionLike[]` objects are then passed into `createAgentSessionFromServices({ customTools: [...] })`
+
+### Path 2: Legacy `registerNativeTools` — stub-piFactory paths
+For legacy code paths (stub-piFactory), `registerNativeTools` is called directly with a real `pi` object that has a `registerTool(spec)` method, which registers tools into the pi agent framework at runtime.
+
+### Key runtime wiring details:
+- **`NATIVE_TOOL_NAMES`** is the collision source of truth — consumed by `mcp-bridge.ts` to prevent MCP tool name conflicts with native tools
+- **`web_search`** registration is gated by: profile has `harness.tools.web_search` block, `webSearchEnabled` is true, and neither `EMMY_WEB_SEARCH=off` nor `EMMY_TELEMETRY=off` kill-switches are engaged
+- **`web_fetch`** enforcement uses the profile's `harness.tools.web_fetch.allowlist` (hostname-exact, no DNS resolution, loopback always permitted) with a "recent search URL bypass" store for URLs returned by `web_search` calls
+- Every tool invocation emits a telemetry event (`tool.invoke`) with latency, outcome, and profile info (currently no-op in Wave 0)

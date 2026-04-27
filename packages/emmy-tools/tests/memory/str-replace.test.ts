@@ -58,7 +58,8 @@ describe("str_replace command", () => {
 		expect(r.isError).toBe(false);
 		const ok = r as { payload: { replacedAtLine: number } };
 		expect(ok.payload.replacedAtLine).toBe(2);
-		expect(readFileSync(f, "utf8")).toBe("alpha\nBB\ngamma\n");
+		// Phase 04.4-followup — str_replace refreshes/prepends `last_updated:` on every edit.
+		expect(readFileSync(f, "utf8")).toMatch(/^last_updated: \d{4}-\d{2}-\d{2}T[\d:.]+Z\n\nalpha\nBB\ngamma\n$/);
 	});
 
 	test("2-match returns memory.ambiguous_match with both line numbers", async () => {

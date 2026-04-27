@@ -4,6 +4,7 @@
 
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { checkFileQuota } from "../quotas";
+import { withLastUpdatedHeader } from "../staleness";
 import { MemoryError, type MemoryConfig, type MemoryResult } from "../types";
 
 export interface StrReplaceArgs {
@@ -69,7 +70,11 @@ export async function strReplaceCommand(
 			details: { matchCount: lineNumbers.length, lineNumbers },
 		};
 	}
-	const out = orig.replace(args.oldStr, args.newStr);
+	const replaced = orig.replace(args.oldStr, args.newStr);
+	// Phase 04.4-followup — refresh `last_updated:` header (or prepend if
+	// absent) so the staleness banner reflects the most recent edit, not the
+	// note's original creation time.
+	const out = withLastUpdatedHeader(replaced);
 	const newBytes = Buffer.byteLength(out, "utf8");
 	try {
 		checkFileQuota(newBytes, args.config.max_file_bytes);

@@ -42,8 +42,9 @@ describe("insert command", () => {
 			scopeRootAbs: tmp,
 		});
 		expect(r.isError).toBe(false);
+		// Phase 04.4-followup — insert refreshes/prepends `last_updated:` on every edit.
 		const out = readFileSync(f, "utf8");
-		expect(out).toBe("ZERO\nalpha\nbeta\n");
+		expect(out).toMatch(/^last_updated: \d{4}-\d{2}-\d{2}T[\d:.]+Z\n\nZERO\nalpha\nbeta\n$/);
 	});
 
 	test("insert_line:N places between line N and line N+1", async () => {
@@ -59,7 +60,7 @@ describe("insert command", () => {
 			scopeRootAbs: tmp,
 		});
 		expect(r.isError).toBe(false);
-		expect(readFileSync(f, "utf8")).toBe("alpha\nMID\nbeta\ngamma\n");
+		expect(readFileSync(f, "utf8")).toMatch(/^last_updated: \d{4}-\d{2}-\d{2}T[\d:.]+Z\n\nalpha\nMID\nbeta\ngamma\n$/);
 	});
 
 	test("insert at lineCount appends as last line", async () => {
@@ -75,7 +76,7 @@ describe("insert command", () => {
 			scopeRootAbs: tmp,
 		});
 		expect(r.isError).toBe(false);
-		expect(readFileSync(f, "utf8")).toBe("a\nb\nEND\n");
+		expect(readFileSync(f, "utf8")).toMatch(/^last_updated: \d{4}-\d{2}-\d{2}T[\d:.]+Z\n\na\nb\nEND\n$/);
 	});
 
 	test("insert_line out of range returns memory.not_found", async () => {

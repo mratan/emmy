@@ -1,0 +1,17 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=092ab0e538d0740748e34a1e0a408171f6e3f4361a504d7b74f22c8b3704aa01
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=092ab0e538d0740748e34a1e0a408171f6e3f4361a504d7b74f22c8b3704aa01, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T04-03-59-190Z.jsonl
+According to **CONTEXT-04** (documented in `02-CONTEXT.md`), the prompt layering order is **locked** and must **never be reordered**. The order is:
+
+1. **`system.md`** — the profile's system prompt (model-shaped baseline, under 200-token base budget per HARNESS-06)
+2. **`AGENTS.md`** — project-level verbatim include (counted against prompt-token budget per SC-5)
+3. **Tool definitions** (`tool_defs`)
+4. **User turn**
+
+So the full prefix order is: **system → AGENTS.md → tool_defs → user**.
+
+This ordering is enforced by a SHA-256 hash of the assembled prompt, which is emitted to both the structured session event stream and as a `prompt.assembled sha256=<hex>` log line on every session start. Changing the order changes the hash and would fail the SC-5 regression check.

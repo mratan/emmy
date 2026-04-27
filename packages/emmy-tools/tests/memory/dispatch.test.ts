@@ -77,7 +77,9 @@ describe("memoryTool dispatch (Plan 04.4-02)", () => {
 			file_text: "hi",
 		});
 		expect(c.isError).toBe(false);
-		expect(c.bytes).toBe(2);
+		// Phase 04.4-followup — create auto-prepends `last_updated:` header,
+		// so bytes is no longer just the user-supplied file_text length.
+		expect(c.bytes).toBeGreaterThan(2);
 
 		const v = await call(tool, {
 			command: "view",

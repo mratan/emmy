@@ -31,7 +31,7 @@ afterEach(() => {
 });
 
 describe("create command", () => {
-	test("writes new file with file_text bytes", async () => {
+	test("writes new file with file_text bytes (and auto last_updated header)", async () => {
 		const target = join(tmp, "new.md");
 		const r = await createCommand({
 			absPath: target,
@@ -42,8 +42,11 @@ describe("create command", () => {
 			scopeRootAbs: tmp,
 		});
 		expect(r.isError).toBe(false);
-		expect((r as { bytes?: number }).bytes).toBe(11);
-		expect(readFileSync(target, "utf8")).toBe("hello world");
+		// Phase 04.4-followup — create auto-prepends `last_updated: <ISO>\n\n`.
+		// Body is preserved verbatim beneath the header.
+		const written = readFileSync(target, "utf8");
+		expect(written).toMatch(/^last_updated: \d{4}-\d{2}-\d{2}T[\d:.]+Z\n\nhello world$/);
+		expect((r as { bytes?: number }).bytes).toBe(Buffer.byteLength(written, "utf8"));
 	});
 
 	test("rejects with memory.exists when file already exists", async () => {

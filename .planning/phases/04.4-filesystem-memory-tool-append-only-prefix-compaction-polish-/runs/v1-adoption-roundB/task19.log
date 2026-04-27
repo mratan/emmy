@@ -1,0 +1,20 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=00ab94c51e271896657ccdf3baa0780be0c6a8bb9af1c8c987cdd59264b23247
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=00ab94c51e271896657ccdf3baa0780be0c6a8bb9af1c8c987cdd59264b23247, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T04-29-12-228Z.jsonl
+[31m[emmy] NETWORK USED (web_fetch → platform.claude.com) — blocked by profile allowlist[0m
+I wasn't able to find definitive public documentation about `harness.yaml` and `serving.yaml` in "profile bundles." This terminology doesn't appear to be from a widely-documented, public framework. It could be:
+
+1. **Internal Anthropic terminology** — related to their Managed Agents platform, but not publicly documented in detail
+2. **A specific framework's terminology** that I couldn't locate through web search
+3. **A less common or newly introduced concept** that hasn't been widely covered
+
+Could you provide more context about where you encountered these terms? For example:
+- Is this from **Anthropic's Managed Agents** platform?
+- Is it from a **specific open-source framework** (like mcp-agent, OpenRig, etc.)?
+- Is it from **your own codebase** or an internal tool?
+
+With more context, I can give you a much more precise and useful answer.

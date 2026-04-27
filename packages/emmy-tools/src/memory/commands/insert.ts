@@ -4,6 +4,7 @@
 
 import { existsSync, readFileSync, statSync, writeFileSync } from "node:fs";
 import { checkFileQuota, checkScopeQuota } from "../quotas";
+import { withLastUpdatedHeader } from "../staleness";
 import { MemoryError, type MemoryConfig, type MemoryResult } from "../types";
 
 export interface InsertArgs {
@@ -47,7 +48,10 @@ export async function insertCommand(args: InsertArgs): Promise<MemoryResult> {
 		);
 	}
 	lines.splice(args.insertLine, 0, args.insertText);
-	const out = lines.join("\n") + (trailingNewline ? "\n" : "");
+	const inserted = lines.join("\n") + (trailingNewline ? "\n" : "");
+	// Phase 04.4-followup — refresh `last_updated:` header (or prepend if
+	// absent) so the staleness banner reflects the most recent edit.
+	const out = withLastUpdatedHeader(inserted);
 
 	const newBytes = Buffer.byteLength(out, "utf8");
 	const origBytes = Buffer.byteLength(orig, "utf8");

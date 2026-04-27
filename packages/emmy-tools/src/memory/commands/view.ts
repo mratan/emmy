@@ -5,6 +5,7 @@
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { buildStalenessBanner } from "../staleness";
 import { MemoryError, type MemoryConfig, type MemoryResult } from "../types";
 
 export interface ViewArgs {
@@ -71,12 +72,18 @@ export async function viewCommand(args: ViewArgs): Promise<MemoryResult> {
 	const numbered = slice
 		.map((l, i) => `${String(from + i).padStart(6, " ")}\t${l}`)
 		.join("\n");
+	// Phase 04.4-followup: prepend verify-before-trust banner with staleness
+	// info parsed from the note's `last_updated:` header (if present).
+	// Surfaces to the model at every read, not reliant on prompt-language
+	// adherence — addresses V3 rot vuln that prompt revisions did not close.
+	const banner = buildStalenessBanner(text);
+	const contentText = `${banner}${numbered}`;
 	return ok({
 		scope: args.scope,
 		path: args.logicalPath,
 		bytes: text.length,
 		payload: { lines: numbered, lineCount, from, to },
-		contentText: numbered,
+		contentText,
 	});
 }
 

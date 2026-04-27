@@ -1,0 +1,31 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=e739426de4f44b88d3746d7c6600b1f2c523eb29eca7d0bdafb4f9c377ce0988
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=e739426de4f44b88d3746d7c6600b1f2c523eb29eca7d0bdafb4f9c377ce0988, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T03-49-41-600Z.jsonl
+Based on the tool descriptions in my system prompt, here's how the bypass mechanism works:
+
+## The Two-Layer System
+
+**1. Allowlist Gate (Primary)**
+- `web_fetch` is gated by a per-profile allowlist defined in `profile.harness.tools.web_fetch.allowlist`
+- Only hosts in that allowlist (plus loopback) are permitted
+- Non-allowlisted hosts return an error and flip the offline badge red
+
+**2. The `web_search` → `web_fetch` Bypass**
+- `web_search` queries a local self-hosted SearxNG instance at `http://127.0.0.1:8888`
+- It returns search results as `{title, url, snippet, engine}` records
+- The key instruction: **"Use web_fetch to follow up on any returned URL without adding to the allowlist."**
+
+## How It Works in Practice
+
+1. You call `web_search` with a query — it hits the local SearxNG instance (loopback, so it passes the allowlist gate)
+2. SearxNG returns results with URLs from various web sources
+3. You then call `web_fetch` on any of those returned URLs
+4. Even though those URLs are **not** in the allowlist, the system permits the fetch because the URL was discovered through `web_search`
+
+This creates a two-step discovery pattern: **search first, then fetch**. The allowlist acts as a general restriction to prevent arbitrary fetching, but the `web_search` tool serves as a trusted discovery mechanism that unlocks follow-up fetches to any URL found in search results.
+
+The rationale is that `web_search` constrains what you can discover (you have to go through the search engine), while still allowing you to read the full content of any result — without needing every possible website pre-approved in an allowlist.

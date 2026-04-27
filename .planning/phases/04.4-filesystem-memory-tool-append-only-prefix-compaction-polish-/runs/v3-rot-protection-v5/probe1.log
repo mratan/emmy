@@ -1,0 +1,8 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=132d7e500c8b8a9569739e3dd18441e421b2be279c6ebb9fab5827768b87a05e
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=132d7e500c8b8a9569739e3dd18441e421b2be279c6ebb9fab5827768b87a05e, layers=system.md,tool_defs,user)
+pi-emmy transcript=/tmp/v3-rot-test/runs/phase2-sc3-capture/session-2026-04-27T03-46-51-951Z.jsonl
+This project (`confluenSC_sprint2`) is a Python CLI/scientific analysis package — it doesn't have an API handler. Could you clarify which project you're referring to? There are several projects here (`confluenSC_sprint2`, `generalytiq_sprint2`, `lovelace`, `hopper`, etc.). Also, is it a Python or Go project, and what framework are you using (FastAPI, Flask, gin, chi, etc.)?
