@@ -1,0 +1,23 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=61ecd6f9f256236a782a5d0cf2819d127b9a4a15286bb2bde8e380228e5b801b
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=61ecd6f9f256236a782a5d0cf2819d127b9a4a15286bb2bde8e380228e5b801b, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T02-39-58-895Z.jsonl
+grep: .: Is a directory
+grep: .: Is a directory
+The v3.1 profile's `gpu_memory_utilization` value is **0.55**, and here's why it was picked:
+
+**The value: 0.55**
+
+**Why it was picked:**
+
+The original v3 profile used `gpu_memory_utilization=0.88`, which was too aggressive for the DGX Spark's 128 GB unified memory architecture (UMA). On UMA, GPU and system RAM share the same pool, so reserving 88% for GPU/KV left only ~12 GB for the OS and other processes — resulting in **116/125 GB used + 8 GB swap** even at idle.
+
+The 0.55 value was chosen to address **Pitfall #3** from CLAUDE.md, which explicitly warned to "start at 0.75" rather than pushing to the no-preemption ceiling. The goal was to free system RAM headroom:
+
+- **Before (v3 @ 0.88):** ~112 GB reserved for GPU/KV, leaving only ~4.6 GB available system RAM
+- **After (v3.1 @ 0.55):** Freed ~37 GiB, bringing available system RAM to **42 GiB** (9× improvement)
+
+The `max_model_len` was kept at 131072 (a user constraint — don't shrink context), but `max_num_batched_tokens` was dropped from 16384 → 8192 to further reduce the CUDA workspace footprint. The target was ~50–70 GB emmy-serve footprint with >40 GB system headroom and no swap pressure.

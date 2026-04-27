@@ -860,11 +860,11 @@ export async function createEmmySession(
 				"",
 				"# Memory instinct",
 				"",
-				"BEFORE answering ANY user request, your FIRST tool call MUST be `memory` with command=\"view\" path=\"/memories/project\" to check for prior context written by past sessions. Notes there carry hard-won project knowledge — API quirks, conventions, dead-ends — that you should consult before doing the work.",
+				"Your FIRST tool call this session MUST be `memory` with command=\"view\" path=\"/memories/project\" — no exceptions. Even if you think you already know the answer, view project memory first. Notes there carry hard-won project knowledge — API quirks, conventions, dead-ends, counter-intuitive findings — that override any default assumption you might have. When in doubt, view memory.",
 				"",
-				"After viewing project memory, proceed normally. If a discovery during the session would help a future session, write a note via memory create or str_replace. Skip writing on trivial findings (already-obvious facts, narrative summaries).",
+				"NOTES CAN BE STALE — VERIFY BEFORE TRUSTING. After reading any note, cross-check the current code/state before relying on the note's content. Your trust order is: current code > recent notes > older notes. If a note contradicts the code you observe, the CODE wins, and you should consider str_replace'ing the note to reflect current truth (or noting the contradiction in your reply). NEVER answer based on a note alone without verification when the answer is checkable in the codebase.",
 				"",
-				"Skip the initial view ONLY when the user's request is purely syntactic (e.g. \"what does TypeScript Optional<T> mean?\") — anything project-shaped should view memory first.",
+				"After viewing project memory and (when relevant) verifying against code, proceed normally. If a discovery during the session would help a future session — load-bearing facts (API quirks, project conventions, hard-won discoveries, counter-intuitive findings, dead-ends) — write a note via memory create or str_replace. Skip writing on trivial findings (already-obvious facts, narrative summaries like \"then I fixed the bug\").",
 			]
 		: [];
 	const memoryInstinctText = memoryInstinctLines.join("\n");

@@ -1,0 +1,34 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=0a07fc3f6ef89ac140a066012b615221d91526d90253054399f46693000e409d
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=0a07fc3f6ef89ac140a066012b615221d91526d90253054399f46693000e409d, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T02-38-25-904Z.jsonl
+## Hash-Anchored Edit Pattern
+
+The hash-anchored edit pattern is a **version-control-inspired approach to file editing** that uses cryptographic hashes to precisely identify which lines to modify. Here's how it works:
+
+### The Pattern
+
+1. **Read** a file first — every line in the output is prefixed with an 8-hex-character content hash (e.g., `a3f1b2c4`). This hash is derived from the line's content.
+
+2. **Edit** by referencing those specific line hashes. You tell the system: "On the line whose hash is `a3f1b2c4`, replace the content with X."
+
+3. **Validation** — if the file has changed since you last read it, the hash won't match, and the edit is **rejected** with a stale-hash error. You must re-read and try again.
+
+### How It Differs from Plain String-Replace
+
+| Aspect | Plain String-Replace | Hash-Anchored |
+|---|---|---|
+| **Targeting** | Matches by string content (can match multiple lines, or none) | Matches by unique line identity (hash) |
+| **Ambiguity** | `"foo"` could appear 100 times — which one gets replaced? | Each line has exactly one hash — unambiguous |
+| **Concurrency safety** | Silent corruption if two edits target the same file | Stale hash → explicit error → no silent corruption |
+| **Precision** | "Replace first occurrence of X" is fragile | "Replace line with hash Y" is exact |
+| **Failure mode** | Partial/wrong replacements | Edit rejected entirely; must re-read |
+
+### The Key Insight
+
+It's essentially **optimistic concurrency control** applied to text editing. The hash acts as a lightweight version stamp. If someone (or another tool) modified the file between your read and your edit, the hash changes, and the system refuses to apply a potentially conflicting change — forcing you to re-read the current state and re-apply your edit on top of it.
+
+This is far more robust than `sed`-style or `replace()`-style editing, where a common string like `"TODO"` could accidentally match dozens of lines, or where a race condition could silently corrupt the file.

@@ -1,0 +1,20 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=e739426de4f44b88d3746d7c6600b1f2c523eb29eca7d0bdafb4f9c377ce0988
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=e739426de4f44b88d3746d7c6600b1f2c523eb29eca7d0bdafb4f9c377ce0988, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T02-39-07-040Z.jsonl
+Based on the tool descriptions, here's how the bypass mechanism works:
+
+1. **`web_fetch` is gated by an allowlist.** By default, it can only fetch URLs from hosts listed in `profile.harness.tools.web_fetch.allowlist` (plus loopback). Non-allowlisted hosts are rejected and flip an "offline badge red."
+
+2. **`web_search` provides a bypass.** The `web_fetch` description explicitly states: *"Use web_fetch to follow up on any returned URL without adding to the allowlist."*
+
+The mechanism works like this:
+- You first use **`web_search`** to search the open web (via a local SearxNG instance at `http://127.0.0.1:8888`). This returns results with URLs.
+- You can then use **`web_fetch`** on any of those returned URLs, even if they're not in the allowlist. The system treats URLs discovered through `web_search` as "pre-approved" for follow-up fetching.
+
+This is a two-step pattern: **search first, then fetch**. It lets you explore and read content from arbitrary sites without needing every possible domain pre-registered in the allowlist — you just need to discover the URL through `web_search` first.
+
+The same principle applies to `web_fetch` itself: *"Reads documentation only (no inference). Tagged network-required. Allowlist-gated..."* — so it's intentionally restricted to prevent arbitrary network access, but the `web_search` → `web_fetch` chain provides a controlled escape hatch for reading documentation/content from the broader web.

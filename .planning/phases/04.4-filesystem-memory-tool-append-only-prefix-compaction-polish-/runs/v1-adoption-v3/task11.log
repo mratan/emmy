@@ -1,0 +1,77 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=471ea3f12a9f172f8f1f2f2fa93b9b539ea9f3be82fbb8340c24bf2257b8900e
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=471ea3f12a9f172f8f1f2f2fa93b9b539ea9f3be82fbb8340c24bf2257b8900e, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T02-40-24-411Z.jsonl
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-38-48-179Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T01-46-08-655Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T01-54-35-374Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-10-52-930Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T01-54-17-272Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-24-08-812Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-19-38-129Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-22-06-645Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-38-48-179Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T01-46-08-655Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T01-54-35-374Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-10-52-930Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T01-54-17-272Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-24-08-812Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-19-38-129Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-22-06-645Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-21-56-600Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-23-53-509Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-10-45-190Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-38-57-265Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-15-16-718Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-15-00-300Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T01-46-15-203Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T01-50-16-256Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-24-21-068Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-39-15-175Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-39-30-973Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-39-40-144Z.jsonl: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/charset_normalizer/__pycache__/api.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/transformers/generation/__pycache__/configuration_utils.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/transformers/utils/__pycache__/import_utils.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/transformers/integrations/__pycache__/ggml.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/transformers/__pycache__/modeling_gguf_pytorch_utils.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/transformers/__pycache__/convert_slow_tokenizer.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/_core/_multiarray_umath.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/typing_inspection/__pycache__/introspection.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/huggingface_hub/utils/__pycache__/_runtime.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/huggingface_hub/utils/__pycache__/_http.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/huggingface_hub/__pycache__/file_download.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/rich/__pycache__/syntax.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/filelock/__pycache__/_unix.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/filelock/__pycache__/asyncio.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/filelock/__pycache__/_api.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/lark/__pycache__/exceptions.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/watchfiles/_rust_notify.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/click/__pycache__/core.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/websockets/__pycache__/server.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/tqdm/__pycache__/std.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy.libs/libscipy_openblas64_-7220728c.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/hf_xet/hf_xet.abi3.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/httpx/__pycache__/_models.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/tokenizers/tokenizers.abi3.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/tokenizers/implementations/__pycache__/sentencepiece_unigram.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/_io/__pycache__/pprint.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/_io/__pycache__/terminalwriter.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/__pycache__/hookspec.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/uvloop/loop.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/v1/__pycache__/typing.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/v1/__pycache__/color.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/_internal/__pycache__/_namespace_utils.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/_internal/__pycache__/_generics.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/__pycache__/color.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/__pycache__/main.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/__pycache__/type_adapter.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic_core/_pydantic_core.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task13.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task15.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task14.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task12.jsonl: binary file matches
+

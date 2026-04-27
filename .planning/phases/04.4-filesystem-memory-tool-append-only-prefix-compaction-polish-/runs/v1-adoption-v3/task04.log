@@ -1,0 +1,16 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=b69f5e18d10bbf8d3d31502799aebc805e79eddec95be96ff24a484657789328
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=b69f5e18d10bbf8d3d31502799aebc805e79eddec95be96ff24a484657789328, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T02-38-57-265Z.jsonl
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-22-06-645Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-23-53-509Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-15-16-718Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T01-46-15-203Z.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task13.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task13.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task15.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task04.jsonl: binary file matches
+
