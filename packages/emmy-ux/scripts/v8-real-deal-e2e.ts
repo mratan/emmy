@@ -122,8 +122,11 @@ async function main(): Promise<void> {
 			console.log(`[V8] session up — sp_ok=${out.spOkOk} transcript=${out.transcriptPath}`);
 
 			const prompt = `Use the Agent tool with subagent_type="research" and prompt="find usages of customTools in the @emmy/tools package; return a 4-sentence summary citing file:line".`;
-			const res = await out.runtime.run(prompt, { mode: "json" });
-			parentText = (res as any).text ?? "";
+			if (!out.runtime.runPrint) {
+				throw new Error("runtime.runPrint not available — V8 requires a print/json-mode session");
+			}
+			const res = await out.runtime.runPrint(prompt, { mode: "json" });
+			parentText = res.text ?? "";
 			console.log(`[V8] parent final text (first 300 chars): ${parentText.slice(0, 300)}`);
 			parent.end();
 		});
