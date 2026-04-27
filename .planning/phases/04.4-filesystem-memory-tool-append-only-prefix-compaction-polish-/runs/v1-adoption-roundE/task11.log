@@ -1,0 +1,24 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=3cb13f1ee8d5a4e8d4435c2b2aecdfe7d8ae20889c5d4b43f7591b8f221595a8
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=3cb13f1ee8d5a4e8d4435c2b2aecdfe7d8ae20889c5d4b43f7591b8f221595a8, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T20-34-12-956Z.jsonl
+I now have the complete picture. The function that decides whether to fall back to vLLM after a tool-call parse failure is:
+
+**`callWithReactiveGrammar`** — defined in `/data/projects/emmy/packages/emmy-provider/src/grammar-retry.ts` (line 82).
+
+Here's how it works:
+
+1. **First POST (unconstrained):** It sends the request to vLLM without any grammar guidance (`postChat(baseUrl, req)`).
+
+2. **Check for parse failure:** It inspects the response's `tool_calls` and runs `firstBadArgument()` — which tries `JSON.parse(tc.function.arguments)` on each tool call. If any tool call's arguments aren't valid JSON, it's a parse failure.
+
+3. **Decide to retry/fallback:** If there's a parse failure, it checks `profile.harness.tools.grammar`:
+   - If `grammarConfig === null` or `mode === "disabled"` → **no fallback** (throws `ProviderError`)
+   - Otherwise → **retry with grammar**: reads the Lark grammar file, sends a second POST with `extra_body.guided_decoding.grammar` populated
+
+4. **Second POST (with grammar):** If the retry still has bad arguments, it throws `GrammarRetryExhaustedError`. If the retry succeeds, it returns the grammatically-guided response.
+
+The retry budget is hard-coded to **1** (single retry only). The grammar config is consumed from the nested shape `profile.harness.tools.grammar.{path, mode}`.

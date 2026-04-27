@@ -1,0 +1,38 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=c1597760b3a0ab8f0df7f2c41b5da6fa6f9020ebf9892fafb54fcec3a3e38319
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=c1597760b3a0ab8f0df7f2c41b5da6fa6f9020ebf9892fafb54fcec3a3e38319, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T20-47-50-746Z.jsonl
+Based on the code in `@emmy/tools`, here's the full picture:
+
+## Registered Native Tools
+
+The `NATIVE_TOOL_NAMES` constant (frozen array) defines **9 tools**:
+
+| # | Tool Name | Description |
+|---|-----------|-------------|
+| 1 | `read` | Read a file with 8-hex content hashes on each line (for hash-anchored edits). Optional `line_range` param. |
+| 2 | `write` | Overwrite a file atomically (open → writeFile → fsync → close). |
+| 3 | `edit` | Hash-anchored edit — edits/inserts reference line hashes from a prior `read`. Stale hashes are rejected. |
+| 4 | `bash` | Run a bash command (YOLO mode). Has a builtin denylist (`rm -rf /`, fork bombs) + user-extensible list. Output truncated to 50 lines head+tail. Default timeout 60s. |
+| 5 | `grep` | Run grep against a path. Returns stdout + exit_code. |
+| 6 | `find` | Run find on a path. Returns matching paths, one per line. |
+| 7 | `ls` | List directory contents. |
+| 8 | `web_fetch` | HTTP GET → markdown. **Allowlist-gated** — only hosts in the profile's `web_fetch.allowlist` (plus loopback) are permitted. Non-allowlisted hosts return an error. |
+| 9 | `web_search` | Search the open web via a local SearxNG instance. **Conditionally registered** — only when `opts.webSearchEnabled` is true AND `opts.webSearchConfig` is provided. |
+
+## Runtime Discovery
+
+Tools are discovered/registered via the **`registerNativeTools`** function in `native-tools.ts`:
+
+1. **Single registration function**: `registerNativeTools(pi, opts)` takes a `pi` object with a `registerTool(spec)` callback and an `opts` object with configuration (cwd, profile, denylist, allowlist, web search config, etc.).
+
+2. **Each tool is registered** by calling `pi.registerTool({...})` with a `PiToolSpec` containing `name`, `description`, `parameters` (JSON Schema), and an async `invoke` function.
+
+3. **Telemetry wrapper**: Every invocation is wrapped in an `invoke()` helper that emits a `tool.invoke` telemetry event with latency, outcome, and error info.
+
+4. **Phase-3 wire-through**: For the `createAgentSessionFromServices` API, there's a `buildNativeToolDefs(opts)` function that creates a collector shim (capturing specs instead of registering them), calls `registerNativeTools` with that shim, then adapts the collected `PiToolSpec[]` into `ToolDefinitionLike[]` objects via `toolSpecToDefinition`.
+
+5. **Conditional registration**: `web_search` is only registered when `opts.webSearchEnabled && opts.webSearchConfig` are truthy. The other 8 tools are always registered.

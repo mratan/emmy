@@ -1,0 +1,65 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=a2fdcb1ff1ffc7f7d11a886254f9e4128ef582a8dd4b8dc1859f9cad4b176332
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=a2fdcb1ff1ffc7f7d11a886254f9e4128ef582a8dd4b8dc1859f9cad4b176332, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T05-35-52-581Z.jsonl
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task13.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task15.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task14.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task12.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task17.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task07.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task13.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task15.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task02.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task12.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task04.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task16.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task17.jsonl: binary file matches
+grep: ./tests/integration/__pycache__/test_boot.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./tests/integration/__pycache__/test_boot.cpython-312-pytest-9.0.2.pyc: binary file matches
+grep: ./tests/unit/__pycache__/test_immutability.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./tests/unit/__pycache__/test_canary.cpython-312-pytest-9.0.2.pyc: binary file matches
+grep: ./tests/unit/__pycache__/test_canary.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./scripts/__pycache__/smoke_test.cpython-312.pyc: binary file matches
+grep: ./emmy_serve/thermal/__pycache__/replay.cpython-312.pyc: binary file matches
+grep: ./emmy_serve/canary/__pycache__/__init__.cpython-312.pyc: binary file matches
+grep: ./emmy_serve/canary/__pycache__/sp_ok.cpython-312.pyc: binary file matches
+Here's the full picture:
+
+## What `[SP_OK]` is
+
+It's a **system-prompt delivery smoke test** (designated **D-07 / EVAL-07**). The canary asks the model: *"When the user says 'ping' you must reply with the exact literal text `[SP_OK]` and nothing else."* If the model echoes back `[SP_OK]`, it proves the system prompt was actually delivered to the model. If it doesn't, the system-prompt delivery is silently broken — a known critical failure mode from the prior repo's Phase 3 incident (0/5 task success with no warning).
+
+## Where it's implemented
+
+There are **two parallel implementations** (TypeScript + Python) that are byte-identical in their constants:
+
+| Layer | File | Role |
+|---|---|---|
+| **TypeScript canary** | `packages/emmy-ux/src/sp-ok-canary.ts` | `runSpOk()` — sends a `postChat()` request to the vLLM server with the canary system prompt + `"ping"` user message, checks the response for `[SP_OK]` substring |
+| **Python canary** | `emmy_serve/canary/sp_ok.py` | `run_sp_ok()` — same logic via `httpx.post()` to `{base_url}/v1/chat/completions` |
+| **Constants** | Both files define `SP_OK_SYSTEM_PROMPT`, `SP_OK_USER_MESSAGE` (`"ping"`), `SP_OK_ASSERTION_SUBSTR` (`"[SP_OK]"`) |
+| **Error type** | `packages/emmy-ux/src/errors.ts` → `SpOkCanaryError` (extends `UxError` with field `canary.sp_ok`) |
+| **Boot-time gate** | `packages/emmy-ux/src/session.ts` → `createEmmySession()` calls `runSpOk()` **before** building the pi runtime |
+| **CLI handler** | `packages/emmy-ux/bin/pi-emmy.ts` → catches `SpOkCanaryError`, prints `SP_OK canary: FAILED`, exits with code 1 |
+| **Smoke test** | `scripts/smoke_test.py` → step 2 runs the Python canary |
+| **Tests** | `packages/emmy-ux/tests/sp-ok-canary.test.ts`, `packages/emmy-ux/tests/session.test.ts`, `packages/emmy-ux/tests/pi-emmy-cli.test.ts`, `tests/unit/test_canary.py`, and many integration tests |
+
+## What it gates
+
+The SP_OK canary is a **hard boot-time gate** in `createEmmySession()`:
+
+1. **It fires first**, before `buildRealPiRuntime()` is called. This is critical — if it ran *after* the pi runtime was built, the request would route through `before_provider_request` which would overwrite the canary's terse system prompt with Emmy's full 3-layer assembled prompt, defeating the test.
+
+2. **If it fails** (response doesn't contain `[SP_OK]`), a `SpOkCanaryError` is thrown, the CLI prints `SP_OK canary: FAILED`, and the process exits with code **1**. The pi runtime is never constructed.
+
+3. **If it passes**, the CLI prints `SP_OK canary: OK` and proceeds to build the runtime and enter the TUI or `--print` mode.
+
+4. **Skip logic**: In remote-client mode (`EMMY_REMOTE_CLIENT=1`) when the sidecar reports `vllm_up=false`, the canary is skipped (with a logged warning) so that a dead vLLM doesn't produce a misleading canary failure — the upstream prereq probe owns that check.
+
+5. **Re-fires on `/clear`**: When the user runs `/clear`, a fresh `AgentSession` is created via `ctx.newSession()`, which triggers a fresh boot sequence including a new SP_OK canary check.
+
+The canary is also embedded in every model profile's `prompts/system.md` so that normal user sessions also carry the instruction, providing a belt-and-suspenders approach.

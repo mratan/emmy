@@ -1,0 +1,20 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=1c81aea8fc222db48d25bfe240b86d30737a626c0980f16c2910b299e0f65b62
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=1c81aea8fc222db48d25bfe240b86d30737a626c0980f16c2910b299e0f65b62, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T06-04-05-010Z.jsonl
+Based on the tool description for `web_fetch`, here's how the URL bypass mechanism works:
+
+1. **Allowlist gating (UX-03):** `web_fetch` is restricted to a specific allowlist of hosts defined in `profile.harness.tools.web_fetch.allowlist`. By default, only those pre-approved hosts can be fetched.
+
+2. **Loopback exception:** In addition to the allowlist, **loopback addresses** (e.g., `127.0.0.1`, `localhost`) are always permitted, regardless of the allowlist.
+
+3. **`web_search` as a bypass:** The `web_search` tool queries a **local self-hosted SearxNG instance** at `http://127.0.0.1:8888`. Since `127.0.0.1` is a loopback address, it's exempt from the allowlist check. This means `web_search` can reach any URL that SearxNG can resolve — effectively bypassing the `web_fetch` allowlist restriction.
+
+4. **The intended pattern:** The description explicitly says: *"Use web_fetch to follow up on any returned URL without adding to the allowlist."* So the workflow is:
+   - Use `web_search` to find URLs (bypasses allowlist via loopback).
+   - Then use `web_fetch` on those URLs — but wait, `web_fetch` still enforces its own allowlist. The "bypass" is that `web_search` results give you URLs you can then investigate, and the loopback exception means you can always reach the local SearxNG instance itself via `web_fetch` if needed.
+
+In short: **`web_search` bypasses the `web_fetch` allowlist because it talks to a local loopback address (`127.0.0.1:8888`), which is always permitted.** This lets you discover and follow up on URLs that wouldn't otherwise be in the `web_fetch` allowlist.

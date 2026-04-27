@@ -1,0 +1,48 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=6197bd31f085f3e8055b7a0bbe3ec91cda5e3fedb2936d03bb23ead3c8159f15
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=6197bd31f085f3e8055b7a0bbe3ec91cda5e3fedb2936d03bb23ead3c8159f15, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T20-35-01-256Z.jsonl
+Now I have the full picture. Here's the answer:
+
+---
+
+`gen_ai.system` is hardcoded to `"vllm"` in **three places** across the emmy codebase, and it's always a literal string — never derived from the actual model family:
+
+1. **`packages/emmy-telemetry/src/otel-sdk.ts:89`** — Set as a **resource attribute** on the `NodeSDK` itself:
+   ```ts
+   resource: resourceFromAttributes({
+     [ATTR_SERVICE_NAME]: "emmy",
+     "gen_ai.system": "vllm",  // ← resource-level, applies to ALL spans
+   })
+   ```
+
+2. **`packages/emmy-telemetry/src/span-factory.ts:49`** — Set as a **span attribute** on every chat span:
+   ```ts
+   span.setAttributes({
+     "gen_ai.system": "vllm",  // ← span-level, hardcoded
+     "gen_ai.request.model": args.model,
+     "emmy.prompt.sha256": args.promptSha256,
+   });
+   ```
+
+3. **`packages/emmy-ux/src/pi-emmy-extension.ts:625`** — Set on the `harness.assembly` event:
+   ```ts
+   emitEvent({
+     event: "harness.assembly",
+     // ...
+     "gen_ai.system": "vllm",  // ← event-level, hardcoded
+     "gen_ai.request.model": modelName,
+     // ...
+   });
+   ```
+
+**Why it's always `"vllm"` instead of the model family name:**
+
+- **`gen_ai.system`** is the [OTel GenAI semantic convention](https://opentelemetry.io/docs/specs/semconv/gen-ai/) attribute that identifies the **AI inference system/provider** (e.g., `"vllm"`, `"openai"`, `"anthropic"`), **not** the model family. The model family is captured by `gen_ai.request.model` (which *is* set dynamically to the actual model name like `"meta-llama/Llama-3.1-8B"`).
+
+- The emmy project always routes through **vLLM** as its inference backend, so `"vllm"` is the correct value for `gen_ai.system`. The model family (e.g., `"llama"`, `"mistral"`) is not what this attribute is meant to capture — it's the serving engine.
+
+- The value is **hardcoded** because emmy is designed to work exclusively with vLLM. There's no abstraction or configuration to switch the inference backend, so there's no need to derive it dynamically. The comment in `otel-sdk.ts` even notes this is a "literal string (rather than importing from /incubating) to keep this module compatible with semconv releases where the incubating surface moves around."

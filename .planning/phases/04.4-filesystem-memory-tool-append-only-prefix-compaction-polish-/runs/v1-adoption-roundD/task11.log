@@ -1,0 +1,28 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=3cb13f1ee8d5a4e8d4435c2b2aecdfe7d8ae20889c5d4b43f7591b8f221595a8
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=3cb13f1ee8d5a4e8d4435c2b2aecdfe7d8ae20889c5d4b43f7591b8f221595a8, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T06-08-44-257Z.jsonl
+Now I have a complete picture. The function is `callWithReactiveGrammar` in `/data/projects/emmy/packages/emmy-provider/src/grammar-retry.ts`. Let me provide the answer.
+
+The function that decides whether to fall back to vLLM after a tool-call parse failure is **`callWithReactiveGrammar`**, located at:
+
+**`/data/projects/emmy/packages/emmy-provider/src/grammar-retry.ts`** (line 82)
+
+Here's how it works:
+
+1. **First POST**: Sends the request to vLLM **unconstrained** (no grammar) — most turns never pay the grammar cost.
+
+2. **Parse check**: After the response, it calls `firstBadArgument(toolCalls)` (line 175) which iterates over tool calls and tries `JSON.parse(tc.function.arguments)`. If any tool call's arguments are not valid JSON, it returns the tool name.
+
+3. **Fallback decision**: If a parse failure is detected, it checks whether grammar retry is possible:
+   - If `profile.harness.tools.grammar` is `null` or `mode === "disabled"`, it throws a `ProviderError` with reason `"no_grammar_configured"`.
+   - Otherwise, it reads the grammar file and re-sends the request with `extra_body.guided_decoding.grammar` populated.
+
+4. **Second check**: If the retry response still has bad arguments, it throws a `GrammarRetryExhaustedError`.
+
+5. **Telemetry**: Every decision emits events (`grammar.retry`, `grammar.retry.success`, `grammar.retry.exhausted`) for observability.
+
+This is called from `registerEmmyProvider` in `/data/projects/emmy/packages/emmy-provider/src/index.ts` (line 75), which is the pi-registered provider that routes all chat requests through vLLM.

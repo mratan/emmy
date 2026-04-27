@@ -855,18 +855,37 @@ export async function createEmmySession(
 	// passive tool-availability hints).
 	const memoryInstinctActive =
 		memoryActiveInPrompt && _memCfg?.read_at_session_start === true;
-	const memoryInstinctLines: string[] = memoryInstinctActive
-		? [
-				"",
-				"# Memory instinct",
-				"",
-				"Your FIRST tool call this session MUST be `memory` with command=\"view\" path=\"/memories/project\" — no exceptions. Even if you think you already know the answer, view project memory first. Notes there carry hard-won project knowledge — API quirks, conventions, dead-ends, counter-intuitive findings — that override any default assumption you might have. When in doubt, view memory.",
-				"",
-				"NOTES CAN BE STALE — VERIFY BEFORE TRUSTING. After reading any note, cross-check the current code/state before relying on the note's content. Your trust order is: current code > recent notes > older notes. If a note contradicts the code you observe, the CODE wins, and you should consider str_replace'ing the note to reflect current truth (or noting the contradiction in your reply). NEVER answer based on a note alone without verification when the answer is checkable in the codebase.",
-				"",
-				"After viewing project memory and (when relevant) verifying against code, proceed normally. If a discovery during the session would help a future session — load-bearing facts (API quirks, project conventions, hard-won discoveries, counter-intuitive findings, dead-ends) — write a note via memory create or str_replace. Skip writing on trivial findings (already-obvious facts, narrative summaries like \"then I fixed the bug\").",
-			]
-		: [];
+	// Phase 04.4-followup ablation — env-gated compressed variant of the
+	// instinct directive. Default is the verbose v3 phrasing (~12 lines / 4
+	// paragraphs). EMMY_MEMORY_INSTINCT_COMPRESSED=1 swaps in a 3-sentence
+	// version with a worked example. Both deliver the same three messages
+	// (view-first, verify-before-trust, write-when-load-bearing); the
+	// compressed variant tests whether brevity buys more directive-attention
+	// budget on Qwen 35B-A3B v3.1.
+	const memoryInstinctCompressed = process.env.EMMY_MEMORY_INSTINCT_COMPRESSED === "1";
+	const memoryInstinctLines: string[] = !memoryInstinctActive
+		? []
+		: memoryInstinctCompressed
+			? [
+					"",
+					"# Memory instinct",
+					"",
+					"Before answering, your first action MUST be: `memory(command=\"view\", path=\"/memories/project\")`. View even if the question seems answerable from training — notes there override default assumptions about this project.",
+					"",
+					"Notes can be stale. After reading any note, cross-check the current code before trusting it. Trust order: current code > recent notes > older notes.",
+					"",
+					"If you discover a load-bearing fact during the session (API quirk, convention, hard-won finding), write a note via `memory create` or `str_replace`. Skip narrative writes (\"then I fixed the bug\").",
+				]
+			: [
+					"",
+					"# Memory instinct",
+					"",
+					"Your FIRST tool call this session MUST be `memory` with command=\"view\" path=\"/memories/project\" — no exceptions. Even if you think you already know the answer, view project memory first. Notes there carry hard-won project knowledge — API quirks, conventions, dead-ends, counter-intuitive findings — that override any default assumption you might have. When in doubt, view memory.",
+					"",
+					"NOTES CAN BE STALE — VERIFY BEFORE TRUSTING. After reading any note, cross-check the current code/state before relying on the note's content. Your trust order is: current code > recent notes > older notes. If a note contradicts the code you observe, the CODE wins, and you should consider str_replace'ing the note to reflect current truth (or noting the contradiction in your reply). NEVER answer based on a note alone without verification when the answer is checkable in the codebase.",
+					"",
+					"After viewing project memory and (when relevant) verifying against code, proceed normally. If a discovery during the session would help a future session — load-bearing facts (API quirks, project conventions, hard-won discoveries, counter-intuitive findings, dead-ends) — write a note via memory create or str_replace. Skip writing on trivial findings (already-obvious facts, narrative summaries like \"then I fixed the bug\").",
+				];
 	const memoryInstinctText = memoryInstinctLines.join("\n");
 	// Append the instinct directive to toolDefsText so it lives within the
 	// CONTEXT-04 locked tool_defs layer (no new layer added — sha256 changes,

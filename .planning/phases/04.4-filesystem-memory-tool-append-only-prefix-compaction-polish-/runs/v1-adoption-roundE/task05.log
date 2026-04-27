@@ -1,0 +1,33 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=1c81aea8fc222db48d25bfe240b86d30737a626c0980f16c2910b299e0f65b62
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=1c81aea8fc222db48d25bfe240b86d30737a626c0980f16c2910b299e0f65b62, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T20-26-06-385Z.jsonl
+Based on the tool description in my system prompt, here's how the bypass mechanism works:
+
+## The Two-Layer Allowlist System
+
+**Layer 1 — Profile Allowlist:** `web_fetch` is gated by a per-profile allowlist defined in `profile.harness.tools.web_fetch.allowlist`. This allowlist specifies which hosts are permitted for direct fetching. By default, only hosts in this allowlist (plus loopback) are accessible.
+
+**Layer 2 — web_search URL Bypass:** After using `web_search` to find results, you can use `web_fetch` to read the content of **any URL returned by `web_search`** — even if that URL's host is *not* in the profile allowlist. This is the "bypass."
+
+## How It Works in Practice
+
+1. You call `web_search` with a query (e.g., `"React documentation"`).
+2. `web_search` returns an array of `{title, url, snippet, engine}` records from the open web.
+3. You can then call `web_fetch(url=<any URL from step 2>)` to fetch the full content of that page, **even though the host isn't in the allowlist**.
+4. The system uses `web_search` results as an implicit, temporary allowlist for `web_fetch`.
+
+## Why This Design
+
+This prevents agents from arbitrarily fetching any URL on the internet (which would be a security risk) while still allowing them to follow up on search results — a common and necessary workflow. The idea is: if a URL appeared in search results, it's a legitimate target worth reading.
+
+## Important Caveats
+
+- **Rate limiting:** `web_search` is rate-limited to 10 calls per agent turn.
+- **Not a free pass:** You can't just guess random URLs — they need to have surfaced in a `web_search` result first.
+- **Trusted upstream:** The mechanism relies on the local SearxNG instance at `http://127.0.0.1:8888` returning legitimate results.
+
+In short: **`web_search` results act as a temporary, implicit allowlist for `web_fetch`**, bridging the gap between discovery (search) and reading (fetch) without opening the entire internet.

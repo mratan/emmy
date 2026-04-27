@@ -1,0 +1,47 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=ac2dbd499c8c0e15cd0bf8f75ae7a3dc84f6af34af3274d7635cf4b482d2debb
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=ac2dbd499c8c0e15cd0bf8f75ae7a3dc84f6af34af3274d7635cf4b482d2debb, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T20-24-58-991Z.jsonl
+This is a great question about cryptographic hashing conventions. Here's why `TextEncoder().encode(s)` is used before `sha256`:
+
+## The Core Problem: Hashes Need Bytes, Strings Are Unicode
+
+JavaScript strings are sequences of **Unicode code points** (UTF-16 code units internally). But cryptographic hash functions like SHA-256 operate on **byte sequences** (Uint8Array). You can't feed a string directly into a hash function — it needs raw bytes.
+
+## Why Not Just `.charCodeAt()` or `.toString().split('')`?
+
+Because those approaches are **ambiguous**:
+
+| Approach | Problem |
+|---|---|
+| `charCodeAt()` | Uses UTF-16 code units, which is fine for BMP characters but breaks for supplementary planes (emojis, rare CJK) |
+| `.split('')` | Same UTF-16 issue; also splits surrogate pairs |
+| `btoa()` / `atob()` | Only handles Latin-1 range |
+
+## `TextEncoder('utf-8')` Is the Correct Choice
+
+```js
+const encoder = new TextEncoder();
+const bytes = encoder.encode("hello 🌍");
+// → Uint8Array [104, 101, 108, 108, 111, 32, 240, 159, 141, 141]
+// The emoji is 4 bytes in UTF-8, not 2 UTF-16 code units
+```
+
+**Key reasons:**
+
+1. **UTF-8 is the universal interchange encoding.** It's deterministic, well-defined, and matches how data is stored on disk, transmitted over networks, and hashed in virtually every other language/tool (Python's `.encode('utf-8')`, Node.js `Buffer.from(s, 'utf8')`, etc.).
+
+2. **Determinism.** Given the same string, `TextEncoder` always produces the same byte sequence. This is critical for hashing — if the encoding were non-deterministic, the hash would be meaningless.
+
+3. **Correctness for all Unicode.** UTF-8 handles the full Unicode range (all 1,114,156 code points), including emojis, CJK, Arabic, etc.
+
+4. **It's the standard Web API.** `TextEncoder`/`TextDecoder` are part of the Encoding Standard (whatwg), designed specifically for this purpose.
+
+## In Context of the Prefix-Hash
+
+The prefix-hash is likely used for content-addressable storage or deduplication. If two agents/processes compute the same hash for the same string, they **must** agree on the byte representation. UTF-8 via `TextEncoder` ensures that cross-platform, cross-language, and cross-session consistency.
+
+**TL;DR:** SHA-256 hashes bytes, not strings. `TextEncoder().encode()` converts the string to a deterministic, complete, and universal UTF-8 byte representation so the hash is correct and reproducible.

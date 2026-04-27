@@ -1,0 +1,24 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=e3e2de0d4c354199387204d8a65c5bb2338afa99b798703aee6ceaeaf0e24781
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=e3e2de0d4c354199387204d8a65c5bb2338afa99b798703aee6ceaeaf0e24781, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T06-16-46-640Z.jsonl
+Now I have the full picture. Here's the answer:
+
+In plan **04.5-02**, the `harness.yaml` defines three personas:
+
+| Persona | pattern | persona_dir |
+|---|---|---|
+| `research` | `"persona"` | `"subagents/research"` |
+| `code_reviewer` | `"persona"` | `"subagents/code-reviewer"` |
+| `bash_runner` | `"lean"` | *(none)* |
+
+The distinction is architectural:
+
+- **`pattern='persona'`** means the subagent is a **full persona** — it has its own `persona_dir` (e.g. `subagents/research/`) containing an `AGENTS.md` that defines its system prompt/conventions. The harness loads that directory's `AGENTS.md` as the subagent's prompt. So `persona_dir` is **required** because it's the source of the persona's identity.
+
+- **`pattern='lean'`** means the subagent is a **lean/inlined persona** — its entire prompt is defined inline in the harness config (just `description`, `tool_allowlist`, `max_turns`, etc.) with **no separate directory or AGENTS.md**. That's why `persona_dir` is **forbidden** for `lean` — there's nothing to point to; the persona is self-contained in the harness definition itself.
+
+In short: `persona` = external prompt from a directory (needs `persona_dir`), `lean` = inline prompt (no directory, so `persona_dir` doesn't apply).

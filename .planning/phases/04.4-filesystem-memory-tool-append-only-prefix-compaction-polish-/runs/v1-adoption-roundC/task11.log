@@ -1,0 +1,23 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=471ea3f12a9f172f8f1f2f2fa93b9b539ea9f3be82fbb8340c24bf2257b8900e
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=471ea3f12a9f172f8f1f2f2fa93b9b539ea9f3be82fbb8340c24bf2257b8900e, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T05-39-41-123Z.jsonl
+Now I have a clear picture. The function that decides whether to fall back to vLLM (via the reactive grammar retry path) after a tool-call parse failure is **`callWithReactiveGrammar`** in `/data/projects/emmy/packages/emmy-provider/src/grammar-retry.ts`.
+
+Here's how it works:
+
+1. **`callWithReactiveGrammar`** (line 99 of `grammar-retry.ts`) is the main function. It:
+   - First sends the request to vLLM **unconstrained** (no grammar) via `postChat`.
+   - Checks if any `tool_call.arguments` field is not valid JSON using `firstBadArgument()`.
+   - If there's a parse failure, it emits a `grammar.retry` telemetry event.
+   - Then it checks whether grammar retry is configured (`profile.harness.tools.grammar` is not null and mode is not `"disabled"`).
+   - If grammar is available, it reads the grammar file and retries the request **once** with `extra_body.guided_decoding.grammar` populated.
+   - If the retry also fails, it throws `GrammarRetryExhaustedError`.
+   - If the retry succeeds, it returns the retry response with `retried: true`.
+
+2. **`firstBadArgument`** (line 176) is the helper that actually detects the parse failure — it iterates over tool calls and tries `JSON.parse` on each `function.arguments`, returning the name of the first one that fails.
+
+3. The function is wired into the provider at **`registerEmmyProvider`** in `index.ts` (line 86), where every chat request routes through `callWithReactiveGrammar`.

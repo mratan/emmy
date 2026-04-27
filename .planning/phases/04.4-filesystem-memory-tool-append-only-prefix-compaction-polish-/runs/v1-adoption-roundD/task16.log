@@ -1,0 +1,17 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=c2070abd39edbc23088efbacb7f3dc066cbf032fd0399d8b2cc2de7cf23c77c9
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=c2070abd39edbc23088efbacb7f3dc066cbf032fd0399d8b2cc2de7cf23c77c9, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T06-15-48-956Z.jsonl
+None of the `04*CONTEXT.md` files mention "prompt layering" or "layering" at all.
+
+**Answer:** There is no mention of "prompt layering order" in any of the `04*CONTEXT.md` files in this project. The term "prompt layering" doesn't appear anywhere in the Phase 4 context documents.
+
+Could you clarify what you mean by "CONTEXT-04"? It's possible you're referring to:
+- A different document not in this repo
+- A memory note (none exist under `/memories/project` or `/memories/global`)
+- A different naming convention
+
+If you can point me to the right file or provide more context, I'd be happy to look more closely.

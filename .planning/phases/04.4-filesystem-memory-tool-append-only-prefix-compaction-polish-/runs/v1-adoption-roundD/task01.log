@@ -1,0 +1,51 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=a3967d14e6084bfa39a6f5e42a237e31deec1aaa6c684715608fe02bfc23ce6c
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=a3967d14e6084bfa39a6f5e42a237e31deec1aaa6c684715608fe02bfc23ce6c, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T06-02-56-489Z.jsonl
+## Hash-Anchored Edits
+
+### How It Works
+
+Every line in a `read` output is prefixed with an 8-hex-character content hash, like this:
+
+```
+a3f1b2c4  some line of code
+d5e6f7a8  another line
+```
+
+When you want to edit a file via the `edit` tool, you don't just specify a search string — you specify the **exact hash** of the line you want to replace. The edit looks like:
+
+```json
+{
+  "hash": "a3f1b2c4",
+  "new_content": "modified line of code"
+}
+```
+
+You can also **insert** new lines by referencing the hash of the line *after which* to insert:
+
+```json
+{
+  "after_hash": "d5e6f7a8",
+  "insert": ["brand new line", "another new line"]
+}
+```
+
+### How It Differs From Plain String-Replace
+
+| Dimension | Plain String-Replace | Hash-Anchored Edit |
+|---|---|---|
+| **Target** | A raw text pattern (e.g. `"foo" → "bar"`) | A specific line identified by its content hash |
+| **Ambiguity** | Can match zero, one, or many occurrences | Matches exactly **one** line (the hash is unique to that line's content) |
+| **Staleness detection** | No — you might replace the wrong thing if the file changed | **Built-in** — if the file changed since you last read it, the hash won't match and the edit is rejected with a clear error |
+| **Safety** | Risky in concurrent/long-running sessions where the file may have drifted | Safe — forces you to re-read the file and get fresh hashes before proceeding |
+| **Precision** | You specify *what* to change | You specify *where* (which exact line) to change it |
+
+### The Key Insight
+
+The hash acts as a **version token** for a specific line. If anyone (or any process) modifies the file between your `read` and your `edit`, the hash will no longer correspond to the current content, and the edit tool will reject it. This prevents silent corruption — you're forced to re-read and work with the current state of the file.
+
+It's essentially a lightweight, line-level optimistic concurrency control mechanism baked directly into the editing workflow.

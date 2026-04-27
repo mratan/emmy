@@ -1,0 +1,22 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=61ecd6f9f256236a782a5d0cf2819d127b9a4a15286bb2bde8e380228e5b801b
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=61ecd6f9f256236a782a5d0cf2819d127b9a4a15286bb2bde8e380228e5b801b, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T05-36-59-568Z.jsonl
+Now I have the full picture. Here's the answer:
+
+---
+
+The v3.1 profile's `gpu_memory_utilization` value is **0.55**.
+
+**Why it was picked (D-29):**
+
+The v3 profile had `gpu_memory_utilization: 0.88`, which was determined by an automated KV-bisection finder (`scripts/find_kv_budget.py`) that ran 10 iterations from 0.75 up to 0.93 (all clean, zero preemptions, zero OOM). The 0.88 value was chosen with a 5% safety margin below the highest clean value of 0.93.
+
+However, this KV-finder was optimized for "no preemption" at the vLLM level and **didn't account for OS-side RAM headroom** on the DGX Spark's 128 GB UMA (Unified Memory Architecture) pool. At 0.88 utilization, the emmy-serve process consumed too much of the shared memory, leaving only ~4.6 GiB free in `free -h` with 7.2 GiB of swap in use — essentially starving the OS.
+
+The D-29 change to 0.55 was a **user lock** targeting an emmy-serve footprint of ~50–70 GB, leaving **>40 GB of system RAM free** on the 128 GB DGX Spark UMA pool. This was validated in the phase3.1-01-walkthrough run, which showed 42 GiB available post-restart (vs 4.6 GiB on v3) — a 9× improvement in system headroom.
+
+The `max_num_batched_tokens` was also reduced from 16384 to 8192 (D-29) to further reduce the CUDA workspace footprint, while still staying above the "interactive latency" threshold documented in STACK.md.

@@ -1,0 +1,38 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=2090c0244675b8fbfec31a8257e24a88d349c3956eea890f4e503687e415baf3
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=2090c0244675b8fbfec31a8257e24a88d349c3956eea890f4e503687e415baf3, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T06-14-59-572Z.jsonl
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task15.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task15.jsonl: binary file matches
+Now I have a complete picture. Here's the answer:
+
+## Where the assembled-prompt sha256 is logged
+
+The SHA-256 is computed and logged in **`/data/projects/emmy/packages/emmy-ux/src/prompt-assembly.ts`** (the `assemblePrompt` function), in two places:
+
+1. **`process.stderr`** — a plain text line is written to stderr:
+   ```
+   prompt.assembled sha256=<64-hex>
+   ```
+   This is a visible, human-readable audit trail for daily-driver users (tagged **HARNESS-06**).
+
+2. **Telemetry event** — `emitEvent({ event: "prompt.assembled", sha256, layers, ts, ... })` is called, which feeds into Phase 3's observability bus for structured event capture.
+
+The sha256 is also returned as part of the `AssembledPrompt` object (`{ text, sha256, layers }`), which is exposed via an `assembledPromptProvider` callback in the session runtime.
+
+## What it audits
+
+The sha256 is the **SHA-256 hash of the fully assembled system prompt text** — the concatenation of all four layers in the locked order defined by **CONTEXT-04**:
+
+> `system.md` → `AGENTS.md` → `tool_defs` → `user`
+
+It serves as a **stable regression identifier** (tagged **SC-5**). Because the layer order is locked, any reordering or content change produces a different hash. The tests verify:
+
+- **Determinism**: same inputs → same sha256
+- **Sensitivity**: different AGENTS.md content → different sha256
+- **Format**: always a 64-character hex string
+
+This lets the harness detect **semantic regressions** — if the assembled prompt changes unexpectedly (e.g., layers reordered, content altered), the sha256 will differ from the expected baseline, flagging a regression.

@@ -1,0 +1,28 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=3e94ad16d32b99e82da9a1f0d295de58b7e80c0540a596adf95c1c7e6a94b2df
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=3e94ad16d32b99e82da9a1f0d295de58b7e80c0540a596adf95c1c7e6a94b2df, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T05-35-46-559Z.jsonl
+grep: ./.venv/lib/python3.12/site-packages/requests/__pycache__/auth.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/transformers/__pycache__/dynamic_module_utils.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/huggingface_hub/utils/__pycache__/insecure_hashlib.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/huggingface_hub/utils/__pycache__/_verification.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/huggingface_hub/utils/__pycache__/sha.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/huggingface_hub/__pycache__/_commit_api.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/huggingface_hub/__pycache__/file_download.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/huggingface_hub/__pycache__/_upload_large_folder.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/huggingface_hub/__pycache__/_local_folder.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/huggingface_hub/__pycache__/lfs.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/huggingface_hub/__pycache__/hf_api.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/urllib3/util/__pycache__/ssl_.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/lark/__pycache__/lark.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/lark/__pycache__/load_grammar.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/hf_xet/hf_xet.abi3.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/httpx/__pycache__/_auth.cpython-312.pyc: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task13.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task15.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task14.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task12.jsonl: binary file matches
+

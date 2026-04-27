@@ -1,0 +1,19 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=c2070abd39edbc23088efbacb7f3dc066cbf032fd0399d8b2cc2de7cf23c77c9
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=c2070abd39edbc23088efbacb7f3dc066cbf032fd0399d8b2cc2de7cf23c77c9, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T20-41-01-783Z.jsonl
+Here's what **CONTEXT-04** says about prompt layering order:
+
+> **CONTEXT-04**: Per-profile prompt-prefix discipline documented (system → AGENTS.md → tool defs → user; never reorder) so prefix caching is maximized.
+
+In other words, CONTEXT-04 locks the prompt assembly order to exactly **4 layers** in this sequence:
+
+1. **`system.md`** — the profile's system prompt
+2. **`AGENTS.md`** — the project-level AGENTS.md file
+3. **Tool definitions** — tool schema/definitions
+4. **User** — the user's turn/message
+
+This order is **never reordered** — it's a hard invariant. The rationale is to maximize **prefix caching** (since the fixed prefix stays the same across turns, enabling KV-cache reuse). The order is enforced in `prompt-assembly.ts` with a SHA-256 hash emitted on every session start to verify determinism and order stability.

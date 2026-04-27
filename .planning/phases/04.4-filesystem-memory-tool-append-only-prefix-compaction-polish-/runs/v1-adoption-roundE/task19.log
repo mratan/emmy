@@ -1,0 +1,17 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=4daf792e5ba6d8ea89ca8873610c5367997484496d44210be00be3448402900c
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=4daf792e5ba6d8ea89ca8873610c5367997484496d44210be00be3448402900c, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T20-46-48-199Z.jsonl
+Based on my extensive search, I wasn't able to find specific documentation about `harness.yaml` and `serving.yaml` in the context of "profile bundles." This terminology doesn't appear to be widely documented in public sources. 
+
+Could you provide a bit more context about what framework or platform these profile bundles belong to? For example:
+- Is this related to **Backstage** / **Red Hat Developer Hub**?
+- **Databricks Asset Bundles**?
+- **KServe / OpenShift AI**?
+- **Open Policy Agent (OPA) bundles**?
+- Something else entirely?
+
+With more context, I can give you a much more targeted and accurate answer.

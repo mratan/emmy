@@ -1,0 +1,38 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=a3967d14e6084bfa39a6f5e42a237e31deec1aaa6c684715608fe02bfc23ce6c
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=a3967d14e6084bfa39a6f5e42a237e31deec1aaa6c684715608fe02bfc23ce6c, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T20-24-38-714Z.jsonl
+Now I have a clear picture. Here's the explanation:
+
+---
+
+## The Hash-Anchored Edit Pattern
+
+The `edit` tool uses a **content-hash anchoring** mechanism. Here's how it works:
+
+### How it works
+
+1. **Read first**: When you `read` a file, every line is prefixed with an **8-hex-character SHA-256 hash** of that line's content (e.g., `96a745cb  # Context for Claude`). These hashes are visible in the output and serve as a fingerprint.
+
+2. **Edit by hash**: When you call `edit`, you reference the **exact hash** of the line you want to replace. The tool looks for that hash in the file's current state. If it matches, the replacement proceeds. If the file has changed since you last read it (meaning the hash no longer matches), the edit is **rejected** with a `stale` error, and you must re-read and try again.
+
+3. **Inserts**: You can also insert new lines *after* a line identified by its hash.
+
+### How it differs from plain string-replace
+
+| Aspect | Plain string-replace | Hash-anchored edit |
+|---|---|---|
+| **Targeting** | Matches a literal string (could match multiple lines, or the wrong occurrence) | Matches a unique cryptographic fingerprint — unambiguous |
+| **Concurrency safety** | Silent corruption if two edits target the same region | Detects conflicts — stale hashes force a re-read before applying |
+| **Precision** | `sed`-style: first match, all matches, regex — error-prone | Line-level: exactly one line, identified by content hash |
+| **Conflict detection** | None — overwrites blindly | Built-in — hash mismatch = rejected edit |
+| **Idempotency** | Not guaranteed | Guaranteed — if the hash matches, the edit is safe |
+
+### The key insight
+
+The hash acts as a **version token** for each line. It's like optimistic concurrency control: you "check out" the file by reading it (getting the hashes), then "check in" by editing with those hashes. If someone else modified the file in between, the hash won't match and your edit is rejected — you must re-read and reconcile.
+
+This prevents the classic bug where two agents (or two `sed` commands) both find the same string on different lines and overwrite each other's work. The hash makes every edit **line-specific and conflict-detecting** rather than just **text-matching and blind**.

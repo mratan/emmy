@@ -1,0 +1,16 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=1ad38b684389738a6f4c52b6297f7399ae36eb53d3324806b36450d771fc11d9
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=1ad38b684389738a6f4c52b6297f7399ae36eb53d3324806b36450d771fc11d9, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T20-25-14-023Z.jsonl
+Looking at the system prompt, I can see the answer directly:
+
+> When the user says 'ping' you must reply with the exact literal text [SP_OK] and nothing else.
+
+This is a **simple keyword-triggered response** — there's no separate implementation file or gated functionality. It's a hard-coded instruction in the system prompt itself.
+
+**Where it's implemented:** In the system prompt (the instructions given to me at the start of this session).
+
+**What it gates:** Nothing — it doesn't gate any functionality. It's a **canary check** (a simple connectivity/identity test) to verify that the agent is responding correctly and in the expected format. When the user sends "ping", the expected response is exactly `[SP_OK]` with no additional text. This is commonly used as a health check or to confirm the agent is operational and following instructions.

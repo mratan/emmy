@@ -1,0 +1,39 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=4e2cd39739bae61aae62e1698f30cb381a085cc57c2a7515e4d6c30a2857381d
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=4e2cd39739bae61aae62e1698f30cb381a085cc57c2a7515e4d6c30a2857381d, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T05-59-36-035Z.jsonl
+Here's the difference:
+
+## `serving.yaml` — vLLM Engine Configuration
+
+This file configures the **underlying LLM inference engine** (vLLM). It controls:
+
+- **Model identity** — model path, HuggingFace ID, served model name, container image & digest
+- **Memory & context** — `max_model_len`, `gpu_memory_utilization`, `kv_cache_dtype`, `max_num_batched_tokens`, `max_num_seqs`
+- **Quantization & loading** — `quantization` (e.g. `fp8`), `load_format` (e.g. `safetensors`)
+- **Attention backends** — which FlashAttention/FlashInfer backend to use
+- **Sampling defaults** — `temperature`, `top_p`, `top_k`, `repetition_penalty`, `max_tokens`
+- **Tool-call parser** — which parser to use (e.g. `gemma4`, `qwen3`)
+- **Engine quirks** — e.g. `strip_thinking_tags`, `buffer_tool_streams`
+- **Environment variables** — `VLLM_NO_USAGE_STATS`, `HF_HUB_OFFLINE`, etc.
+
+**Key property: changing engine fields requires a vLLM restart.**
+
+## `harness.yaml` — Agent/Conversation Configuration
+
+This file configures the **agent layer on top of the engine**. It controls:
+
+- **Prompts** — `system` prompt, `edit_format`, `tool_descriptions`, whether to use the system role
+- **Context management** — `max_input_tokens`, compaction settings (`soft_threshold_pct`, `preserve_recent_turns`, `summarization_prompt_path`), repo map settings
+- **Tool configuration** — tool format (`openai`), schema directory, grammar file, per-tool sampling overrides (e.g. `edit: { temperature: 0.0 }`), `web_fetch` allowlist, `web_search` settings
+- **Agent loop** — `max_iterations`, retry budgets, self-correction behavior
+- **Advanced settings whitelist** — which per-call knobs are allowed without engine restart (e.g. `reasoning_effort`, `thinking_budget`)
+
+**Key property: these settings are hot-reloadable — no engine restart needed.**
+
+## The relationship
+
+A single `serving.yaml` (one loaded vLLM model) can serve multiple profile variants that differ only in their `harness.yaml` settings. The `serving.yaml` is the **heavy, restart-required** config, while `harness.yaml` is the **light, hot-reloadable** config that shapes how the model interacts with the user.

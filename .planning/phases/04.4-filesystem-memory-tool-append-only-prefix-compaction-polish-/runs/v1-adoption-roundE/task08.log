@@ -1,0 +1,59 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=fc236355d2893f4f4885ba3e06b3fb70848eebada227328c9ea83824ede54584
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=fc236355d2893f4f4885ba3e06b3fb70848eebada227328c9ea83824ede54584, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T20-30-24-954Z.jsonl
+grep: .: Is a directory
+grep: .: Is a directory
+Now I have a complete picture. Here's the answer:
+
+---
+
+## Air-gap STRICT Validator
+
+There are **two** air-gap validators, and the **STRICT** one is:
+
+### `emmy_serve/airgap/ci_verify_phase3.py`
+
+This is the **STRICT** air-gap CI gate. It asserts **zero outbound network connections** from the emmy-serve + Langfuse dual-stack during a 50-turn replay. It's the "NO OUTBOUND AT ALL" gate used for Phase-3 release certification.
+
+**What it blocks/verifies:**
+- **Zero non-loopback outbound connections** from emmy-serve and Langfuse containers
+- Config validation: profile dir exists, all scripts/compose files present
+- Docker-compose digest-pinning (`@sha256:`) on the Langfuse compose file
+- Loopback binding (`127.0.0.1:`) on all compose ports
+- Memory tool air-gap subcheck (V5): runs 100 mixed memory ops under `strace -e trace=network` to assert zero non-loopback connects
+- Full run: starts emmy-serve + Langfuse, runs a 50-turn replay, captures `ss -tnp state established` and `tcpdump` to assert zero non-loopback connections
+
+**Entry point:** `emmy_serve.airgap.ci_verify_phase3 --dry-run` (config-only) or `--profile=v3` (full run).
+
+---
+
+### The sibling PERMISSIVE validator: `emmy_serve/airgap/ci_verify_research_egress.py`
+
+This is the **PERMISSIVE** gate (Phase-3.1). It **allows** SearxNG's outbound traffic (to search engines like Google, DuckDuckGo, etc.) but **hard-blocks** cloud-inference endpoints.
+
+**What it blocks (STRICT_DENY_HOSTS):**
+- `api.openai.com`
+- `api.anthropic.com`
+- `generativelanguage.googleapis.com`, `ai.google.dev`
+- `api.mistral.ai`
+- `api.groq.com`
+- `bedrock-runtime.amazonaws.com`, `bedrock.amazonaws.com`
+- `api-inference.huggingface.co`
+- `api.deepseek.com`, `api.cohere.com`, `api.fireworks.ai`
+
+---
+
+### The underlying D-12 layer probes: `emmy_serve/airgap/probe.py`
+
+Both validators use these four layers (from `emmy_serve.airgap.validator.py`):
+
+| Layer | What it checks |
+|-------|---------------|
+| **(a)** Network devices | `docker inspect` shows `["none"]` network; `ip addr` shows only `lo` |
+| **(b)** DNS audit | No external nameservers in `/etc/resolv.conf`; `getent hosts huggingface.co` fails |
+| **(c)** Telemetry env | `VLLM_NO_USAGE_STATS=1` and `DO_NOT_TRACK=1` |
+| **(d)** HF offline env | `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1` |

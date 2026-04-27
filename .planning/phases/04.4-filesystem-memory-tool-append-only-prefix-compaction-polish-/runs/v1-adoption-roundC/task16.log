@@ -1,0 +1,15 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=092ab0e538d0740748e34a1e0a408171f6e3f4361a504d7b74f22c8b3704aa01
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=092ab0e538d0740748e34a1e0a408171f6e3f4361a504d7b74f22c8b3704aa01, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T05-49-33-168Z.jsonl
+I can't find any file or memory entry referencing "CONTEXT-04" on this system. The `memory` tool also returned no project or global notes.
+
+Could you clarify where CONTEXT-04 lives? For example:
+- Is it a file in a specific project directory?
+- Is it a note in the memory system under a different path?
+- Is it part of some external documentation or a prompt template you can share?
+
+Once I have the right location or content, I'll be happy to tell you what it says about prompt layering order.

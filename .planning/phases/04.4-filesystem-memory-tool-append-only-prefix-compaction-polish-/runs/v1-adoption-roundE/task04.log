@@ -1,0 +1,47 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=1bced13bc4a13d6e97a059c5b24abaeebd673ef701c735ea9d872738dd558923
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=1bced13bc4a13d6e97a059c5b24abaeebd673ef701c735ea9d872738dd558923, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T20-25-19-746Z.jsonl
+Here's the convention for naming OTel span attributes in this codebase:
+
+## Attribute Naming Convention
+
+### 1. **Use OTel Semantic Conventions (semconv) where they exist**
+Canonical OTel GenAI semconv attributes are used verbatim — no prefix, no modification:
+
+| Attribute | Example Value |
+|---|---|
+| `gen_ai.system` | `"vllm"` |
+| `gen_ai.request.model` | model name |
+| `gen_ai.usage.input_tokens` | number |
+| `gen_ai.usage.output_tokens` | number |
+| `gen_ai.response.finish_reasons` | string[] |
+| `gen_ai.operation.name` | `"execute_tool"` |
+| `gen_ai.tool.name` | tool name |
+
+### 2. **Emmy-specific attributes use the `emmy.` prefix**
+For attributes that have no OTel semconv coverage, the convention is `emmy.<domain>.<key>`:
+
+| Attribute | Purpose |
+|---|---|
+| `emmy.prompt.sha256` | SHA-256 hash of the prompt |
+| `emmy.tool.args_hash` | Hash of tool arguments |
+| `emmy.profile.id` | Profile ID (auto-stamped on every span) |
+| `emmy.profile.version` | Profile version (auto-stamped) |
+| `emmy.profile.hash` | Profile hash (auto-stamped) |
+| `emmy.profile.variant` | Variant name (when applicable) |
+| `emmy.profile.variant_hash` | Variant hash (when applicable) |
+| `emmy.role` | Turn role context |
+
+### 3. **Span names use the `emmy.` prefix**
+- `emmy.chat` — chat completion spans
+- `emmy.tool.<toolName>` — tool execution spans
+- `emmy.<event>` — event spans (mirrors JSONL event names)
+
+### 4. **Key design principle (from `span-factory.ts`)**
+> "Rather than stamp the attributes ad-hoc at every call site (D-10 anti-pattern — inventing emmy-specific names where OTel semconv already has canonical ones), we funnel span creation through helpers and only add emmy-specific attrs where semconv has no coverage."
+
+The `EmmyProfileStampProcessor` (a `SpanProcessor`) auto-stamps `emmy.profile.*` on **every** span at `onStart`, avoiding the need to manually set these attributes at each call site.

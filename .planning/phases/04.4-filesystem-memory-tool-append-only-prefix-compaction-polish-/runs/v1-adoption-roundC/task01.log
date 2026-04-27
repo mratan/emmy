@@ -1,0 +1,41 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=0a07fc3f6ef89ac140a066012b615221d91526d90253054399f46693000e409d
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=0a07fc3f6ef89ac140a066012b615221d91526d90253054399f46693000e409d, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T05-35-35-921Z.jsonl
+Looking at the `edit` tool's schema and description, I can explain the hash-anchored edit pattern:
+
+## How It Works
+
+Every time you `read` a file, each line is prefixed with an **8-hex-character content hash** (e.g., `a3f1b2c4`). These hashes are derived from the actual content of each line, so they act as a fingerprint.
+
+When you want to edit a line, you reference that exact line hash in your `edits` array:
+
+```json
+{
+  "hash": "a3f1b2c4",
+  "new_content": "replacement text here"
+}
+```
+
+You can also **insert** new lines by referencing the hash of the line *after which* to insert:
+
+```json
+{
+  "after_hash": "a3f1b2c4",
+  "insert": ["new line 1", "new line 2"]
+}
+```
+
+## How It Differs from Plain String-Replace
+
+| Aspect | Hash-Anchored Edit | Plain String-Replace |
+|---|---|---|
+| **Uniqueness** | Each line has a unique content hash — no ambiguity even if the same text appears multiple times | A plain string match can hit the wrong occurrence if the text isn't unique |
+| **Safety** | If the file has changed since you last read it, the hash won't match and the edit **fails with a stale error** — preventing accidental edits to the wrong content | A blind string replace can silently corrupt a file that's drifted from what you expected |
+| **Precision** | You target a *specific line* by its hash, not by searching for a substring | You search for a substring, which may match more or fewer places than intended |
+| **Staleness detection** | The tool rejects edits when the underlying content has changed, forcing you to re-read first | No built-in protection against editing stale content |
+
+In short: hash-anchored edits are **content-addressed** and **conflict-aware**, whereas plain string-replace is **text-matching** and **blind to drift**.
