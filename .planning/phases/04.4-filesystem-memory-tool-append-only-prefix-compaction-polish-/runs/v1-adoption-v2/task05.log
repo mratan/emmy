@@ -1,0 +1,24 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=21c91edd6ede26b137f3f3ea7ff41196ea549be450cf371f1592fadcf49c45e7
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=21c91edd6ede26b137f3f3ea7ff41196ea549be450cf371f1592fadcf49c45e7, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T02-15-28-592Z.jsonl
+Based on the tool descriptions in my system prompt, here's how the `web_search` → `web_fetch` URL bypass mechanism works:
+
+## The Allowlist + Bypass System
+
+**`web_fetch` has a two-layer access control:**
+
+1. **Allowlist gating (UX-03):** Only hosts listed in `profile.harness.tools.web_fetch.allowlist` (plus loopback) are permitted. Non-allowlisted hosts return an error and flip the offline badge red.
+
+2. **`web_search` URL bypass:** URLs discovered through `web_search` results can be followed with `web_fetch` *even if they're not on the allowlist*. The mechanism works like this:
+   - You first use `web_search` to look up information (e.g., latest versions, docs).
+   - `web_search` returns results with URLs (title, url, snippet, engine).
+   - You can then use `web_fetch` on **any of those returned URLs** without them needing to be pre-approved on the allowlist.
+   - This is explicitly called out in the `web_fetch` description: *"Use web_fetch to follow up on any returned URL without adding to the allowlist."*
+
+**The intent** is to let you research and read documentation from arbitrary sites without requiring every possible documentation host to be pre-registered on the allowlist — you just need to discover the URL via `web_search` first.
+
+**Important caveat:** The bypass only applies to URLs *returned by `web_search`*. You can't just pick an arbitrary non-allowlisted URL and fetch it directly — it must have surfaced as a search result first.

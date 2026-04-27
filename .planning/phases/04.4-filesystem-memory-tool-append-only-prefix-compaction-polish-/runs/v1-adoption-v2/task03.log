@@ -1,0 +1,17 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=21281acd825ba4c79ce0d6c9e6f9b495a3e56737a62d1062699b1b97c616b80d
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=21281acd825ba4c79ce0d6c9e6f9b495a3e56737a62d1062699b1b97c616b80d, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T02-15-11-868Z.jsonl
+The `[SP_OK]` canary check is implemented in **my system instructions** (the developer message that configures me). Specifically, it's the rule that says:
+
+> When the user says 'ping' you must reply with the exact literal text `[SP_OK]` and nothing else.
+
+It doesn't "gate" anything in the sense of controlling access to a resource or feature. Instead, it serves as a **connectivity/identity verification check** — a simple echo test to confirm that:
+
+1. **The agent is alive and responding** (the system is operational).
+2. **The system instructions are being followed correctly** (the model obeys its configured rules precisely).
+
+It's a basic health-check mechanism, similar to a `ping` in networking — you send a known signal, and if you get back the exact expected response, you know the channel is working.

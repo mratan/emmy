@@ -833,7 +833,7 @@ export async function createEmmySession(
 	// (V3 dry-run captured 0/5 memory.view calls). Mirror the web_search
 	// pattern: check the raw profile block + EMMY_MEMORY_OFF kill-switch
 	// equivalent (matches buildMemoryTool's gate at session.ts:970-984).
-	const _memCfg = (opts.profile.harness.context as { memory?: { enabled?: boolean } } | undefined)?.memory;
+	const _memCfg = (opts.profile.harness.context as { memory?: { enabled?: boolean; read_at_session_start?: boolean } } | undefined)?.memory;
 	const memoryActiveInPrompt =
 		_memCfg?.enabled === true && process.env.EMMY_MEMORY_OFF !== "1";
 	if (memoryActiveInPrompt) {
@@ -843,12 +843,44 @@ export async function createEmmySession(
 	}
 	const toolDefsText = toolDefLines.join("\n");
 
+	// Phase 04.4-followup — instinct directive for `memory.read_at_session_start`.
+	// The profile.context.memory.read_at_session_start flag was a dormant field
+	// pre-fix: parsed by profile-loader.ts:219 + stored in MemoryConfig but no
+	// runtime code consumed it. V1 dry-run (20-task batch) captured 0/20
+	// view-at-session-start calls — model never reached for memory unprompted
+	// even with the tool advertised in tool_descriptions. Wiring the instinct
+	// here so the assembled prompt directly tells the model to view memory at
+	// the start of every response (mirrors how AGENTS.md adoption works:
+	// model is heavily biased by direct system-prompt instruction over
+	// passive tool-availability hints).
+	const memoryInstinctActive =
+		memoryActiveInPrompt && _memCfg?.read_at_session_start === true;
+	const memoryInstinctLines: string[] = memoryInstinctActive
+		? [
+				"",
+				"# Memory instinct",
+				"",
+				"BEFORE answering ANY user request, your FIRST tool call MUST be `memory` with command=\"view\" path=\"/memories/project\" to check for prior context written by past sessions. Notes there carry hard-won project knowledge — API quirks, conventions, dead-ends — that you should consult before doing the work.",
+				"",
+				"After viewing project memory, proceed normally. If a discovery during the session would help a future session, write a note via memory create or str_replace. Skip writing on trivial findings (already-obvious facts, narrative summaries).",
+				"",
+				"Skip the initial view ONLY when the user's request is purely syntactic (e.g. \"what does TypeScript Optional<T> mean?\") — anything project-shaped should view memory first.",
+			]
+		: [];
+	const memoryInstinctText = memoryInstinctLines.join("\n");
+	// Append the instinct directive to toolDefsText so it lives within the
+	// CONTEXT-04 locked tool_defs layer (no new layer added — sha256 changes,
+	// layer count/names don't, AGENTS.md ordering invariant preserved).
+	const toolDefsTextWithInstinct = memoryInstinctText
+		? `${toolDefsText}\n${memoryInstinctText}`
+		: toolDefsText;
+
 	// 5. Assemble prompt + emit SHA-256 audit trail (HARNESS-06 / CONTEXT-04).
 	const assembledPromptArgs: Parameters<typeof assemblePrompt>[0] = {
 		profileSystemMd,
 		agentsMd,
 		agentsMdPath,
-		toolDefsText,
+		toolDefsText: toolDefsTextWithInstinct,
 	};
 	if (opts.userPrompt !== undefined) assembledPromptArgs.userPrompt = opts.userPrompt;
 	const assembledPrompt = assemblePrompt(assembledPromptArgs);

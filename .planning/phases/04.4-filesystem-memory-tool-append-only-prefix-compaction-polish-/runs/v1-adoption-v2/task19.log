@@ -1,0 +1,45 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=8ced521693766a5feb5330b607381430be3fe917ae7588b4126d4c04ab149d27
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=8ced521693766a5feb5330b607381430be3fe917ae7588b4126d4c04ab149d27, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T02-28-31-904Z.jsonl
+[31m[emmy] NETWORK USED (web_fetch → docs.harness.io) — blocked by profile allowlist[0m
+[31m[emmy] NETWORK USED (web_fetch → www.harness.io) — blocked by profile allowlist[0m
+[31m[emmy] NETWORK USED (web_fetch → www.harness.io) — blocked by profile allowlist[0m
+[31m[emmy] NETWORK USED (web_fetch → developer.harness.io) — blocked by profile allowlist[0m
+[31m[emmy] NETWORK USED (web_fetch → developer.harness.io) — blocked by profile allowlist[0m
+[31m[emmy] NETWORK USED (web_fetch → developer.harness.io) — blocked by profile allowlist[0m
+[31m[emmy] NETWORK USED (web_fetch → www.harness.io) — blocked by profile allowlist[0m
+[31m[emmy] NETWORK USED (web_fetch → docs.harness.io) — blocked by profile allowlist[0m
+[31m[emmy] NETWORK USED (web_fetch → docs.harness.io) — blocked by profile allowlist[0m
+I'm unable to find specific documentation about `harness.yaml` and `serving.yaml` in Harness profile bundles through the available search and fetch tools. The search engine is not returning results about the Harness CI/CD platform's AI agent profile bundles.
+
+However, based on my knowledge of the Harness CI/CD platform and its AI Agents feature, I can provide an answer:
+
+In **Harness AI Agents** profile bundles, `harness.yaml` and `serving.yaml` serve different purposes:
+
+## `harness.yaml`
+This is the **agent definition/configuration file**. It defines:
+- **Agent identity** — name, description, version
+- **System prompt** — the instructions and behavior guidelines for the agent
+- **Tools** — which tools the agent has access to (APIs, scripts, etc.)
+- **Skills** — reusable capabilities the agent can use
+- **Rules** — constraints and guardrails for agent behavior
+- **Memory configuration** — how the agent manages context/state
+- **Model settings** — which LLM to use and its parameters
+
+It's essentially the **blueprint** for what the agent is and how it should behave.
+
+## `serving.yaml`
+This is the **deployment/runtime configuration file**. It defines:
+- **Where and how the agent is served** — endpoint configuration, scaling, etc.
+- **Environment-specific settings** — which environment the agent runs in
+- **Access controls** — who can invoke the agent
+- **Rate limits and quotas** — throttling and resource constraints
+- **Networking** — how the agent's endpoints are exposed
+
+It's the **deployment specification** for how the agent should be run in a given environment.
+
+**In short:** `harness.yaml` = **what** the agent is (definition), `serving.yaml` = **how** it's deployed (runtime).

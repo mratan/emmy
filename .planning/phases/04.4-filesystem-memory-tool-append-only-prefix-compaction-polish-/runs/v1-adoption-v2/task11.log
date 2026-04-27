@@ -1,0 +1,27 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=7907a05b1debaa75251d712a15abd9b07d8c9c86d9d3513df22b8b3584e5bc5d
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=7907a05b1debaa75251d712a15abd9b07d8c9c86d9d3513df22b8b3584e5bc5d, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T02-21-25-567Z.jsonl
+I found the function. Here's the answer:
+
+## `callWithReactiveGrammar`
+
+**File:** `/data/projects/emmy/packages/emmy-provider/src/grammar-retry.ts`
+
+This function decides whether to fall back to vLLM with guided decoding (grammar) after a tool-call parse failure. Here's how it works:
+
+1. **First pass (unconstrained):** It calls `postChat()` to get a response from vLLM without any grammar constraint.
+
+2. **Check for parse failure:** It iterates over the returned `tool_calls` and tries `JSON.parse()` on each `function.arguments`. If any one fails, `firstBadArgument()` returns the tool name and triggers the retry path.
+
+3. **Decide whether to retry:** Before retrying, it checks `profile.harness.tools.grammar`:
+   - If `grammarConfig` is `null` → throws `ProviderError` (no retry possible)
+   - If `grammarConfig.mode === "disabled"` → throws `ProviderError` (retry explicitly disabled)
+   - Otherwise → reads the grammar file from the path specified in the config and makes a **second** `postChat()` call with `extra_body.guided_decoding.grammar` populated
+
+4. **Telemetry:** Emits `grammar.retry` on first-pass failure, `grammar.retry.success` if the retry parsed cleanly, or `grammar.retry.exhausted` if the retry still had bad arguments or no grammar was configured.
+
+The retry budget is hard-coded to **1** — it retries at most once. The actual `before-request-hook` (`before-request-hook.ts`) is what injects the grammar into the vLLM request when `retryState.wantsGrammar === true`.

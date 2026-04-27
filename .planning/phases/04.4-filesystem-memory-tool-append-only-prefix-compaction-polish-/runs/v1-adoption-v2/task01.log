@@ -1,0 +1,38 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=1742580f9935ee4c738b9e685c27ea28330d2008ad536e7c29ad53f450882b2f
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=1742580f9935ee4c738b9e685c27ea28330d2008ad536e7c29ad53f450882b2f, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T02-14-49-301Z.jsonl
+## Hash-Anchored Edits
+
+The hash-anchored edit pattern is a **version-control-inspired** approach to file modification. Here's how it works:
+
+### The Pattern
+
+1. **Read** a file first — every line is returned with an 8-hex-character content hash prefix (e.g., `a3f1b2c4  some line of code`). This hash is derived from the line's content.
+
+2. **Edit** by referencing the exact line hash. You tell the tool: "Find the line with hash `a3f1b2c4` and replace it with this new content."
+
+3. **Validation** — if the file has changed since you read it (someone else edited it, or you made another edit), the hash will no longer match. The tool **rejects the edit** with a stale-hash error, forcing you to re-read and get fresh hashes.
+
+### How It Differs from Plain String-Replace
+
+| Aspect | Plain String-Replace | Hash-Anchored |
+|---|---|---|
+| **Target** | Matches by raw text content | Matches by cryptographic hash of the line |
+| **Ambiguity** | Can match multiple lines or the wrong line if text appears twice | Each line's hash is unique to its exact content at read time |
+| **Concurrency safety** | Silent corruption — two edits can overwrite each other | Explicit failure — stale hash forces a re-read, preventing lost updates |
+| **Precision** | You must provide the full string to find/replace | You identify the line by hash, then provide only the replacement |
+| **Mental model** | Like `sed` or `find/replace` | Like a **patch** with content-addressed line IDs |
+
+### Why It Matters
+
+The key advantage is **optimistic concurrency control**. It's similar to how Git works:
+- You "read" (like checking out a commit)
+- You make changes referencing specific line hashes
+- The system validates that nothing changed underneath you
+- If it did, you get a clear error and must re-apply on top of the new state
+
+This prevents the classic bug where a string-replace matches the wrong occurrence in a large file, or where concurrent edits silently corrupt each other.

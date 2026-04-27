@@ -1,0 +1,30 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=97cc41922b1ae1f0e166cf4cf526876593f0046b768ccdb0c96995383fbaf3c9
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=97cc41922b1ae1f0e166cf4cf526876593f0046b768ccdb0c96995383fbaf3c9, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T02-23-53-509Z.jsonl
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T01-54-17-272Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-19-38-129Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-10-45-190Z.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task15.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T01-54-17-272Z.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task15.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T01-46-08-655Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T01-54-35-374Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-10-52-930Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T01-54-17-272Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-19-38-129Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-22-06-645Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-21-56-600Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-10-45-190Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-15-16-718Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T02-15-00-300Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T01-46-15-203Z.jsonl: binary file matches
+grep: ./runs/phase2-sc3-capture/session-2026-04-27T01-50-16-256Z.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task13.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task15.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task14.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task12.jsonl: binary file matches
+

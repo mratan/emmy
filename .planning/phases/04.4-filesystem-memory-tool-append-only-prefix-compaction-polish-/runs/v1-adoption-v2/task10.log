@@ -1,0 +1,40 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=16f45241d4aa16fa1ffd6bba646f2155e71ce6a2286e1c8baa338f4d5de1df42
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=16f45241d4aa16fa1ffd6bba646f2155e71ce6a2286e1c8baa338f4d5de1df42, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T02-21-15-702Z.jsonl
+## Telemetry per operation
+
+The memory tool emits **one telemetry event per operation**, with the following structure:
+
+| Field | Type | Description |
+|---|---|---|
+| `event` | `string` | Always `"memory"` |
+| `operation` | `string` | One of: `create`, `str_replace`, `insert`, `delete`, `rename`, `view` |
+| `scope` | `string` | Either `"project"` or `"global"` |
+| `path` | `string` | The full memory path (e.g. `/memories/project/telemetry` or `/memories/global/notes`) |
+| `success` | `boolean` | Whether the operation completed successfully |
+| `latency_ms` | `number` | Time taken for the operation in milliseconds |
+
+### Example
+
+```json
+{
+  "event": "memory",
+  "operation": "create",
+  "scope": "project",
+  "path": "/memories/project/telemetry",
+  "success": true,
+  "latency_ms": 12
+}
+```
+
+### Key details
+
+- **Every operation** (including `view`) emits a telemetry event — there's no separate read/write distinction beyond the `operation` field.
+- The `path` is the **full canonical path** within the memory system, not a relative one.
+- `latency_ms` measures end-to-end wall-clock time for the operation.
+- `success` is `true` if the operation completed without error, `false` if it failed (e.g. stale hash on `str_replace`, path not found on `delete`).
+- There is **no payload** included in the telemetry — the content of the memory (what was written, what was read) is **not** captured in the telemetry event itself.

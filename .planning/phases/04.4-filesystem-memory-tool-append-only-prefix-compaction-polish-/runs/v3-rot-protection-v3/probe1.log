@@ -1,0 +1,8 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=f8a6d45f4421a222fe0dd55fe089fb763e779faff36ba99f6c42fe1d2cbc77fe
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=f8a6d45f4421a222fe0dd55fe089fb763e779faff36ba99f6c42fe1d2cbc77fe, layers=system.md,tool_defs,user)
+pi-emmy transcript=/tmp/v3-rot-test/runs/phase2-sc3-capture/session-2026-04-27T02-32-10-366Z.jsonl
+Use **camelCase** for JSON field names in API payloads (e.g., `requestId`). This applies to all endpoints.

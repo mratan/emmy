@@ -1,0 +1,35 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=78bc658cc42d754a2184921dc9bb5e1e28a722fb2cd1084b0227cb1134b589be
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=78bc658cc42d754a2184921dc9bb5e1e28a722fb2cd1084b0227cb1134b589be, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T02-29-52-707Z.jsonl
+Based on the code in `@emmy/tools`, here's the full picture:
+
+## Registered Native Tools
+
+The **8-tool native floor** is defined by the `NATIVE_TOOL_NAMES` constant in `native-tools.ts`:
+
+| # | Tool Name | Description |
+|---|-----------|-------------|
+| 1 | `read` | Read a file; outputs each line prefixed with an 8-hex content hash (for use by `edit`). Supports optional `line_range`. |
+| 2 | `write` | Overwrite a file atomically (open → writeFile → fsync → close). |
+| 3 | `edit` | Hash-anchored edit — edits reference individual line hashes from a prior `read`. Stale hashes are rejected. Also supports `inserts` after a given hash. |
+| 4 | `bash` | Run a bash command (YOLO mode). Output truncated to 50 lines head+tail. Has a builtin denylist (`rm -rf /`, fork bombs) plus user-extensible patterns. Scripts are fed via stdin to avoid `pkill -f` self-kill issues. |
+| 5 | `grep` | Run `grep` against a path. Defaults to `-rn` flags. |
+| 6 | `find` | Run `find` on a path. Supports `-name` and `-type` (f/d) filters. |
+| 7 | `ls` | List directory contents. Supports `-l` (long) and `-a` (all) flags. |
+| 8 | `web_fetch` | HTTP GET → markdown. **Allowlist-gated** — only hosts in the profile's `web_fetch.allowlist` (plus loopback) are permitted. Non-allowlisted hosts return an error and flip the offline badge red. |
+
+Additionally, **`web_search`** is conditionally registered (9th tool) when the profile enables it AND neither kill-switch (`EMMY_WEB_SEARCH=off`, `EMMY_TELEMETRY=off`) is engaged. It searches via a local self-hosted SearxNG instance.
+
+## Runtime Discovery
+
+Discovery happens through two mechanisms:
+
+1. **`registerNativeTools(pi, opts)`** — The primary registration function. It takes a `pi` object with a `registerTool(spec)` method and an `opts` object. It calls `pi.registerTool()` for each tool, passing a `PiToolSpec` (name, description, parameters schema, and invoke function). This is the single source of truth for all 8+ tools.
+
+2. **`buildNativeToolDefs(opts)`** — A Phase-3 wire-through helper that creates a "collector shim" that captures the `PiToolSpec` emissions from `registerNativeTools`, then adapts each spec to a `ToolDefinitionLike` shape via `toolSpecToDefinition()`. This returns the 8 native tools as definition objects ready to pass into `createAgentSessionFromServices({ customTools: [...] })`.
+
+The `NATIVE_TOOL_NAMES` constant (`Object.freeze([...])`) serves as the **collision source of truth** — it's consumed by `mcp-bridge.ts` to detect name collisions between native tools and MCP tools.
