@@ -1,0 +1,33 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=6a13875928320e5fd86785259398038aaeb5ccf0b2cda87a4ae6e493d1cfdfa2
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=6a13875928320e5fd86785259398038aaeb5ccf0b2cda87a4ae6e493d1cfdfa2, layers=system.md,tool_defs,user)
+pi-emmy transcript=/tmp/v3-rot-test/runs/phase2-sc3-capture/session-2026-04-27T00-35-50-963Z.jsonl
+grep: .: Is a directory
+grep: .: Is a directory
+grep: /data/projects/emmy/server: No such file or directory
+Now I have a complete picture. Here's the answer:
+
+---
+
+**Use `camelCase` for JSON field names in request payloads sent to the API handler.**
+
+Here's the evidence from the codebase:
+
+1. **API wire format (TypeScript types)** — All the `ChatRequest`, `ChatResponse`, `ToolCall`, etc. interfaces in `packages/emmy-provider/src/types.ts` use `camelCase`:
+   - `chat_template_kwargs` (this is a YAML/Python-ism carried from the vLLM Python SDK convention, but it's an exception — the field comes from OpenAI's `chat_template_kwargs` which itself is snake_case from Python)
+   - `max_tokens`, `top_p`, `stop`, `tool_choice`, `finish_reason`, `prompt_tokens`, `completion_tokens`, `total_tokens`, `reasoning_content`, `tool_calls`, `tool_call_id`, `stream`
+   - `guided_decoding` is nested under `extra_body` — again, from vLLM's Python-style naming
+
+2. **Tool schemas** — The JSON schemas in `profiles/*/tool_schemas/*.schema.json` use `camelCase` for all parameter names: `command`, `cwd`, `timeout_ms` (snake_case only for `timeout_ms`, `max_model_len` — these are vLLM/Python library convention carryovers), `path`, `content`, `hash`, `new_content`, `after_hash`, `insert`, etc.
+
+3. **Profile types** — `ProfileSnapshot` uses `camelCase` for most fields: `served_model_name`, `max_model_len`, `repetition_penalty`, `strip_thinking_tags`, `promote_reasoning_to_content`, `buffer_tool_streams`.
+
+4. **The only snake_case fields** are Python/vLLM SDK carryovers: `chat_template_kwargs`, `max_model_len`, `repetition_penalty`, `tool_call_id`, `guided_decoding` (nested), `top_p`. These exist because they mirror the OpenAI API and vLLM's Python SDK field names.
+
+**Rule of thumb:** 
+- **New fields** you add to the API handler payload → **`camelCase`** (it's the TypeScript/JavaScript default and the dominant convention in the codebase)
+- **Existing fields that come from OpenAI/vLLM APIs** → keep whatever they use (mostly `snake_case` for the few Python-isms like `max_model_len`, `chat_template_kwargs`)
+- **YAML configuration** (profiles/harness.yaml, profiles/serving.yaml) → uses `snake_case` (matching Python conventions)

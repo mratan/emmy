@@ -1,0 +1,14 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=50b5cd0e1bd263b90c9611ae98e415aff5c4679d1510b6a892778b4ad543c962
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=50b5cd0e1bd263b90c9611ae98e415aff5c4679d1510b6a892778b4ad543c962, layers=system.md,tool_defs,user)
+pi-emmy transcript=/tmp/v3-rot-test/runs/phase2-sc3-capture/session-2026-04-27T00-37-58-400Z.jsonl
+The max database connections for this app is **200**, as set on line 4 of `src/db/pool.ts`:
+
+```ts
+max: 200,  // 200
+```
+
+This configures the `pg` connection pool to maintain a maximum of 200 concurrent database connections.

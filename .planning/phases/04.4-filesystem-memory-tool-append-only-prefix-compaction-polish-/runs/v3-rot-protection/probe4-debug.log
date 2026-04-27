@@ -1,0 +1,21 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=5ed3c7d9c78821d1f971db5a0aabbcbf9cae817acf170b6728547f0eb13e25df
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=5ed3c7d9c78821d1f971db5a0aabbcbf9cae817acf170b6728547f0eb13e25df, layers=system.md,tool_defs,user)
+pi-emmy transcript=/tmp/v3-rot-test/runs/phase2-sc3-capture/session-2026-04-27T00-38-09-171Z.jsonl
+Based on `src/config/logger.ts`, to enable debug logging you need to set the `DEBUG` environment variable to `"1"`:
+
+```bash
+DEBUG=1 <your-start-command>
+```
+
+For example:
+- `DEBUG=1 npm start`
+- `DEBUG=1 npm run dev`
+- or `export DEBUG=1` in your shell before running the app.
+
+The logger uses **pino** and switches between:
+- **`debug`** level when `DEBUG=1` (shows debug messages)
+- **`info`** level by default (hides debug messages)
