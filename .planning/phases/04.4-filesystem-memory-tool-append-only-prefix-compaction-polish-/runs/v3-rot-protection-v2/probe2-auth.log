@@ -1,0 +1,11 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=44f1350e8ab868380c9140d0de1667ca662f5e548527cf0477c1054732f619a8
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=44f1350e8ab868380c9140d0de1667ca662f5e548527cf0477c1054732f619a8, layers=system.md,tool_defs,user)
+pi-emmy transcript=/tmp/v3-rot-test/runs/phase2-sc3-capture/session-2026-04-27T01-31-23-696Z.jsonl
+The file uses **RS256** (RSA Signature with SHA-256) as the signing algorithm. This is evident from:
+
+1. `importPKCS8(PRIVATE_KEY_PEM, "RS256")` — the private key is imported with RS256.
+2. `.setProtectedHeader({ alg: "RS256" })` — the JWT header explicitly sets the algorithm to RS256.

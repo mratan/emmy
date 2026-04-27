@@ -1,0 +1,50 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=e4d80f52622191c8cae7838db2bc02e99ff39328104dba47c74b7ad43a4a268f
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=e4d80f52622191c8cae7838db2bc02e99ff39328104dba47c74b7ad43a4a268f, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T01-34-14-664Z.jsonl
+grep: .: Is a directory
+grep: .: Is a directory
+Based on my analysis of the codebase, here's the convention for naming OTel span attributes:
+
+## OTel Span Attribute Naming Convention
+
+The codebase follows a **two-tier prefix strategy**:
+
+### 1. **`emmy.*`** — Custom/emmy-specific attributes
+All custom attributes are namespaced under the `emmy.` prefix, using **dot-separated snake_case**:
+
+| Attribute | Purpose |
+|---|---|
+| `emmy.profile.id` | Profile identifier |
+| `emmy.profile.version` | Profile version |
+| `emmy.profile.hash` | Profile hash |
+| `emmy.profile.variant` | Per-turn variant |
+| `emmy.profile.variant_hash` | Variant hash |
+| `emmy.role` | Turn role (user/assistant/system) |
+| `emmy.prompt.sha256` | Prompt content hash |
+| `emmy.subagent.serialized` | Subagent serialized payload |
+| `emmy.subagent.final_text_chars` | Subagent output length |
+| `emmy.tool.args_hash` | Tool call argument hash |
+| `emmy.{event_key}` | Generic event fields from `emitEvent` (e.g., `emmy.model`, `emmy.duration_ms`) |
+
+### 2. **`gen_ai.*`** — OTel GenAI semantic conventions
+Standard [OTel GenAI semantic conventions](https://opentelemetry.io/docs/specs/semconv/gen-ai/) are used verbatim for LLM-related attributes:
+
+| Attribute | Purpose |
+|---|---|
+| `gen_ai.system` | Inference system (e.g., `"vllm"`) |
+| `gen_ai.request.model` | Model name |
+| `gen_ai.operation.name` | Operation type (e.g., `"execute_tool"`) |
+| `gen_ai.tool.name` | Tool name |
+| `gen_ai.usage.input_tokens` | Input token count |
+| `gen_ai.usage.output_tokens` | Output token count |
+| `gen_ai.response.finish_reasons` | Finish reason array |
+
+### Key design principles (from the code comments):
+
+- **No ad-hoc naming** — The code explicitly avoids inventing emmy-specific names where OTel semantic conventions already exist (see `span-factory.ts` comment about "D-10 anti-pattern").
+- **SpanProcessor auto-stamping** — The `EmmyProfileStampProcessor` automatically stamps `emmy.profile.*` attributes on every span at `onStart`, so callers don't need to manually add them.
+- **Dot-separated snake_case** — All attribute keys use lowercase with dots as separators (e.g., `emmy.profile.variant_hash`, not `emmy.profile.variantHash`).

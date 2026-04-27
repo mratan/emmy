@@ -1,0 +1,51 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=9fd35692a422214687e36081232508d1232d0ba2e4330f8e8dd7bd8dd6be5ceb
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=9fd35692a422214687e36081232508d1232d0ba2e4330f8e8dd7bd8dd6be5ceb, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T01-41-49-368Z.jsonl
+grep: ./tests/unit/__pycache__/test_kv_finder.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./tests/unit/__pycache__/test_profile_schema_gemma4.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./tests/unit/__pycache__/test_immutability.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./tests/unit/__pycache__/test_docker_run_build.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./tests/unit/__pycache__/test_serving_yaml.cpython-312-pytest-9.0.2.pyc: binary file matches
+grep: ./tests/unit/__pycache__/test_serving_yaml.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./emmy_serve/profile/__pycache__/schema.cpython-312.pyc: binary file matches
+grep: ./emmy_serve/profile/__pycache__/loader.cpython-312.pyc: binary file matches
+grep: ./emmy_serve/boot/__pycache__/runner.cpython-312.pyc: binary file matches
+grep: ./emmy_serve/kv_finder/__pycache__/bisect.cpython-312.pyc: binary file matches
+grep: ./emmy_serve/kv_finder/__pycache__/__init__.cpython-312.pyc: binary file matches
+grep: ./.git/index: binary file matches
+grep: ./tests/integration/__pycache__/test_swap.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./tests/unit/__pycache__/test_sidecar_sse.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./tests/unit/__pycache__/test_sidecar_start.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./tests/unit/__pycache__/test_ci_verify_research_egress.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./tests/unit/__pycache__/test_profile_schema_memory.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./tests/unit/__pycache__/test_profile_schema_gemma4.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./tests/unit/__pycache__/test_profile_schema_v3_1.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./tests/unit/__pycache__/test_swap_rollback.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./tests/unit/__pycache__/test_swap_preflight_fail.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./tests/unit/__pycache__/test_sidecar_stop.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./tests/unit/__pycache__/test_variant_engine_byte_identity.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./emmy_serve/profile/__pycache__/schema.cpython-312.pyc: binary file matches
+grep: ./emmy_serve/swap/__pycache__/controller.cpython-312.pyc: binary file matches
+grep: ./emmy_serve/swap/__pycache__/orchestrator_runner.cpython-312.pyc: binary file matches
+grep: ./emmy_serve/airgap/__pycache__/ci_verify_research_egress.cpython-312.pyc: binary file matches
+The v3.1 profile's `gpu_memory_utilization` value is **0.55**.
+
+**Why it was picked:**
+
+The prior v3 profile had `gpu_memory_utilization: 0.88`, which was determined by the Phase 1 KV-finder's automated bisection (`scripts/find_kv_budget.py`). That bisection's objective was "highest value that doesn't cause preemption" — and at 0.88, the engine achieved zero preemptions across 10 sustained-load iterations. However, on the DGX Spark's 128 GB **UMA** (unified memory architecture), this left only ~12 GB for system RAM, resulting in 116/125 GB used + 8 GB swap during idle emmy-serve operation.
+
+The Phase 3.1 team (designated **D-29**) dropped it to **0.55** to free system RAM headroom. The rationale:
+
+1. **CLAUDE.md Pitfall #3** had explicitly warned: "DGX Spark UMA shares model + KV + harness CPU. Default `gpu_memory_utilization=0.95` causes preemption. Start at 0.75, validate with 30-min sustained load." The Phase 1 KV-finder had optimized for "no preempt" without accounting for OS-side RAM headroom.
+
+2. The target was to bring emmy-serve's footprint down to ~50-70 GB, leaving **>40 GB of system RAM free** (no swap pressure).
+
+3. `max_model_len` was kept at 131072 (128K context) — a user constraint that the context size must not be reduced.
+
+4. `max_num_batched_tokens` was also dropped from 16384 → 8192 to further reduce the CUDA workspace footprint.
+
+Post-deploy validation confirmed `free -h` showed ~42 GiB available (9× the ~4.6 GiB from v3), with no swap pressure.

@@ -1,0 +1,30 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=71cb0e20a4917d7e4268768e698d214d51653151dcdcb72f4055eb928eec6b99
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=71cb0e20a4917d7e4268768e698d214d51653151dcdcb72f4055eb928eec6b99, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T01-33-51-813Z.jsonl
+The hash-anchored edit pattern is a **diff-like mechanism** for making surgical edits to files. Here's how it works:
+
+### How it works
+
+1. **Read** a file first — every line in the output is prefixed with an 8-hex-character content hash (e.g., `a3f1b2c4`). This hash is derived from the line's content, acting as a unique fingerprint.
+
+2. **Edit** by referencing those exact line hashes. You tell the tool: "Find the line with hash `a3f1b2c4` and replace it with this new content."
+
+3. **Validation** — if the file has changed since you read it (someone else edited it, or you made a prior edit), the hash will no longer match. The tool rejects the edit with a **stale hash error**, forcing you to re-read the file before proceeding.
+
+### How it differs from plain string-replace
+
+| Aspect | Plain string-replace | Hash-anchored edit |
+|---|---|---|
+| **Targeting** | Matches by literal text content | Matches by cryptographic hash of the exact line |
+| **Ambiguity** | Can match multiple lines, wrong lines, or nothing at all | Uniquely identifies one specific line |
+| **Concurrency safety** | Silent corruption if file changed between read and write | Detects changes — refuses to edit stale content |
+| **Precision** | "Replace all occurrences of X with Y" | "Replace line #42 (hash `a3f1b2c4`) with Z" |
+| **Conflict detection** | None — overwrites blindly | Explicit failure on stale hashes, preventing lost updates |
+
+### Why it matters
+
+The hash acts as an **optimistic concurrency control** mechanism. It's like a lightweight lock-free version check: you prove you've seen the current state of the file (via the hash), and if the state has changed, you're told to re-read rather than silently overwriting someone else's work. This is far safer than blind string replacement, which can corrupt files if the target text appears in multiple places or has drifted.

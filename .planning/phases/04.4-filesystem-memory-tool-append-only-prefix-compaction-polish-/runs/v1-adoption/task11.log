@@ -1,0 +1,31 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=dff09288e37e07c571ab8cf306beea1d9a5d8c28c3ff3f3ed1aef8a65a3de83c
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=dff09288e37e07c571ab8cf306beea1d9a5d8c28c3ff3f3ed1aef8a65a3de83c, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T01-42-57-892Z.jsonl
+Now I have the full picture. Here's the answer:
+
+---
+
+The function that decides whether to fall back to vLLM after a tool-call parse failure is **`callWithReactiveGrammar`** in:
+
+**`/data/projects/emmy/packages/emmy-provider/src/grammar-retry.ts`**
+
+### How it works:
+
+1. **First pass (unconstrained):** It sends the request to vLLM without any grammar constraint (`postChat(baseUrl, req)`).
+
+2. **Parse check:** It calls `firstBadArgument(toolCalls)` which iterates over the returned `tool_calls` and tries `JSON.parse(tc.function.arguments)` on each. If any fails, it returns the name of the first bad tool call.
+
+3. **Decision logic** (lines 56-118):
+   - If there are **no tool calls** or **all arguments parse cleanly** → return the first response (no retry).
+   - If there's a **parse failure** and **grammar is null or mode is "disabled"** → emit `grammar.retry.exhausted` and throw `ProviderError`.
+   - If there's a **parse failure** and **grammar is configured** → retry the request with `extra_body.guided_decoding.grammar` populated (the grammar text loaded from the profile's Lark file).
+   - If the **retry still has bad arguments** → emit `grammar.retry.exhausted` and throw `GrammarRetryExhaustedError`.
+   - If the **retry succeeds** → emit `grammar.retry.success` and return the retry response.
+
+4. **The fallback is a single retry** — the retry budget is hard-coded to 1 at the provider level. The `retry_on_unparseable_tool_call` field in `AgentLoopConfig` (schema.py line 352) is the **agent loop's** retry budget, separate from this provider-level grammar retry.
+
+The grammar injection itself (step 4 of the fallback) is also applied in **`handleBeforeProviderRequest`** in `before-request-hook.ts` (lines 103-115), which reads the `RetryState.wantsGrammar` flag from the WeakMap and injects `extra_body.guided_decoding.grammar_str` into the request payload.

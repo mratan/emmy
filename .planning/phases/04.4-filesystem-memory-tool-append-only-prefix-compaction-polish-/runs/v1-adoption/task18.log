@@ -1,0 +1,18 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=7cc0374ee3522fa9cb9a511a33dc3489c39f27b0368d54e20490520dffd70836
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=7cc0374ee3522fa9cb9a511a33dc3489c39f27b0368d54e20490520dffd70836, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T01-54-38-741Z.jsonl
+Based on the grep results and the operator protocols file, **"v1 memory adoption green" is operator-typed, not parsed from code.**
+
+Here's what's happening:
+
+1. **It's a human-run verification gate.** The file `.planning/phases/04.4-.../04.4-09-OPERATOR-PROTOCOLS.md` defines 6 "operator-gated" closeout protocols. The operator manually runs the V1 protocol (20-task batch on Qwen 35B-A3B v3.1), hand-rates whether the model used the memory tool (`view /memories/...`) before each task, and then **types the resume signal** as free-text:
+
+   > **Resume signal:** `v1 memory adoption green: <observed_pct>%` OR `v1 memory adoption FAIL — observed <pct>%, recommend description revision`
+
+2. **The planner (not code) consumes it.** The STATE.md closeout ledger says: *"When all 6 resume signals land, the planner flips the corresponding ledger entries from Done† → Done in `.planning/STATE.md`"*. So the next agent session reads the operator's typed resume signal and updates the planning state accordingly.
+
+3. **No code parses this string.** There's no `grep` or regex in the codebase that looks for `"v1 memory adoption green"`. It's purely a human-in-the-loop verification protocol — the operator measures, types the signal, and the planning system acts on it.

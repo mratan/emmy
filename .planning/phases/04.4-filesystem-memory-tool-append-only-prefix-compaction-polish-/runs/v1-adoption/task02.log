@@ -1,0 +1,24 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=d1ac8228ce9bc8856f5a6aad77c483cc984912991353436a9106524a557eeac1
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=d1ac8228ce9bc8856f5a6aad77c483cc984912991353436a9106524a557eeac1, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T01-34-02-282Z.jsonl
+The `TextEncoder().encode(s)` is used before `sha256` because **SHA-256 operates on bytes, not strings**.
+
+Here's the breakdown:
+
+1. **SHA-256 is a byte-level hash function** — it takes an input of arbitrary bytes and produces a fixed-size byte digest. It has no concept of text encoding.
+
+2. **JavaScript strings are sequences of UTF-16 code units** — they are not raw bytes. You can't directly feed a JS string into a cryptographic hash function.
+
+3. **`TextEncoder().encode(s)` converts the string to a UTF-8 byte array** (`Uint8Array`). This ensures:
+   - **Determinism**: The same string always produces the same byte sequence, regardless of platform or environment.
+   - **Correctness**: Multi-byte characters (e.g., `é`, `中`, `😀`) are encoded as their proper UTF-8 byte sequences rather than being misinterpreted as raw UTF-16 code units.
+
+If you skipped `TextEncoder` and tried to hash the string directly (or used something like `.charCodeAt()`), you'd get:
+- **Non-portable results** — different environments might encode the same string differently.
+- **Incorrect hashes for non-ASCII characters** — UTF-16 code units don't map 1:1 to the bytes that SHA-256 expects.
+
+So `TextEncoder().encode(s)` is the bridge that turns a JavaScript string into the byte array that SHA-256 can actually hash.

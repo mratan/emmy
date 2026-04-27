@@ -1,0 +1,10 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=8443dffd4569ccf38ede43574908a0c450d4104e75ef88bcf5cb528b3edde9c8
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=8443dffd4569ccf38ede43574908a0c450d4104e75ef88bcf5cb528b3edde9c8, layers=system.md,tool_defs,user)
+pi-emmy transcript=/tmp/v3-rot-test/runs/phase2-sc3-capture/session-2026-04-27T01-32-19-420Z.jsonl
+The user-creation endpoint path is **`POST /users`**.
+
+This is defined on line 3: `router.post("/users", ...)` which maps to `POST /users`.

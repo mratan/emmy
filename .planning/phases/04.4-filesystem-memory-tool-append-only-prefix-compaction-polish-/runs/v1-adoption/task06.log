@@ -1,0 +1,95 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=6e6eb466a55b7d3df0ec49f3de8a0b1d63fd9c94344dabedcc03a2da3b3d71b9
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=6e6eb466a55b7d3df0ec49f3de8a0b1d63fd9c94344dabedcc03a2da3b3d71b9, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T01-35-37-098Z.jsonl
+Now I have a complete picture. Here's the explanation:
+
+---
+
+## File: `/data/projects/emmy/emmy_serve/profile/schema.py`
+
+This is the single file that defines **all** Pydantic v2 schemas for the profile bundle system, including `harness.yaml`, `serving.yaml`, and `profile.yaml`.
+
+### How the optional `sampling_defaults` block is wired
+
+There are actually **two** distinct `sampling_defaults` concepts in this codebase, and they live at different layers:
+
+#### 1. `SamplingDefaults` — serving.yaml (base profile)
+
+Defined at line ~127 of `schema.py`:
+
+```python
+class SamplingDefaults(BaseModel):
+    """Prior-sampling settings; harness per-tool sampling overrides these."""
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    temperature: float = Field(ge=0.0, le=2.0)
+    top_p: float = Field(gt=0.0, le=1.0)
+    top_k: int = Field(gt=0)
+    repetition_penalty: float = Field(gt=0.0)
+    max_tokens: int = Field(gt=0)
+    stop: list[str] = []
+```
+
+This is a **required** field on `ServingConfig` (the root of `serving.yaml`). It establishes the base sampling defaults that every variant inherits.
+
+#### 2. `VariantSamplingDefaults` — harness.yaml (optional, variant-level override)
+
+Defined at line ~312 of `schema.py`:
+
+```python
+class VariantSamplingDefaults(BaseModel):
+    """Phase 4 HARNESS-08 — variant-level sampling_defaults."""
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    temperature: Optional[float] = Field(default=None, ge=0.0, le=2.0)
+    top_p: Optional[float] = Field(default=None, gt=0.0, le=1.0)
+    top_k: Optional[int] = Field(default=None, gt=0)
+    max_tokens: Optional[int] = Field(default=None, gt=0)
+    repetition_penalty: Optional[float] = Field(default=None, gt=0.0)
+```
+
+This is the **optional** block on `HarnessConfig` (the root of `harness.yaml`):
+
+```python
+class HarnessConfig(BaseModel):
+    """Root of harness.yaml — Phase-2 placeholder values allowed as long as they type-check."""
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    prompts: PromptsConfig
+    context: ContextConfig
+    tools: ToolsConfig
+    agent_loop: AgentLoopConfig
+    advanced_settings_whitelist: list[str] = []
+    sampling_defaults: Optional[VariantSamplingDefaults] = None   # ← optional!
+    chat_template_kwargs: Optional[dict[str, Any]] = None
+    subagents: Optional[SubagentsConfig] = None
+```
+
+Key design decisions:
+
+- **All fields are `Optional`** — a variant may only diverge on a subset (e.g., `v3.1-reason` overrides only `temperature` + `top_p`). Absent fields fall through to the base `serving.yaml` `SamplingDefaults`.
+- **`extra="forbid", frozen=True`** — typo safety + immutability, consistent with every BaseModel in the schema.
+
+#### 3. Runtime consumption: `before-request-hook.ts`
+
+The wiring from schema to wire happens in `packages/emmy-provider/src/before-request-hook.ts` (lines ~90–108). On every LLM request, the `handleBeforeProviderRequest` hook receives an optional `variantSnapshot`:
+
+```typescript
+if (variantSnapshot) {
+    const sd = variantSnapshot.harness.sampling_defaults;
+    if (sd) {
+        if (typeof sd.temperature === "number") payload.temperature = sd.temperature;
+        if (typeof sd.top_p === "number") payload.top_p = sd.top_p;
+        if (typeof sd.top_k === "number") payload.top_k = sd.top_k;
+        if (typeof sd.max_tokens === "number") payload.max_tokens = sd.max_tokens;
+    }
+    // ... also merges chat_template_kwargs
+}
+```
+
+The `variantSnapshot` comes from the TypeScript `VariantSnapshot` interface in `packages/emmy-provider/src/types.ts`, which mirrors the Python schema's `VariantSamplingDefaults` shape as a plain `harness.sampling_defaults` object with optional `temperature`, `top_p`, `top_k`, `max_tokens` fields.
+
+#### 4. The variant profile mechanism
+
+Sibling variants (e.g., `v3.1-default`, `v3.1-reason`, `v3.1-precise`) share a **byte-identical** `serving.yaml` (enforced by CI). The only per-variant differences live in `harness.yaml` — specifically `sampling_defaults`, `chat_template_kwargs`, `per_tool_sampling`, and `prompts`. This means you can route different turns to different variants (e.g., "plan" turns → `v3.1-reason` with `temperature=0.6`, "edit" turns → `v3.1-default` with `temperature=0.0`) **without restarting the vLLM engine**.

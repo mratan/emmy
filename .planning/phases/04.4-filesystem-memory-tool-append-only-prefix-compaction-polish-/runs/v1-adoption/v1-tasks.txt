@@ -1,0 +1,20 @@
+What's the project's hash-anchored edit pattern? Explain how it differs from a plain string-replace.
+Why does the prefix-hash compute use TextEncoder().encode(s) before sha256?
+Where is the [SP_OK] canary check implemented and what does it gate?
+What's the convention for naming OTel span attributes in this codebase?
+How does the web_search tool's URL bypass mechanism work for web_fetch?
+Find the file that defines the Pydantic schema for harness.yaml and explain how the optional sampling_defaults block is wired.
+What's the difference between buildRealPiRuntime and buildRealPiRuntimeTui in session.ts?
+Where is the air-gap STRICT validator and what does it block?
+What's the v3.1 profile's gpu_memory_utilization value and why was it picked?
+What kind of telemetry does the memory tool emit per operation?
+Find the function that decides whether to fall back to vLLM after a tool-call parse failure.
+Why is `gen_ai.system` always "vllm" instead of the model family name in OTel spans?
+What does the EmmyProfileStampProcessor do?
+How does the sub-agent dispatcher enforce the `max_concurrent: 2` cap?
+Where is the assembled-prompt sha256 logged, and what does it audit?
+What does CONTEXT-04 say about prompt layering order?
+Why does plan 04.5-02 require persona_dir for pattern='persona' but forbid it for pattern='lean'?
+Where in the code is the resume-signal "v1 memory adoption green" parsed (or is it operator-typed)?
+What's the difference between `harness.yaml` and `serving.yaml` in profile bundles?
+What's the registered set of native tools in @emmy/tools and how is it discovered at runtime?

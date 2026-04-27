@@ -1,0 +1,37 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-35b-a3b@v3.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=ad9ac3d3ba180edddc879d5a7efa69e8340fd32594f1f3a7987b2e8ffbf43da4
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=ad9ac3d3ba180edddc879d5a7efa69e8340fd32594f1f3a7987b2e8ffbf43da4, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T01-55-58-386Z.jsonl
+[31m[emmy] NETWORK USED (web_fetch → www.npmjs.com) — blocked by profile allowlist[0m
+Here's a comprehensive answer:
+
+## Registered Native Tools in `@emmy/tools`
+
+The package is a **local monorepo workspace package** (`/data/projects/emmy/packages/emmy-tools/`), not published to npm. It defines **9 native tools** (8 always + 1 conditional), registered via the `registerNativeTools()` function in `src/native-tools.ts`.
+
+### The 9 tools (from `NATIVE_TOOL_NAMES`):
+
+| # | Tool | Description |
+|---|------|-------------|
+| 1 | **`read`** | Reads a file, prefixing each line with an 8-hex content hash (for use by `edit`). Supports optional `line_range`. |
+| 2 | **`write`** | Overwrites a file atomically (open → writeFile → fsync → close). |
+| 3 | **`edit`** | Hash-anchored edit (the default). Edits reference line hashes from a prior `read`. Supports both `edits` (replace/delete) and `inserts` (after-hash). Stale hashes are rejected. |
+| 4 | **`bash`** | Runs a bash command via `spawnSync` (stdin-fed to avoid `pkill -f` self-kill). Has a builtin denylist (`rm -rf /`, fork bombs) plus user-extensible patterns. Output truncated to 50 lines head+tail. Default timeout 60s. |
+| 5 | **`grep`** | Runs `grep` against a path. Default flags `-rn`. Returns stdout + exit_code. |
+| 6 | **`find`** | Runs `find` on a path with optional `-name` and `-type` filters. |
+| 7 | **`ls`** | Lists directory contents with optional `-l` and `-a` flags. |
+| 8 | **`web_fetch`** | HTTP GET → markdown. **Allowlist-gated** (UX-03): only hosts in `profile.harness.tools.web_fetch.allowlist` (plus loopback) are permitted. Non-allowlisted hosts return an error and flip the offline badge red. Also supports a "recent-search URL bypass" (D-35) for URLs returned by `web_search`. |
+| 9 | **`web_search`** ⚡ | Searches a local self-hosted SearxNG instance at `http://127.0.0.1:8888`. **Conditionally registered** — only when `opts.webSearchConfig` is set AND `opts.webSearchEnabled` is true AND no env kill-switches (`EMMY_WEB_SEARCH=off`, `EMMY_TELEMETRY=off`) are engaged. |
+
+### Runtime Discovery Mechanism
+
+The discovery happens through **two complementary patterns**:
+
+1. **`registerNativeTools(pi, opts)`** — The primary registration function. It takes a `pi` object with a `registerTool(spec: PiToolSpec) => void` method and an `opts: NativeToolOpts` config object. It calls `pi.registerTool()` for each tool, wiring up the schema (JSON Schema `parameters`) and the `invoke` handler. The `pi` object is the agent runtime's tool registry (from `@mariozechner/pi-ai`).
+
+2. **`buildNativeToolDefs(opts)`** — A Phase-3 wire-through helper that **re-uses `registerNativeTools` as the single source of truth**. It creates a collector shim that captures all `PiToolSpec` emissions, then adapts each spec to a `ToolDefinitionLike` via `toolSpecToDefinition()`. This lets downstream callers pass tool definitions directly into `createAgentSessionFromServices({ customTools: [...] })` without needing the full `pi` runtime.
+
+The `NATIVE_TOOL_NAMES` constant (`Object.freeze([...])`) is the **collision source of truth** — it's consumed by the MCP bridge (`mcp-bridge.ts`) to avoid name collisions between native tools and MCP-provided tools.
