@@ -1,0 +1,5 @@
+Why does the prefix-hash compute use TextEncoder().encode(s) before sha256?
+Find the file that defines the Pydantic schema for harness.yaml and explain how the optional sampling_defaults block is wired.
+What kind of telemetry does the memory tool emit per operation?
+How does the sub-agent dispatcher enforce the `max_concurrent: 2` cap?
+What's the registered set of native tools in @emmy/tools and how is it discovered at runtime?

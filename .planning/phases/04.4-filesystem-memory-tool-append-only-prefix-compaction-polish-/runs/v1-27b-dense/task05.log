@@ -1,0 +1,51 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-27b@v1.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=1b08ff4985b8fb589ba5ee2a9795b35735f11d01fe9fff89f9eae7acbae5bc8f
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=1b08ff4985b8fb589ba5ee2a9795b35735f11d01fe9fff89f9eae7acbae5bc8f, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T23-25-10-015Z.jsonl
+Here's the complete picture:
+
+## Registered Native Tools in `@emmy/tools`
+
+The package defines **9 native tools** in the frozen constant `NATIVE_TOOL_NAMES` (`packages/emmy-tools/src/native-tools.ts`):
+
+| # | Tool | Description |
+|---|------|-------------|
+| 1 | **read** | Read a file; each line tagged with an 8-hex content hash for hash-anchored edits |
+| 2 | **write** | Atomic file overwrite (open → writeFile → fsync → close) |
+| 3 | **edit** | Hash-anchored edit — references line hashes from the last `read`; stale hashes rejected |
+| 4 | **bash** | Shell command execution (YOLO mode, with builtin + user-extensible denylist) |
+| 5 | **grep** | ripgrep-style pattern search |
+| 6 | **find** | Filesystem find (path, name, type filters) |
+| 7 | **ls** | Directory listing |
+| 8 | **web_fetch** | HTTP GET → markdown (allowlist-gated per profile, plus recent-search-URL bypass) |
+| 9 | **web_search** | Open web search via local SearxNG (conditional — only when profile enables it) |
+
+## Runtime Discovery Flow
+
+The discovery happens in **`packages/emmy-ux/src/session.ts`** inside `createEmmySession()`:
+
+1. **`buildNativeToolDefs(nativeToolOpts)`** is called. Internally, this:
+   - Calls `registerNativeTools()` with a **collector shim** (`{ registerTool: spec => collected.push(spec) }`) that captures every `PiToolSpec` emission
+   - Maps each captured spec through **`toolSpecToDefinition()`** (in `tool-definition-adapter.ts`), which converts the Emmy-internal `{name, description, parameters, invoke}` shape into a pi 0.68-compatible `ToolDefinitionLike` with `{name, label, description, parameters, execute(...)}`
+   - Returns `ToolDefinitionLike[]`
+
+2. **`NATIVE_TOOL_NAMES`** is used as a **collision guard set** — when MCP tools are registered via `buildMcpToolDefs()`, any MCP tool whose name matches a native tool name is skipped (D-15 anti-shadowing rule)
+
+3. The final **`customTools`** array is assembled as:
+   ```
+   [...nativeTools, ...mcpTools, ...memoryTools]
+   ```
+   (plus the `Agent` subagent tool if the profile has personas configured)
+
+4. This array is passed to **`createAgentSessionFromServices({ customTools })`** — pi's session constructor — making it the authoritative tool registry
+
+5. Separately, the tool descriptions are also **enumerated in the system prompt** (the `# Tools available` section in `toolDefsText`) so the LLM knows what tools exist at inference time
+
+### Conditional Registration
+
+- **`web_search`**: Only registered when `profile.harness.tools.web_search.enabled === true` AND env kill-switches (`EMMY_WEB_SEARCH=off`, `EMMY_TELEMETRY=off`) are not engaged
+- **`memory`**: Only registered when the profile declares a `harness.context.memory` block and `resolvedMemoryConfig.enabled` is true
+- **`Agent`** (subagent): Only registered when the profile has `subagents.enabled: true` with personas defined
