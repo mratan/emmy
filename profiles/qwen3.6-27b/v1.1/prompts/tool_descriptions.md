@@ -1,6 +1,6 @@
 # Native tool descriptions
 
-Nine tools are always available (eight Phase-2-stable + `web_search` added in Phase 3.1). Call exactly one per assistant turn.
+Ten tools are always available (eight Phase-2-stable + `web_search` added in Phase 3.1 + `memory` added in Phase 04.4). Call exactly one per assistant turn.
 
 ## read
 
@@ -63,6 +63,20 @@ information, latest versions, docs, or answers not in your training;
 then follow up with `web_fetch` on any returned URL (bypass preserves
 air-gap — only search-returned URLs bypass the allowlist). Args:
 `query` (required), optional `max_results` (1-50, default 10).
+
+## memory
+
+Read and write notes that persist across sessions. Two scopes via path
+prefix: `/memories/project/...` for repo-specific knowledge (e.g. project
+conventions, hard-won discoveries, dead-ends to avoid), `/memories/global/...`
+for cross-project preferences. Six commands: `view` (read or list), `create`
+(new file or overwrite), `str_replace` (in-place edit), `insert` (line-based
+insert), `delete`, `rename`. Check what's there with `view /memories/project`
+before non-trivial work; write notes ONLY when a discovery would help a future
+session — load-bearing facts (API quirks, project conventions, counter-intuitive
+findings), not narrative ("then I fixed the bug"). Args: `command` (required:
+view|create|str_replace|insert|delete|rename), `path` (required), plus
+command-specific args per the schema.
 
 ## Style
 

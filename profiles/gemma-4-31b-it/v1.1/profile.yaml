@@ -9,7 +9,7 @@ profile:
     \ mirroring Qwen v3.1's daily-driver lock-in (>40 GiB system headroom on 128 GiB\
     \ UMA)."
   created: '2026-04-25'
-  hash: sha256:eebba605eceaa691e3e91f4505361f7d767744db1a5032a1d329d8cc9519ebc7
+  hash: sha256:7faa8a7e94a1da806216c43903082f19d03bd3ed371221c58da9addca1d7ac49
   hash_algorithm: sha256
   hash_manifest_version: 1
   tags:

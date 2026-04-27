@@ -825,6 +825,22 @@ export async function createEmmySession(
 				". Returns {title, url, snippet, engine}[] with upstream-engine fallback. Use before web_fetch to look up current info / latest versions / docs.",
 		);
 	}
+	// Phase 04.4 — advertise the memory tool when the profile enables it.
+	// This was the V1 adoption blocker surfaced post-merge: the tool was
+	// registered as a customTool and reached vLLM in the OpenAI tools array,
+	// but Qwen heavily follows this hand-curated "Tools available" enumeration
+	// in the system prompt and never reached for the un-listed memory tool
+	// (V3 dry-run captured 0/5 memory.view calls). Mirror the web_search
+	// pattern: check the raw profile block + EMMY_MEMORY_OFF kill-switch
+	// equivalent (matches buildMemoryTool's gate at session.ts:970-984).
+	const _memCfg = (opts.profile.harness.context as { memory?: { enabled?: boolean } } | undefined)?.memory;
+	const memoryActiveInPrompt =
+		_memCfg?.enabled === true && process.env.EMMY_MEMORY_OFF !== "1";
+	if (memoryActiveInPrompt) {
+		toolDefLines.push(
+			"- memory(command, path, ...): read and write notes that persist across sessions. Two scopes via path prefix: /memories/project/... for repo-specific knowledge (project conventions, hard-won discoveries, dead-ends), /memories/global/... for cross-project preferences. Six commands: view, create, str_replace, insert, delete, rename. Check what's there with view /memories/project before non-trivial work; write notes ONLY when a discovery would help a future session — load-bearing facts (API quirks, conventions, counter-intuitive findings), not narrative.",
+		);
+	}
 	const toolDefsText = toolDefLines.join("\n");
 
 	// 5. Assemble prompt + emit SHA-256 audit trail (HARNESS-06 / CONTEXT-04).
