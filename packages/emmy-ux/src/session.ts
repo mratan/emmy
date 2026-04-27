@@ -42,6 +42,8 @@ import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
+import { SpanStatusCode, trace } from "@opentelemetry/api";
+
 import { registerEmmyProvider, type ProfileSnapshot } from "@emmy/provider";
 import {
 	emitEvent,
@@ -346,49 +348,82 @@ async function buildRealPiRuntime(
 	// packages/emmy-provider/src/before-request-hook.ts). The model never emits
 	// <think> blocks on a live Phase-3 wire path; render-time stripping is no
 	// longer required and would mask future regressions.
+	// Phase 04.5 plan 07 followup — Level 1 of the LOCKED 4-level trace tree
+	// (`parent_session → agent.tool.Agent → subagent.<persona> → child`). The
+	// architecture comment in `packages/emmy-tools/src/subagent/otel.ts:5`
+	// declares this level "owned by emmy-ux's session.ts". Without it, the
+	// Agent tool's `withAgentToolSpan` opens a fresh trace because there is
+	// no active parent span to inherit from — V8 4-level shape fails (W1).
+	// Wrapping the runPrint body in `tracer.startActiveSpan(...)` activates
+	// the span as the AsyncLocalStorage-current span for the entire run, so
+	// subsequent tool dispatches (which call OTel `startActiveSpan` inside
+	// `withAgentToolSpan` / `withSubagentSpan`) inherit trace + parent.
+	const sessionTracer = trace.getTracer("emmy-session");
 	const runPrint = async (
 		prompt: string,
 		opts?: { mode: "text" | "json" },
 	): Promise<{ text: string; messages: unknown[] }> => {
 		const mode = opts?.mode ?? "text";
-		const collectedEvents: unknown[] = [];
-		return new Promise<{ text: string; messages: unknown[] }>((resolve, reject) => {
-			let done = false;
-			const onEvent = (event: unknown): void => {
-				const e = event as { type?: string };
-				if (!e?.type) return;
-				if (mode === "json") collectedEvents.push(event);
-				if (e.type === "agent_end" && !done) {
-					done = true;
-					const messages =
-						(event as { messages?: unknown[] }).messages ?? [];
-					// Find the last assistant message's concatenated text content.
-					let text = "";
-					for (let i = messages.length - 1; i >= 0; i--) {
-						const m = messages[i] as {
-							role?: string;
-							content?: Array<{ type?: string; text?: string }>;
+		return await sessionTracer.startActiveSpan(
+			"parent_session",
+			{
+				attributes: {
+					"gen_ai.conversation.id": sessionId ?? "<unknown>",
+					"emmy.session.mode": mode,
+				},
+			},
+			async (span) => {
+				const collectedEvents: unknown[] = [];
+				try {
+					return await new Promise<{ text: string; messages: unknown[] }>((resolve, reject) => {
+						let done = false;
+						const onEvent = (event: unknown): void => {
+							const e = event as { type?: string };
+							if (!e?.type) return;
+							if (mode === "json") collectedEvents.push(event);
+							if (e.type === "agent_end" && !done) {
+								done = true;
+								const messages =
+									(event as { messages?: unknown[] }).messages ?? [];
+								// Find the last assistant message's concatenated text content.
+								let text = "";
+								for (let i = messages.length - 1; i >= 0; i--) {
+									const m = messages[i] as {
+										role?: string;
+										content?: Array<{ type?: string; text?: string }>;
+									};
+									if (m?.role === "assistant" && Array.isArray(m.content)) {
+										text = m.content
+											.filter((c) => c.type === "text" && typeof c.text === "string")
+											.map((c) => c.text as string)
+											.join("");
+										break;
+									}
+								}
+								resolve({ text, messages: mode === "json" ? collectedEvents : messages });
+							}
 						};
-						if (m?.role === "assistant" && Array.isArray(m.content)) {
-							text = m.content
-								.filter((c) => c.type === "text" && typeof c.text === "string")
-								.map((c) => c.text as string)
-								.join("");
-							break;
-						}
-					}
-					resolve({ text, messages: mode === "json" ? collectedEvents : messages });
+						session.subscribe(onEvent);
+						// session.prompt() returns Promise<void>; errors rejected below.
+						session.prompt(prompt).catch((err: unknown) => {
+							if (!done) {
+								done = true;
+								reject(err instanceof Error ? err : new Error(String(err)));
+							}
+						});
+					});
+				} catch (err) {
+					span.recordException(err as Error);
+					span.setStatus({
+						code: SpanStatusCode.ERROR,
+						message: (err as Error)?.message ?? String(err),
+					});
+					throw err;
+				} finally {
+					span.end();
 				}
-			};
-			session.subscribe(onEvent);
-			// session.prompt() returns Promise<void>; errors rejected below.
-			session.prompt(prompt).catch((err: unknown) => {
-				if (!done) {
-					done = true;
-					reject(err instanceof Error ? err : new Error(String(err)));
-				}
-			});
-		});
+			},
+		);
 	};
 
 	// 8. Build the adapter. Plan 03-01 flips registerProvider + registerTool

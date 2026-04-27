@@ -85,13 +85,16 @@ async function main(): Promise<void> {
 	mkdirSync(RUNS_DIR, { recursive: true });
 
 	// --- OTel setup: in-memory exporter + AsyncHooks context manager. ---
+	// IMPORTANT — order matters. Install the context manager FIRST so the
+	// provider's tracers, when they call context.active() inside
+	// startActiveSpan, get the AsyncHooksContextManager from the get-go and
+	// AsyncLocalStorage propagation is live for every span we create.
+	context.setGlobalContextManager(new AsyncHooksContextManager().enable());
 	const exporter = new InMemorySpanExporter();
 	const provider = new BasicTracerProvider({
 		spanProcessors: [new SimpleSpanProcessor(exporter)],
 	});
-	context.setGlobalContextManager(new AsyncHooksContextManager().enable());
 	trace.setGlobalTracerProvider(provider);
-	const tracer = trace.getTracer("emmy-v8");
 
 	// --- Profile + session. ---
 	if (!existsSync(PROFILE_PATH)) {
@@ -107,29 +110,32 @@ async function main(): Promise<void> {
 	console.log(`[V8] prefix_cache_hits_total BEFORE: ${prefixHitsBefore ?? "unavailable"}`);
 
 	// --- Drive the parent through createEmmySession + ONE prompt. ---
+	// As of the 04.5-07 followup, session.ts's runPrint owns the
+	// `parent_session` span (Level 1 of the LOCKED 4-level shape, per
+	// `packages/emmy-tools/src/subagent/otel.ts:5`). The script no longer
+	// opens its own — that would produce two same-named spans and a
+	// 5-level tree. We just call runPrint and rely on the runtime's own
+	// span ownership.
 	console.log(`[V8] starting parent session…`);
 	let parentText = "";
 	try {
-		await tracer.startActiveSpan("parent_session", async (parent) => {
-			const out = await createEmmySession({
-				profile,
-				baseUrl: VLLM_BASE_URL,
-				cwd,
-				mode: "json",
-				sessionId,
-				telemetryEnabled: true,
-			});
-			console.log(`[V8] session up — sp_ok=${out.spOkOk} transcript=${out.transcriptPath}`);
-
-			const prompt = `Use the Agent tool with subagent_type="research" and prompt="find usages of customTools in the @emmy/tools package; return a 4-sentence summary citing file:line".`;
-			if (!out.runtime.runPrint) {
-				throw new Error("runtime.runPrint not available — V8 requires a print/json-mode session");
-			}
-			const res = await out.runtime.runPrint(prompt, { mode: "json" });
-			parentText = res.text ?? "";
-			console.log(`[V8] parent final text (first 300 chars): ${parentText.slice(0, 300)}`);
-			parent.end();
+		const out = await createEmmySession({
+			profile,
+			baseUrl: VLLM_BASE_URL,
+			cwd,
+			mode: "json",
+			sessionId,
+			telemetryEnabled: true,
 		});
+		console.log(`[V8] session up — sp_ok=${out.spOkOk} transcript=${out.transcriptPath}`);
+
+		const prompt = `Use the Agent tool with subagent_type="research" and prompt="find usages of customTools in the @emmy/tools package; return a 4-sentence summary citing file:line".`;
+		if (!out.runtime.runPrint) {
+			throw new Error("runtime.runPrint not available — V8 requires a print/json-mode session");
+		}
+		const res = await out.runtime.runPrint(prompt, { mode: "json" });
+		parentText = res.text ?? "";
+		console.log(`[V8] parent final text (first 300 chars): ${parentText.slice(0, 300)}`);
 	} catch (err) {
 		console.error(`[V8] dispatch FAILED:`, err);
 		process.exit(1);

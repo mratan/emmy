@@ -46,20 +46,100 @@ Root cause is an architectural gap, not an OTel-helper bug:
 
 ## Why this is real, not a script bug
 
-The fix cannot live in the V8 script alone. Two paths forward:
+The fix cannot live in the V8 script alone. Two paths considered:
 
 1. **Make session.ts own the parent_session span** (matches the architecture
-   comment in `otel.ts:5`). createEmmySession would wrap its run-loop in
-   `tracer.startActiveSpan("parent_session", ...)` so any tool-call dispatch
-   from within the session is parented to it. The V8 script then verifies the
-   shape on the existing emmy provider/exporter, no external span.
+   comment in `otel.ts:5`).
 2. **Lift the parent_session ownership to the runtime callsite (pi-emmy.ts
    bin)** — open it before `createEmmySession`, but coordinate with `initOtel`
    so the context-manager activation isn't lost. Brittle.
 
-Path (1) is the architecturally consistent choice (it's literally what the
-otel.ts comment says) and matches the implementation pattern in `withSubagentSpan`
-which uses `context.active()` to capture the parent span context.
+Path (1) was implemented (commit history below). It works for Level 1 — a
+`parent_session` span is created, attributed with `gen_ai.conversation.id`,
+and lives for the duration of `runPrint`. **But the V8 trace tree STILL
+shows agent.tool.Agent in a separate trace**, captured 2026-04-26 post-Option-X:
+
+```
+parent_session   [trace=b584da73 span=975ccc7e ROOT]                ← session.ts opens
+agent.tool.Agent [trace=46636a58 span=c1e18bcc parent=undefined]    ← still orphaned
+  subagent.research [trace=46636a58 span=0e96f8d3 parent=agent.tool.Agent]
+```
+
+`tool.parentSpanId === undefined` means at the time `withAgentToolSpan` ran,
+`context.active()` returned an empty context — no active span — even though
+session.ts's `parent_session` is still alive at that point.
+
+## Root cause (deeper than initial estimate)
+
+AsyncLocalStorage propagation is breaking somewhere between
+`session.prompt(prompt)` and the Agent tool's `execute()` callback. Most
+likely candidates (in order of suspicion):
+
+1. **pi-coding-agent's HTTP boundary in `session.prompt`.** `pi-ai`'s
+   provider transport uses `fetch` (Node 22 undici). Node should preserve
+   ALS across fetch awaits, but there are documented edge cases — e.g.
+   when response handling routes through an `EventEmitter.emit()` callsite,
+   the active context becomes the emitter's, not the original handler's.
+   The H5 spike confirmed ALS works through pi's tool dispatch BUT used
+   a faux in-process provider — H9 explicitly *did not* exercise pi-mono's
+   real HTTP provider chain (SPIKE-RESULTS.md § "What was not tested in H9").
+   V8 is the first end-to-end exercise of ALS-over-HTTP-via-pi, and it
+   shows the gap.
+
+2. **vLLM stream-response handler internals.** The provider handler in pi
+   parses streamed tool_call chunks. Streaming response handlers may run
+   in the context of whichever code added the chunk listener — which may
+   not be the parent_session active context.
+
+3. **OTel SDK's lazy context manager binding.** Tracers cache resolved
+   context-manager refs. Even though install order is fixed (manager
+   first, provider second), if a tracer is constructed before either is
+   live, it binds to the no-op default. We checked this in v8 script;
+   pi is its own consumer.
+
+## What Path (1) DID accomplish
+
+- Level 1 of the LOCKED 4-level shape now lives in the right architectural
+  place (session.ts owns it; matches `otel.ts:5` comment).
+- The V8 script no longer needs an external compensating span — removed.
+- `parent_session` carries `gen_ai.conversation.id` + `emmy.session.mode`
+  attributes, so when the propagation fix lands, the level-1 span will
+  already be correctly attributed.
+- The run-loop body has explicit error handling via `recordException` +
+  `setStatus(ERROR)` for any uncaught throw out of `session.prompt`.
+
+This is real progress that should not be reverted. The remaining gap is
+the level-1↔level-2 trace linkage.
+
+## What Path (1) revealed that needs a follow-up plan
+
+The W1 invariant "Pitfall #18 mitigation via observable trace tree" is
+NOT achievable by ALS-only propagation through pi-coding-agent's real
+provider chain. The follow-up plan needs to:
+
+A. **Explicit context threading.** Capture `context.active()` inside
+   `runPrint` after `parent_session` opens; pass it down to
+   `createSubAgentTool` via a session-scoped holder; have
+   `withAgentToolSpan` wrap inner in `context.with(capturedCtx, …)`
+   instead of relying on `context.active()`. This bypasses ALS entirely
+   for the level-1↔level-2 hop.
+
+B. **Wire-level traceparent capture verification.** The H9 spike author
+   explicitly flagged this in SPIKE-RESULTS.md § "Implications for
+   Phase 4.5 V4": "Phase 4.5 verification V4 (OTel propagation) will
+   need to capture wire-level traceparent headers rather than rely on
+   prefix-cache hit-rate as a side-channel signal." V8 must assert on
+   the actual `traceparent` HTTP header on the child's vLLM POST.
+
+C. **Investigation: where does pi lose ALS?** A small instrumentation
+   spike inside pi-coding-agent's response stream handler should pin
+   down the exact callsite where context is reset. May reveal that pi
+   itself needs a small upstream contribution (and we should NOT fork
+   pi per CLAUDE.md "MCP via pi extension, not a fork").
+
+ETA on this follow-up plan: real plan-phase work, not a 30-min wrap.
+Recommend a 04.5-08 phase or filing as 04.5-followup with a proper
+PLAN.md.
 
 ## Fixes applied during this run (defects in 04.5-07 Task 2's V8 script)
 
