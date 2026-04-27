@@ -35,6 +35,16 @@
 //   (e) [Plan 03-05] input event hook registration — no-op stub here; future
 //       plan fills the body.
 
+// TODO(04.5-followup): pi 0.68 lacks a tool_render hook for nested transcripts
+// (per Plan 04.5-05 + Plan 04.5-07 Task 2 investigation). The SubagentBlock
+// renderer + subscribeChildSession event-bridge ship in
+// `packages/emmy-ux/src/components/{subagent-block.ts, subagent-event-bridge.ts}`
+// ready for use; live wiring requires either a pi 0.68+ extension hook
+// (registerToolRenderer / subscribeToolEvents) or a dispatcher-side event bus
+// that the TUI subscribes to. Tracked as a phase 04.5 followup. The OTel
+// 4-level trace tree (Plan 04.5-03) is the authoritative observability surface
+// in v1; SubagentBlock TUI rendering is the secondary user-visible surface.
+
 import { existsSync, readFileSync } from "node:fs";
 import { join as joinPath } from "node:path";
 

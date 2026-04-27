@@ -705,3 +705,85 @@ The classifier lives in `packages/emmy-ux/tests/v4-prefix-cache-arch-aware.test.
 - **Phase 4 operator-gated items → `.planning/phases/04-gemma-4-profile-profile-system-maturity/04-CLOSEOUT.md § Carry-forward / deferrals`** (KV bisection + thermal replay + SC-1 / SC-3 / SC-4 walkthroughs; scaffolds at `runs/phase4-{kv,thermal,sc1,sc3,sc4}/PENDING.md`)
 
 `/gsd-audit-uat` surfaces all currently-open UAT items across phases.
+
+---
+
+## Sub-agents
+
+Emmy ships a Claude Code-style `Agent` tool that lets the parent model dispatch focused sub-tasks to a child session. The child runs to completion and returns ONLY a text summary — its intermediate tool calls do NOT pollute the parent's context. Every dispatch is observable.
+
+### How dispatch works
+
+The parent's model invokes the `Agent` tool via tool-call:
+```json
+{"name": "Agent", "arguments": {"subagent_type": "research", "description": "find usages of customTools", "prompt": "Search the @emmy/tools package..."}}
+```
+
+The harness:
+1. Looks up the persona (`research` / `code_reviewer` / `bash_runner`) in the active profile's `harness.yaml subagents.personas` block.
+2. Spawns a child `AgentSession` per the persona's `pattern` (`lean` = shared services; `persona` = per-persona services + parent's cwd + persona AGENTS.md injected via resourceLoaderOptions.agentsFilesOverride).
+3. Disables auto-compaction on the child.
+4. Runs ONE turn against the child, captures the final assistant text, disposes the child.
+5. Returns the text to the parent's model as a tool result.
+
+### Persona registry
+
+Personas live in each profile's bundle:
+```
+profiles/<name>/<version>/
+  harness.yaml                        # subagents: { enabled, max_concurrent, ..., personas: { ... } }
+  subagents/<persona>/
+    AGENTS.md                         # persona's system prompt (pi-minimalism: ~100-300 tokens, < 230 words)
+```
+
+The 3 built-in personas are shipped with all 4 of Emmy's first-class profiles. Persona files are profile-scoped — model-shaped logic stays out of code.
+
+### Concurrency cap + long-context rule
+
+- Default `max_concurrent: 2` (vLLM hardware ceiling on the GB10 / 128 GB UMA box; default `rejectOverCap: true` — over-cap dispatches are REJECTED with `agent.dispatch.rejected` telemetry event).
+- When parent input tokens exceed `long_context_serialize_threshold_tokens` (default 40000), dispatches SERIALIZE — effective cap = 1 — to prevent KV-cache contention with the parent.
+- Telemetry events fire on all branches: `agent.dispatch.queued` (cap reached, waited), `agent.dispatch.serialized` (long-context branch), and `agent.dispatch.rejected` (over-cap, hard reject).
+
+### Observability (Pitfall #18)
+
+Every dispatch emits the LOCKED 4-level OTel trace tree, parented to the parent's session span:
+```
+parent_session_span
+  └── agent.tool.Agent                         (gen_ai.tool.name=Agent, gen_ai.tool.persona=research)
+        └── subagent.research                  (gen_ai.agent.name=research, gen_ai.conversation.id=<parent_session_id>)
+              ├── child_invoke_agent
+              │     ├── child_chat_completion  (POST /v1/chat/completions; auto-instrumented HTTP)
+              │     ├── child_tool_call.grep
+              │     └── child_tool_call.read
+              └── (agent_end)
+```
+
+The explicit `agent.tool.Agent` span is the level-2 link (Plan 04.5-03 W1 fix) — without it the trace tree would skip the per-tool-call layer.
+
+Inspect via Langfuse (http://localhost:3000 → Traces) or the JSONL stream at `runs/<iso>-<sha>/events.jsonl`.
+
+### Forensics — sidecar index
+
+Every dispatch appends one line to `<parentSessionDir>/session-<parentSessionId>.subagents.jsonl` with `parent_span_id`, `child_session_id`, `persona`, `pattern`, `started_at`, `ended_at`, `ok`, `trace_id`. This is the offline replay/audit record — use `jq` to filter by persona or trace_id.
+
+When a persona has `persist_transcript: true`, the child's full JSONL also lands at `<parentCwd>/.emmy/subagents/<persona>-<timestamp>-<id>/<sessionId>.jsonl`.
+
+### Prefix-cache hit rate is INFORMATIONAL (Pitfall #22)
+
+The H9 spike on Qwen 3.6 35B-A3B v3.1 observed 0% prefix-cache hit rate during real wire-level probes. vLLM marks prefix caching "experimental" for Mamba-hybrid models in this version. The original "Pattern A = free prefix-cache hits" rationale has been WITHDRAWN — Pattern A's benefit is now solely the ~5 ms instantiation cost (vs Pattern B's ~50 ms).
+
+**Do NOT gate Agent dispatch on prefix-cache hit rate.** It is captured for inspection but never blocks. When vLLM upstream graduates Mamba prefix caching out of "experimental," re-measure per profile and tighten the gate then.
+
+### Disabling sub-agents
+
+Set `subagents.enabled: false` in any profile's `harness.yaml` to remove the `Agent` tool from that profile's customTools registry. The 12 AGENTS.md files remain on disk but are never read.
+
+### V8 verification
+
+The end-to-end smoke is `packages/emmy-ux/scripts/v8-real-deal-e2e.ts`. Operator runs:
+```bash
+bash start_emmy.sh                  # boot vLLM + qwen3.6-35b-a3b@v3.1
+bun run packages/emmy-ux/scripts/v8-real-deal-e2e.ts
+```
+
+On success, evidence lands in `.planning/phases/04.5-observable-sub-agent-dispatch-v1-inserted/runs/v8-trace-tree.txt` + `v8-sidecar-sample.jsonl`. These are committed as the phase-close artifact.

@@ -1,0 +1,279 @@
+// Phase 04.5 Plan 01 — SubAgent dispatcher.
+//
+// Pattern A vs B branch — LOCKED in CONTEXT.md §decisions (REVISED 2026-04-26).
+//
+// Pattern A (lean): child reuses parent's services by reference. ~5 ms instantiation per H8.
+//   Used for utility sub-agents (small fetches, one-off greps).
+//
+// Pattern B (persona): child gets per-persona services with cwd=parentCwd, NOT
+//   personaDir. The persona's AGENTS.md is injected via
+//   resourceLoaderOptions.agentsFilesOverride so pi's tool default cwd
+//   (read/grep/find/ls) operates on the USER'S project. This decouples the
+//   persona's prompt source from the tool cwd — the bug we caught in checker B2.
+//
+// Both patterns: child is dispose()'d in finally. setAutoCompactionEnabled(false)
+// is called BEFORE prompt() so children don't compact mid-run (H7 confirmed).
+//
+// Tool allowlist: pass-through to pi's `tools` option. H2 + spike confirm
+// pi rejects disallowed tools AT REGISTRATION TIME (the LOCKED V3 contract).
+
+import { readFileSync } from "node:fs";
+import { resolve as pathResolve } from "node:path";
+import {
+	createAgentSessionFromServices,
+	createAgentSessionServices,
+	SessionManager,
+	type AgentSessionServices,
+} from "@mariozechner/pi-coding-agent";
+import { context as otelContext, trace } from "@opentelemetry/api";
+import { randomUUID } from "node:crypto";
+import type { CreateSubAgentToolOpts, SubAgentSpec } from "./types";
+import { runOneTurnReturningText } from "./run-one-turn";
+import { withSubagentSpan } from "./otel";
+import { createConcurrencyGovernor, type ConcurrencyGovernor } from "./governor";
+import {
+	resolveChildSessionManager,
+	writeSidecarEntry,
+	type SidecarEntry,
+} from "./jsonl";
+
+// Plan 04.5-04 — LOCKED governor defaults (CONTEXT.md §decisions). Lazily
+// constructed when opts.governor is undefined so each Agent tool instance gets
+// its own governor (one per parent session).
+let __defaultGovernorCache = new WeakMap<object, ConcurrencyGovernor>();
+function resolveGovernor(opts: CreateSubAgentToolOpts): ConcurrencyGovernor {
+	if (opts.governor) return opts.governor;
+	let g = __defaultGovernorCache.get(opts);
+	if (!g) {
+		g = createConcurrencyGovernor({
+			maxConcurrent: 2,
+			longContextSerializeThresholdTokens: 40000,
+			rejectOverCap: true, // I3 LOCKED default
+		});
+		__defaultGovernorCache.set(opts, g);
+	}
+	return g;
+}
+
+// Test-only seam (Plan 04.5-01 dispose suite): when set, replaces the
+// real createAgentSessionFromServices call. Production code paths NEVER set
+// this — it is exclusively for installing dispose-counting wrappers in
+// `tests/subagent/dispose.test.ts`. Restore by passing `undefined`.
+type SessionFactory = typeof createAgentSessionFromServices;
+let __sessionFactoryOverride: SessionFactory | undefined;
+
+/** @internal — test-only seam, see comment above. */
+export function __setSessionFactoryForTests(factory: SessionFactory | undefined): void {
+	__sessionFactoryOverride = factory;
+}
+
+export interface DispatchSubAgentParams {
+	description: string;
+	prompt: string;
+	model?: string;
+	/** Optional abort signal — when aborted, child.abort() is called and dispose() still fires once. (B3 fix) */
+	signal?: AbortSignal;
+}
+
+export interface DispatchSubAgentResult {
+	output: string;
+	details: { persona: string; ok: boolean; pattern: "lean" | "persona" };
+}
+
+/**
+ * Dispatch a single sub-agent turn and return the child's final assistant text.
+ *
+ * Lifecycle (LOCKED):
+ *   1. Resolve services per persona.pattern.
+ *   2. Build child via createAgentSessionFromServices with `tools: persona.toolAllowlist`.
+ *   3. child.setAutoCompactionEnabled(false) — H7-validated isolation.
+ *   4. (Optional) wire abort signal forwarding to child.abort().
+ *   5. runOneTurnReturningText(child, prompt) — captures final assistant text.
+ *   6. dispose() in finally on every exit path (success, throw, abort).
+ */
+export async function dispatchSubAgent(
+	opts: CreateSubAgentToolOpts,
+	persona: SubAgentSpec,
+	params: DispatchSubAgentParams,
+): Promise<DispatchSubAgentResult> {
+	// Plan 04.5-04 — concurrency governor BEFORE the OTel span so queueing wait
+	// time does not inflate span duration. acquire() may REJECT (I3 over-cap path)
+	// — we let the rejection propagate up through index.ts's try/catch which
+	// turns it into a structured tool-error result.
+	//
+	// CONTEXT CAPTURE: snapshot the OTel context BEFORE governor.acquire's await
+	// boundary. Bun's AsyncHooks does NOT preserve OTel ALS state across some
+	// awaits (verified empirically — child trace IDs diverge). We re-attach the
+	// captured parent context inside withSubagentSpan so the subagent span is
+	// correctly parented to agent.tool.Agent regardless of what happened during
+	// the governor's queue wait.
+	const parentCtx = otelContext.active();
+	const governor = resolveGovernor(opts);
+	const parentInputTokens = opts.parentInputTokens?.();
+
+	// Plan 04.5-06 — sidecar JSONL state captured for both success and failure paths.
+	const started_at = new Date().toISOString();
+	let child_session_id = ""; // populated inside dispatchSubAgentInner
+	let child_jsonl_path: string | undefined;
+	let parent_span_id: string | undefined;
+	let trace_id: string | undefined;
+
+	let acquireOk = false;
+	let release: (() => void) | undefined;
+	let serialized = false;
+
+	try {
+		const acq = await governor.acquire({ parentInputTokens });
+		release = acq.release;
+		serialized = acq.serialized;
+		acquireOk = true;
+
+		// Plan 04.5-03 — wrap in subagent span (Level 3 of the LOCKED 4-level trace tree).
+		const result = await otelContext.with(parentCtx, async () =>
+			withSubagentSpan(
+				{ name: persona.name, pattern: persona.pattern },
+				opts.parentSessionId,
+				async (span) => {
+					span.setAttribute("emmy.subagent.serialized", serialized);
+					parent_span_id = span.spanContext().spanId;
+					trace_id = span.spanContext().traceId;
+					const inner = await dispatchSubAgentInner(opts, persona, params, (sid, jsonlPath) => {
+						child_session_id = sid;
+						child_jsonl_path = jsonlPath;
+					});
+					span.setAttribute("emmy.subagent.final_text_chars", inner.output.length);
+					return inner;
+				},
+			),
+		);
+
+		// Sidecar entry (success path).
+		writeSidecarEntry(opts.parentSessionDir, opts.parentSessionId, {
+			parent_span_id,
+			child_session_id,
+			persona: persona.name,
+			pattern: persona.pattern,
+			started_at,
+			ended_at: new Date().toISOString(),
+			child_jsonl_path,
+			trace_id,
+			ok: true,
+		});
+		return result;
+	} catch (err) {
+		// Sidecar entry (failure path) — only if we had time to assign anything meaningful.
+		// Skip if acquire failed (over-cap rejection BEFORE child instantiation).
+		if (acquireOk) {
+			writeSidecarEntry(opts.parentSessionDir, opts.parentSessionId, {
+				parent_span_id,
+				child_session_id: child_session_id || "<no-session>",
+				persona: persona.name,
+				pattern: persona.pattern,
+				started_at,
+				ended_at: new Date().toISOString(),
+				child_jsonl_path,
+				trace_id,
+				ok: false,
+			});
+		}
+		throw err;
+	} finally {
+		release?.();
+	}
+}
+
+async function dispatchSubAgentInner(
+	opts: CreateSubAgentToolOpts,
+	persona: SubAgentSpec,
+	params: DispatchSubAgentParams,
+	onChildIdentified: (childSessionId: string, childJsonlPath: string | undefined) => void,
+): Promise<DispatchSubAgentResult> {
+	let services: AgentSessionServices;
+	if (persona.pattern === "persona") {
+		if (!persona.personaDir) {
+			throw new Error(`[Agent] persona "${persona.name}" pattern="persona" requires personaDir`);
+		}
+		const personaAgentsPath = pathResolve(persona.personaDir, "AGENTS.md");
+		const personaAgentsContent =
+			persona.agentsContent ?? readFileSync(personaAgentsPath, "utf8");
+
+		// Pattern B (LOCKED — CONTEXT.md §decisions revised 2026-04-26):
+		//   cwd: opts.parentCwd  ← child's tools operate on user's project (B2 fix)
+		//   agentsFilesOverride: append persona AGENTS.md to base set (parent's CLAUDE.md/AGENTS.md preserved)
+		services = await createAgentSessionServices({
+			cwd: opts.parentCwd, // child operates on user's project
+			authStorage: opts.parentServices.authStorage, // SHARED — auth is profile-level
+			resourceLoaderOptions: {
+				agentsFilesOverride: (base: { agentsFiles: Array<{ path: string; content: string }> }) => ({
+					agentsFiles: [
+						...base.agentsFiles,
+						{ path: personaAgentsPath, content: personaAgentsContent },
+					],
+				}),
+			} as any,
+		});
+	} else {
+		services = opts.parentServices; // SHARED — Pattern A
+	}
+
+	// Plan 04.5-06 — route via resolveChildSessionManager so persistTranscript: true
+	// flips to SessionManager.create with a per-instance subdir. childSessionIdSeed
+	// is a pre-generated id used for the dirname suffix; the actual SDK-assigned
+	// child.sessionId may differ and is captured AFTER the session is built so the
+	// sidecar entry stamps the real one.
+	const childSessionIdSeed = randomUUID();
+	const { sm: sessionManager, childJsonlPath } = resolveChildSessionManager(
+		persona,
+		opts.parentCwd,
+		childSessionIdSeed,
+	);
+
+	const modelId = params.model ?? persona.modelOverride ?? "default";
+	if (params.model && persona.modelOverride && params.model !== persona.modelOverride) {
+		console.warn(
+			`[Agent] model override "${params.model}" requested but v1 is single-model; using parent's model`,
+		);
+	}
+	const model = opts.modelResolver(modelId);
+
+	const factory = __sessionFactoryOverride ?? createAgentSessionFromServices;
+	const { session: child } = await factory({
+		services,
+		sessionManager,
+		model: model as any,
+		tools: persona.toolAllowlist, // V3: pi enforces at registration time
+	} as any);
+
+	// Plan 04.5-06 — stamp child id + jsonl path on the sidecar entry the outer
+	// dispatchSubAgent owns. SDK assigns sessionId at construct time; pull it now.
+	const childSessionId = (child as any).sessionId ?? childSessionIdSeed;
+	onChildIdentified(childSessionId, childJsonlPath);
+
+	child.setAutoCompactionEnabled(false);
+
+	// Wire abort forwarding (B3 fix). When the parent's abort signal fires,
+	// call child.abort() so the child's prompt() rejection unblocks. dispose()
+	// still fires in finally below — exactly once.
+	const onAbort = () => {
+		try {
+			void child.abort?.();
+		} catch {
+			// abort() is best-effort — even if the SDK rejects, dispose() in finally cleans up.
+		}
+	};
+	if (params.signal) {
+		if (params.signal.aborted) onAbort();
+		else params.signal.addEventListener("abort", onAbort, { once: true });
+	}
+
+	try {
+		const finalText = await runOneTurnReturningText(child, params.prompt);
+		return {
+			output: finalText,
+			details: { persona: persona.name, ok: true, pattern: persona.pattern },
+		};
+	} finally {
+		if (params.signal) params.signal.removeEventListener("abort", onAbort);
+		child.dispose();
+	}
+}

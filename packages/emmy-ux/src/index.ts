@@ -93,4 +93,8 @@ export {
 export { loadRoutes, RoutesLoadError } from "./routes-loader";
 export type { RouteRef, RoutesConfig } from "./routes-loader";
 
+// Phase 04.5 Plan 02 — persona loader for the SubAgentTool dispatcher.
+export { loadPersonaConfig, PersonaLoadError } from "./persona-loader";
+export type { PersonaLoadErrorCode } from "./persona-loader";
+
 export const PACKAGE_VERSION = "0.1.0";

@@ -78,3 +78,31 @@ agent_loop:
 advanced_settings_whitelist:
   - reasoning_effort                             # Aider allowlist pattern; per-call without engine restart
   - thinking_budget                              # Aider allowlist pattern
+
+subagents:
+  enabled: true
+  max_concurrent: 2                              # hardware-imposed cap
+  long_context_serialize_threshold_tokens: 40000 # parent input > 40K → serialize
+  default_memory_scope: "project"                # project | global | none
+  personas:
+    research:
+      description: "Investigate a specific question without polluting parent's context."
+      pattern: "persona"
+      persona_dir: "subagents/research"
+      tool_allowlist: ["read", "grep", "find", "ls"]
+      model_override: null
+      max_turns: 10
+      persist_transcript: false
+    code_reviewer:
+      description: "Review a diff or file for bugs and style."
+      pattern: "persona"
+      persona_dir: "subagents/code-reviewer"
+      tool_allowlist: ["read", "grep"]
+      max_turns: 5
+      persist_transcript: false
+    bash_runner:
+      description: "Execute a bash task and return the output."
+      pattern: "lean"
+      tool_allowlist: ["bash", "read"]
+      max_turns: 3
+      persist_transcript: false
