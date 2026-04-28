@@ -306,7 +306,7 @@ def main(argv: list[str] | None = None) -> int:
         prog="scripts/throughput_sweep.py",
         description="SC-1 throughput-sweep harness (Plan 01-06, SC-1 gap closure)",
     )
-    ap.add_argument("--profile", default="profiles/qwen3.6-35b-a3b/v1")
+    ap.add_argument("--profile", default="profiles/gemma-4-26b-a4b-it/v2")
     ap.add_argument("--samples", type=int, default=3)
     ap.add_argument("--max-tokens", type=int, default=500)
     ap.add_argument("--port", type=int, default=8002)

@@ -29,7 +29,7 @@ describe("EmmyProfileStampProcessor — absent turn context (backward-compat)", 
 		const provider = new BasicTracerProvider({
 			spanProcessors: [
 				new EmmyProfileStampProcessor({
-					id: "qwen3.6-35b-a3b",
+					id: "gemma-4-26b-a4b-it",
 					version: "v3.1",
 					hash: "sha256:phase3base",
 				}),
@@ -45,7 +45,7 @@ describe("EmmyProfileStampProcessor — absent turn context (backward-compat)", 
 
 		const attrs = memExporter.getFinishedSpans()[0]!.attributes;
 		// Exactly these 3 base keys:
-		expect(attrs["emmy.profile.id"]).toBe("qwen3.6-35b-a3b");
+		expect(attrs["emmy.profile.id"]).toBe("gemma-4-26b-a4b-it");
 		expect(attrs["emmy.profile.version"]).toBe("v3.1");
 		expect(attrs["emmy.profile.hash"]).toBe("sha256:phase3base");
 		// And NONE of the Phase-4 keys.

@@ -84,7 +84,7 @@ function makeStubPi(): {
   };
 }
 
-const PROFILE_REF = { id: "qwen3.6-35b-a3b", version: "v2", hash: "sha256:aaaaaaaa" };
+const PROFILE_REF = { id: "gemma-4-26b-a4b-it", version: "v2", hash: "sha256:aaaaaaaa" };
 
 beforeEach(() => {
   mockState.toolsByServer = {};

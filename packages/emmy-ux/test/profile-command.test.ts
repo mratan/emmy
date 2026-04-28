@@ -281,9 +281,9 @@ describe("registerProfileCommand — registration + basic flow", () => {
 		});
 
 		const ctx = makeCtx();
-		await registered[0]!.handler("qwen3.6-35b-a3b@v3.1-reason", ctx);
-		expect(resolveArgs.name).toBe("qwen3.6-35b-a3b");
-		expect(resolveArgs.variant).toBe("v3.1-reason");
+		await registered[0]!.handler("gemma-4-26b-a4b-it@v2.1", ctx);
+		expect(resolveArgs.name).toBe("gemma-4-26b-a4b-it");
+		expect(resolveArgs.variant).toBe("v2.1");
 	});
 
 	test("getArgumentCompletions delegates to profileIndex.complete → AutocompleteItem[]", async () => {
@@ -293,9 +293,9 @@ describe("registerProfileCommand — registration + basic flow", () => {
 			port: 8002,
 			profileIndex: makeIndex({}, {
 				gem: ["gemma-4-26b-a4b-it"],
-				"qwen3.6-35b-a3b@v3": [
-					"qwen3.6-35b-a3b@v3",
-					"qwen3.6-35b-a3b@v3.1",
+				"gemma-4-26b-a4b-it@v3": [
+					"gemma-4-26b-a4b-it@v3",
+					"gemma-4-26b-a4b-it@v3.1",
 				],
 			}),
 			runSwap: async () => ({ exit: 0 }),
@@ -309,14 +309,14 @@ describe("registerProfileCommand — registration + basic flow", () => {
 			{ value: "gemma-4-26b-a4b-it", label: "gemma-4-26b-a4b-it" },
 		]);
 
-		const variants = (await getAC("qwen3.6-35b-a3b@v3")) as Array<{
+		const variants = (await getAC("gemma-4-26b-a4b-it@v3")) as Array<{
 			value: string;
 			label: string;
 		}>;
 		expect(variants.length).toBe(2);
 		expect(variants.map((v) => v.value)).toEqual([
-			"qwen3.6-35b-a3b@v3",
-			"qwen3.6-35b-a3b@v3.1",
+			"gemma-4-26b-a4b-it@v3",
+			"gemma-4-26b-a4b-it@v3.1",
 		]);
 
 		// Empty results → null (pi contract).

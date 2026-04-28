@@ -32,7 +32,7 @@ function completedTurn() {
 	return {
 		turn_id: "S-1:0",
 		session_id: "S-1",
-		profile_id: "qwen3.6-35b-a3b",
+		profile_id: "gemma-4-26b-a4b-it",
 		profile_version: "v2",
 		profile_hash:
 			"24be3eea0067102f1f61bd32806a875d019fe02cb114697cd5f3ca4e39985d8b",

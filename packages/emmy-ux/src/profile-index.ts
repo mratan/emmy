@@ -36,7 +36,7 @@ export interface ProfileIndex {
 	/**
 	 * Return autocomplete tokens matching the given prefix.
 	 *   - "ge" → ["gemma-4-26b-a4b-it"]
-	 *   - "qwen3.6-35b-a3b@v3" → ["qwen3.6-35b-a3b@v3", "qwen3.6-35b-a3b@v3.1", …]
+	 *   - "gemma-4-26b-a4b-it@v3" → ["gemma-4-26b-a4b-it@v3", "gemma-4-26b-a4b-it@v3.1", …]
 	 */
 	complete(prefix: string): string[];
 	/**

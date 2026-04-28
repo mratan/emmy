@@ -1,8 +1,11 @@
 // Phase 04.5 Plan 02 Task 3 — integration test against the real shipped profiles.
 //
-// Catches yaml typos, persona_dir drift, and AGENTS.md missing across all 4
-// profiles in one shot. Asserts the LOCKED toolAllowlist values + B2 agentsContent
-// pre-loading invariants for Pattern B personas.
+// Catches yaml typos, persona_dir drift, and AGENTS.md missing across the
+// shipped profiles in one shot. Asserts the LOCKED toolAllowlist values + B2
+// agentsContent pre-loading invariants for Pattern B personas.
+// 2026-04-28: Qwen 35B-A3B MoE dropped from active stack per V-RESULTS-v8;
+// this matrix shrank 4 → 5 entries (Gemma MoE v2 + v2.1 audit/operational
+// pair + Qwen 27B dense v1.1 + Gemma 31B dense v1.1 + v1.2).
 
 import { describe, expect, test } from "bun:test";
 import { resolve } from "node:path";
@@ -11,13 +14,14 @@ import { loadPersonaConfig } from "../src/persona-loader";
 const REPO_ROOT = resolve(import.meta.dir, "../../..");
 
 const PROFILES = [
-	{ name: "qwen3.6-35b-a3b", version: "v3.1" },
-	{ name: "qwen3.6-27b", version: "v1.1" },
-	{ name: "gemma-4-26b-a4b-it", version: "v2" },
-	{ name: "gemma-4-31b-it", version: "v1.1" },
+	{ name: "gemma-4-26b-a4b-it", version: "v2" },     // KV-bisection audit
+	{ name: "gemma-4-26b-a4b-it", version: "v2.1" },   // operational daily-driver
+	{ name: "qwen3.6-27b", version: "v1.1" },          // dense Qwen sibling
+	{ name: "gemma-4-31b-it", version: "v1.1" },       // dense Gemma 128K
+	{ name: "gemma-4-31b-it", version: "v1.2" },       // dense Gemma 256K
 ] as const;
 
-describe("loadPersonaConfig — integration over all 4 shipped profiles", () => {
+describe("loadPersonaConfig — integration over shipped profiles", () => {
 	for (const profile of PROFILES) {
 		const profilePath = resolve(REPO_ROOT, "profiles", profile.name, profile.version);
 

@@ -54,7 +54,7 @@ describe("postChat", () => {
 				),
 		);
 		const resp = await postChat(`http://127.0.0.1:${server.port}`, {
-			model: "qwen3.6-35b-a3b",
+			model: "gemma-4-26b-a4b-it",
 			messages: [{ role: "user", content: "ping" }],
 			temperature: 0,
 			max_tokens: 8,
@@ -130,7 +130,7 @@ describe("postChat", () => {
 			);
 		});
 		await postChat(`http://127.0.0.1:${server.port}`, {
-			model: "qwen3.6-35b-a3b",
+			model: "gemma-4-26b-a4b-it",
 			messages: [{ role: "user", content: "ping" }],
 			temperature: 0,
 			max_tokens: 8,

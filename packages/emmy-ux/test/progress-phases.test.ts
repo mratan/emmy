@@ -46,7 +46,7 @@ describe("D-02 LOCKED — four progress phases in order", () => {
 		const phases: Array<[string, number | undefined]> = [];
 
 		const promise = runSwapAndStreamProgress({
-			from: "profiles/qwen3.6-35b-a3b/v3.1",
+			from: "profiles/gemma-4-26b-a4b-it/v2.1",
 			to: "profiles/gemma-4-26b-a4b-it/v1",
 			port: 8002,
 			onProgress: (p, pct) => phases.push([p, pct]),

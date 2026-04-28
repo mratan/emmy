@@ -226,8 +226,8 @@ def test_finder_subset_includes_the_three_agent_prompts():
 
 _VALID_SERVING_YAML = """\
 engine:
-  model: /models/Qwen3.6-35B-A3B-FP8
-  model_hf_id: Qwen/Qwen3.6-35B-A3B-FP8
+  model: /models/gemma-4-26B-A4B-it
+  model_hf_id: Qwen/gemma-4-26B-A4B-it
   served_model_name: test-model
   container_image: nvcr.io/nvidia/vllm:26.03.post1-py3
   container_image_digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef

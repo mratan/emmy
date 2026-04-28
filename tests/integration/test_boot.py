@@ -18,11 +18,11 @@ pytestmark = pytest.mark.integration
 
 
 def test_models_endpoint(base_url: str):
-    """SERVE-02: GET /v1/models returns 200 with qwen3.6-35b-a3b in the body."""
+    """SERVE-02: GET /v1/models returns 200 with gemma-4-26b-a4b-it in the body."""
     r = httpx.get(f"{base_url}/v1/models", timeout=10.0)
     assert r.status_code == 200, f"unexpected status: {r.status_code}"
     body = r.text
-    assert "qwen3.6-35b-a3b" in body, f"served model name missing in: {body}"
+    assert "gemma-4-26b-a4b-it" in body, f"served model name missing in: {body}"
 
 
 @pytest.mark.xfail(
@@ -43,7 +43,7 @@ def test_throughput_floor(base_url: str):
     emission (see emmy_serve/canary/generate.py for rationale).
     """
     payload = {
-        "model": "qwen3.6-35b-a3b",
+        "model": "gemma-4-26b-a4b-it",
         "messages": [{"role": "user", "content": "Count to 100."}],
         "max_tokens": 100,
         "temperature": 0.0,
@@ -64,7 +64,7 @@ def test_throughput_floor(base_url: str):
 def test_extra_body_passthrough(base_url: str):
     """SERVE-04: /v1/chat/completions with extra_body guided_json must succeed (200)."""
     payload = {
-        "model": "qwen3.6-35b-a3b",
+        "model": "gemma-4-26b-a4b-it",
         "messages": [{"role": "user", "content": "give me {\"n\": 1}"}],
         "max_tokens": 16,
         "temperature": 0.0,
@@ -109,13 +109,13 @@ def test_smoke_all_three(base_url: str):
     than an ad-hoc inline dict, which vLLM rejects with 400.
     """
     from emmy_serve.canary.tool_call import load_default_tool_schema
-    sp_ok, _ = canary.run_sp_ok(base_url, served_model_name="qwen3.6-35b-a3b")
+    sp_ok, _ = canary.run_sp_ok(base_url, served_model_name="gemma-4-26b-a4b-it")
     tool_ok, _ = canary.run_tool_call(
         base_url,
-        served_model_name="qwen3.6-35b-a3b",
+        served_model_name="gemma-4-26b-a4b-it",
         tool_schema=load_default_tool_schema(),
     )
-    gen_ok, _, _ = canary.run_generate(base_url, served_model_name="qwen3.6-35b-a3b")
+    gen_ok, _, _ = canary.run_generate(base_url, served_model_name="gemma-4-26b-a4b-it")
     assert sp_ok and tool_ok and gen_ok, (
         f"smoke failed: sp_ok={sp_ok}, tool_ok={tool_ok}, gen_ok={gen_ok}"
     )

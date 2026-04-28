@@ -13,7 +13,7 @@ export interface EmmyCliArgs {
 	// Positional: either a prompt (for --print/--json) or undefined (TUI mode).
 	prompt?: string;
 	mode: Mode;
-	profilePath: string; // resolved absolute path, default: profiles/qwen3.6-35b-a3b/v2
+	profilePath: string; // resolved absolute path, default: profiles/gemma-4-26b-a4b-it/v2
 	baseUrl: string; // default: http://127.0.0.1:8002
 	cwd: string; // default: process.cwd()
 	printEnvironment?: boolean;

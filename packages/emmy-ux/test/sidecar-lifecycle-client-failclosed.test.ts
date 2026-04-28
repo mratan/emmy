@@ -86,8 +86,8 @@ describe("sidecar-lifecycle-client fail-loud default (Phase 04.2 follow-up)", ()
 		const sink = makeSink();
 		const got = await runSidecarStartHttp({
 			baseUrl,
-			profile_id: "qwen3.6-35b-a3b",
-			variant: "v3.1-default",
+			profile_id: "gemma-4-26b-a4b-it",
+			variant: "v2.1",
 			onProgress: sink.onProgress,
 		});
 		expect(got.exit).toBe(0);
@@ -102,8 +102,8 @@ describe("sidecar-lifecycle-client fail-loud default (Phase 04.2 follow-up)", ()
 		const sink = makeSink();
 		const got = await runSidecarStartHttp({
 			baseUrl,
-			profile_id: "qwen3.6-35b-a3b",
-			variant: "v3.1-default",
+			profile_id: "gemma-4-26b-a4b-it",
+			variant: "v2.1",
 			onProgress: sink.onProgress,
 		});
 		expect(got.exit).toBe(5);
@@ -123,8 +123,8 @@ describe("sidecar-lifecycle-client fail-loud default (Phase 04.2 follow-up)", ()
 		const sink = makeSink();
 		const got = await runSidecarStartHttp({
 			baseUrl,
-			profile_id: "qwen3.6-35b-a3b",
-			variant: "v3.1-default",
+			profile_id: "gemma-4-26b-a4b-it",
+			variant: "v2.1",
 			onProgress: sink.onProgress,
 		});
 		expect(got.exit).toBe(1);
@@ -141,8 +141,8 @@ describe("sidecar-lifecycle-client fail-loud default (Phase 04.2 follow-up)", ()
 		const sink = makeSink();
 		const got = await runSidecarStartHttp({
 			baseUrl,
-			profile_id: "qwen3.6-35b-a3b",
-			variant: "v3.1-default",
+			profile_id: "gemma-4-26b-a4b-it",
+			variant: "v2.1",
 			onProgress: sink.onProgress,
 		});
 		expect(got.exit).toBe(1);
@@ -157,8 +157,8 @@ describe("sidecar-lifecycle-client fail-loud default (Phase 04.2 follow-up)", ()
 		const sink = makeSink();
 		const got = await runSidecarStartHttp({
 			baseUrl,
-			profile_id: "qwen3.6-35b-a3b",
-			variant: "v3.1-default",
+			profile_id: "gemma-4-26b-a4b-it",
+			variant: "v2.1",
 			onProgress: sink.onProgress,
 		});
 		expect(got.exit).toBe(1);
@@ -175,8 +175,8 @@ describe("sidecar-lifecycle-client fail-loud default (Phase 04.2 follow-up)", ()
 		const sink = makeSink();
 		const got = await runSidecarStartHttp({
 			baseUrl,
-			profile_id: "qwen3.6-35b-a3b",
-			variant: "v3.1-default",
+			profile_id: "gemma-4-26b-a4b-it",
+			variant: "v2.1",
 			onProgress: sink.onProgress,
 		});
 		expect(got.exit).toBe(0);
@@ -191,8 +191,8 @@ describe("sidecar-lifecycle-client fail-loud default (Phase 04.2 follow-up)", ()
 		const sink = makeSink();
 		const got = await runSidecarStartHttp({
 			baseUrl,
-			profile_id: "qwen3.6-35b-a3b",
-			variant: "v3.1-default",
+			profile_id: "gemma-4-26b-a4b-it",
+			variant: "v2.1",
 			onProgress: sink.onProgress,
 		});
 		expect(got.exit).toBe(1);

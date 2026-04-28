@@ -25,7 +25,7 @@ describe("EmmyProfileStampProcessor", () => {
 		const memExporter = new InMemorySpanExporter();
 		const provider = new BasicTracerProvider({
 			spanProcessors: [
-				new EmmyProfileStampProcessor({ id: "qwen3.6-35b-a3b", version: "v2", hash: "sha256:24be3eea" }),
+				new EmmyProfileStampProcessor({ id: "gemma-4-26b-a4b-it", version: "v2", hash: "sha256:24be3eea" }),
 				new SimpleSpanProcessor(memExporter),
 			],
 		});
@@ -43,7 +43,7 @@ describe("EmmyProfileStampProcessor", () => {
 			const finished = memExporter.getFinishedSpans();
 			expect(finished.length).toBe(3);
 			for (const span of finished) {
-				expect(span.attributes["emmy.profile.id"]).toBe("qwen3.6-35b-a3b");
+				expect(span.attributes["emmy.profile.id"]).toBe("gemma-4-26b-a4b-it");
 				expect(span.attributes["emmy.profile.version"]).toBe("v2");
 				expect(span.attributes["emmy.profile.hash"]).toBe("sha256:24be3eea");
 			}

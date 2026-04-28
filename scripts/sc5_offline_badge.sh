@@ -27,7 +27,7 @@ set -euo pipefail
 
 WORKDIR="${WORKDIR:-/tmp/emmy-p3-close-badge}"
 EMMY_BASE_URL="${EMMY_BASE_URL:-http://127.0.0.1:8002}"
-EMMY_PROFILE="${EMMY_PROFILE:-qwen3.6-35b-a3b@v3}"
+EMMY_PROFILE="${EMMY_PROFILE:-gemma-4-26b-a4b-it@v3}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in

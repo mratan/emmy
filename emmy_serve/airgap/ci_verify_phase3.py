@@ -42,7 +42,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_PROFILE = "qwen3.6-35b-a3b/v3"
+DEFAULT_PROFILE = "gemma-4-26b-a4b-it/v2"
 
 # Phase 04.4 plan 04 — memory tool air-gap subcheck (V5).
 MEMORY_AIRGAP_SCRIPT = REPO_ROOT / "tests" / "smoke" / "verify_memory_airgap.sh"
@@ -203,7 +203,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument(
         "--profile",
         default=DEFAULT_PROFILE,
-        help="profile path relative to profiles/ (default: qwen3.6-35b-a3b/v3)",
+        help="profile path relative to profiles/ (default: gemma-4-26b-a4b-it/v2)",
     )
     ap.add_argument(
         "--dry-run",

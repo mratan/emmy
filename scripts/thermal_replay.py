@@ -8,11 +8,11 @@ PROFILE_NOTES.md; subsequent runs assert against the recorded floors.
 Usage (Phase B on DGX Spark):
 
     # First run — discover floors (schedule overnight):
-    ./scripts/thermal_replay.py --profile profiles/qwen3.6-35b-a3b/v1 \
+    ./scripts/thermal_replay.py --profile profiles/gemma-4-26b-a4b-it/v2 \
         --target-wall-time-s 7200 --record-floors
 
     # Re-run — assert recorded floors:
-    ./scripts/thermal_replay.py --profile profiles/qwen3.6-35b-a3b/v1 \
+    ./scripts/thermal_replay.py --profile profiles/gemma-4-26b-a4b-it/v2 \
         --target-wall-time-s 7200 --assert-floors
 
 Pre-condition: emmy-serve vLLM already running at http://127.0.0.1:8002

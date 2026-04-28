@@ -35,18 +35,18 @@ describe("scanProfileIndex (real profiles/ tree)", () => {
 		expect(p!.endsWith("/gemma-4-26b-a4b-it/v2")).toBe(true);
 	});
 
-	test("resolve('qwen3.6-35b-a3b') honors DEFAULT_VARIANT → v3.1", () => {
+	test("resolve('gemma-4-26b-a4b-it') honors DEFAULT_VARIANT → v3.1", () => {
 		const idx = scanProfileIndex(REAL_PROFILES_DIR);
-		const p = idx.resolve("qwen3.6-35b-a3b");
+		const p = idx.resolve("gemma-4-26b-a4b-it");
 		expect(p).not.toBeNull();
-		expect(p!.endsWith("/qwen3.6-35b-a3b/v3.1")).toBe(true);
+		expect(p!.endsWith("/gemma-4-26b-a4b-it/v2.1")).toBe(true);
 	});
 
 	test("resolve with explicit variant overrides the default picker", () => {
 		const idx = scanProfileIndex(REAL_PROFILES_DIR);
-		const p = idx.resolve("qwen3.6-35b-a3b", "v1");
+		const p = idx.resolve("gemma-4-26b-a4b-it", "v1");
 		expect(p).not.toBeNull();
-		expect(p!.endsWith("/qwen3.6-35b-a3b/v1")).toBe(true);
+		expect(p!.endsWith("/gemma-4-26b-a4b-it/v1")).toBe(true);
 	});
 
 	test("resolve returns null for unknown profile", () => {
@@ -65,30 +65,30 @@ describe("scanProfileIndex (real profiles/ tree)", () => {
 		expect(results).toContain("gemma-4-26b-a4b-it");
 	});
 
-	test("complete('qwen3.6-35b-a3b@v3') returns v3 + v3.1 variant tokens", () => {
+	test("complete('gemma-4-26b-a4b-it@v3') returns v3 + v3.1 variant tokens", () => {
 		const idx = scanProfileIndex(REAL_PROFILES_DIR);
-		const results = idx.complete("qwen3.6-35b-a3b@v3");
+		const results = idx.complete("gemma-4-26b-a4b-it@v3");
 		// The Qwen bundle ships v1/v2/v3/v3.1 — both v3* variants match.
-		expect(results).toContain("qwen3.6-35b-a3b@v3");
-		expect(results).toContain("qwen3.6-35b-a3b@v3.1");
+		expect(results).toContain("gemma-4-26b-a4b-it@v3");
+		expect(results).toContain("gemma-4-26b-a4b-it@v3.1");
 		// No cross-profile pollution.
-		expect(results.every((r) => r.startsWith("qwen3.6-35b-a3b@"))).toBe(true);
+		expect(results.every((r) => r.startsWith("gemma-4-26b-a4b-it@"))).toBe(true);
 	});
 
-	test("complete('qwen3.6-35b-a3b@') returns ALL variants of the profile", () => {
+	test("complete('gemma-4-26b-a4b-it@') returns ALL variants of the profile", () => {
 		const idx = scanProfileIndex(REAL_PROFILES_DIR);
-		const results = idx.complete("qwen3.6-35b-a3b@");
+		const results = idx.complete("gemma-4-26b-a4b-it@");
 		// Empty prefix after '@' → all variants match.
 		expect(results.length).toBeGreaterThanOrEqual(4);
-		expect(results).toContain("qwen3.6-35b-a3b@v1");
-		expect(results).toContain("qwen3.6-35b-a3b@v3.1");
+		expect(results).toContain("gemma-4-26b-a4b-it@v1");
+		expect(results).toContain("gemma-4-26b-a4b-it@v3.1");
 	});
 
 	test("complete('') returns all profile names", () => {
 		const idx = scanProfileIndex(REAL_PROFILES_DIR);
 		const results = idx.complete("");
 		expect(results).toContain("gemma-4-26b-a4b-it");
-		expect(results).toContain("qwen3.6-35b-a3b");
+		expect(results).toContain("gemma-4-26b-a4b-it");
 	});
 });
 

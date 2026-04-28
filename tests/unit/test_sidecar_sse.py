@@ -78,8 +78,8 @@ async def test_sse_frames_match_phase4_d02(
     # Pre-position READY.
     await _ctl.state.transition_to(SidecarState.STARTING)
     await _ctl.state.transition_to(SidecarState.READY)
-    _ctl._current_profile_id = "qwen3.6-35b-a3b"
-    _ctl._current_variant = "v3.1-default"
+    _ctl._current_profile_id = "gemma-4-26b-a4b-it"
+    _ctl._current_variant = "v2.1"
 
     spy = _OrchestratorScriptedSpy(
         [
@@ -94,8 +94,8 @@ async def test_sse_frames_match_phase4_d02(
 
     r = client.post(
         "/profile/swap",
-        json={"from": "profiles/qwen3.6-35b-a3b/v3.1-default",
-              "to": "profiles/qwen3.6-35b-a3b/v3.1-reason",
+        json={"from": "profiles/gemma-4-26b-a4b-it/v2.1",
+              "to": "profiles/gemma-4-26b-a4b-it/v2.1",
               "port": 8002},
     )
     text = r.text
@@ -117,8 +117,8 @@ async def test_sse_envelope_passthrough(
     """Exit-6 rollback envelope passes through verbatim before the exit frame."""
     await _ctl.state.transition_to(SidecarState.STARTING)
     await _ctl.state.transition_to(SidecarState.READY)
-    _ctl._current_profile_id = "qwen3.6-35b-a3b"
-    _ctl._current_variant = "v3.1-default"
+    _ctl._current_profile_id = "gemma-4-26b-a4b-it"
+    _ctl._current_variant = "v2.1"
 
     spy = _OrchestratorScriptedSpy(
         [
@@ -131,8 +131,8 @@ async def test_sse_envelope_passthrough(
 
     r = client.post(
         "/profile/swap",
-        json={"from": "profiles/qwen3.6-35b-a3b/v3.1-default",
-              "to": "profiles/qwen3.6-35b-a3b/v3.1-reason",
+        json={"from": "profiles/gemma-4-26b-a4b-it/v2.1",
+              "to": "profiles/gemma-4-26b-a4b-it/v2.1",
               "port": 8002},
     )
     text = r.text
@@ -157,8 +157,8 @@ async def test_sse_no_echo_of_client_input(
     """
     await _ctl.state.transition_to(SidecarState.STARTING)
     await _ctl.state.transition_to(SidecarState.READY)
-    _ctl._current_profile_id = "qwen3.6-35b-a3b"
-    _ctl._current_variant = "v3.1-default"
+    _ctl._current_profile_id = "gemma-4-26b-a4b-it"
+    _ctl._current_variant = "v2.1"
 
     sentinel = "ZZZ_CANARY_VALUE_xyz_42"
 
@@ -176,8 +176,8 @@ async def test_sse_no_echo_of_client_input(
     r = client.post(
         "/profile/swap",
         json={
-            "from": f"profiles/qwen3.6-35b-a3b/{sentinel}",
-            "to": f"profiles/qwen3.6-35b-a3b/{sentinel}-target",
+            "from": f"profiles/gemma-4-26b-a4b-it/{sentinel}",
+            "to": f"profiles/gemma-4-26b-a4b-it/{sentinel}-target",
             "port": 8002,
         },
     )
@@ -198,8 +198,8 @@ async def test_sse_data_lines_have_correct_framing(
     """Each SSE 'data:' frame is followed by a blank line (sse-starlette default)."""
     await _ctl.state.transition_to(SidecarState.STARTING)
     await _ctl.state.transition_to(SidecarState.READY)
-    _ctl._current_profile_id = "qwen3.6-35b-a3b"
-    _ctl._current_variant = "v3.1-default"
+    _ctl._current_profile_id = "gemma-4-26b-a4b-it"
+    _ctl._current_variant = "v2.1"
 
     spy = _OrchestratorScriptedSpy(
         [

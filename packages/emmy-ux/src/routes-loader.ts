@@ -5,11 +5,11 @@
 //
 // routes.yaml shape (LiteLLM-inspired; see 04-RESEARCH §4.1):
 //
-//   default: qwen3.6-35b-a3b@v3.1-default
+//   default: gemma-4-26b-a4b-it@v3.1-default
 //   roles:
-//     plan:   qwen3.6-35b-a3b@v3.1-reason
-//     edit:   qwen3.6-35b-a3b@v3.1-precise
-//     critic: qwen3.6-35b-a3b@v3.1-default
+//     plan:   gemma-4-26b-a4b-it@v3.1-reason
+//     edit:   gemma-4-26b-a4b-it@v3.1-precise
+//     critic: gemma-4-26b-a4b-it@v3.1-default
 //
 // Each ref is `<profileId>@<variant>`. The variant resolves to a sibling
 // directory under profiles/<profileId>/ whose serving.yaml is byte-identical

@@ -23,13 +23,14 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-# 2026-04-28: default switched from qwen3.6-35b-a3b/v3.1 to
-# gemma-4-26b-a4b-it per V-RESULTS-v8 4-profile matrix (Gemma MoE
-# clears V1 memory adoption 100%; Qwen MoE 55%). Same-day follow-up
-# bumped to v2.1: 256K native context (Gemma 4 max_position_embeddings
-# = 262144 with sliding_window=1024 makes the 128K→256K bump cheap)
-# + gmu 0.86 → 0.55 RAM-headroom retune. v2 preserved as the
-# KV-bisection audit artifact. Override via --profile.
+# 2026-04-28: daily-driver switched from the prior Qwen 35B-A3B MoE
+# (subsequently dropped from the active stack) to Gemma 4 26B-A4B per
+# V-RESULTS-v8 4-profile matrix (Gemma MoE V1 memory adoption 100%;
+# the dropped Qwen MoE plateaued at 55%). Same-day follow-up bumped
+# to v2.1: 256K native context (Gemma 4 max_position_embeddings=262144
+# with sliding_window=1024 makes the 128K→256K bump cheap) + gmu 0.86
+# → 0.55 RAM-headroom retune. v2 preserved as the KV-bisection audit
+# artifact. Override via --profile.
 PROFILE="profiles/gemma-4-26b-a4b-it/v2.1"
 PORT=8002
 AIRGAP=0

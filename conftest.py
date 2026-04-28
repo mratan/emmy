@@ -9,7 +9,7 @@ from typing import Iterator
 import pytest
 
 REPO_ROOT = Path(__file__).parent.resolve()
-PROFILE_PATH = REPO_ROOT / "profiles" / "qwen3.6-35b-a3b" / "v1"
+PROFILE_PATH = REPO_ROOT / "profiles" / "gemma-4-26b-a4b-it" / "v1"
 
 
 def pytest_addoption(parser):

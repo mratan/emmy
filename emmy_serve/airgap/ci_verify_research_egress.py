@@ -38,7 +38,7 @@ import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-DEFAULT_PROFILE = "qwen3.6-35b-a3b/v3.1"
+DEFAULT_PROFILE = "gemma-4-26b-a4b-it/v2.1"
 
 # Hosts that MUST never receive outbound traffic from ANY emmy-owned container
 # or process — these are cloud-inference endpoints whose presence in a live

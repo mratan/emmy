@@ -174,7 +174,7 @@ import {
 function makeProfile(path: string): ProfileSnapshot {
 	return {
 		ref: {
-			id: "qwen3.6-35b-a3b",
+			id: "gemma-4-26b-a4b-it",
 			version: "v3",
 			hash: "2beb99c773a0e425a3e485459964740640c5f3addbea186738402cf66d4d3718",
 			path,

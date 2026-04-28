@@ -23,9 +23,9 @@ describe("_relativizeProfilePath (Phase 04.2 follow-up)", () => {
 	test("Mac-absolute → strips Mac prefix, keeps profiles/<name>/<variant>", () => {
 		expect(
 			_relativizeProfilePath(
-				"/Users/me/code/emmy/profiles/qwen3.6-35b-a3b/v3.1-default",
+				"/Users/me/code/emmy/profiles/gemma-4-26b-a4b-it/v2.1",
 			),
-		).toBe("profiles/qwen3.6-35b-a3b/v3.1-default");
+		).toBe("profiles/gemma-4-26b-a4b-it/v2.1");
 	});
 
 	test("Spark-absolute → strips Spark prefix, keeps profiles/<name>/<variant>", () => {
@@ -37,8 +37,8 @@ describe("_relativizeProfilePath (Phase 04.2 follow-up)", () => {
 	});
 
 	test("already-relative → pass through unchanged", () => {
-		expect(_relativizeProfilePath("profiles/qwen3.6-35b-a3b/v3.1-default")).toBe(
-			"profiles/qwen3.6-35b-a3b/v3.1-default",
+		expect(_relativizeProfilePath("profiles/gemma-4-26b-a4b-it/v2.1")).toBe(
+			"profiles/gemma-4-26b-a4b-it/v2.1",
 		);
 	});
 

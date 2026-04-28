@@ -80,8 +80,8 @@ describe("renderSidecarStatus (pure)", () => {
 		const { renderSidecarStatus } = await import("../src/slash-commands");
 		const status: SidecarStatus = {
 			state: "ready",
-			profile_id: "qwen3.6-35b-a3b",
-			profile_variant: "v3.1-default",
+			profile_id: "gemma-4-26b-a4b-it",
+			profile_variant: "v2.1",
 			profile_hash: "a".repeat(64),
 			vllm_up: true,
 			vllm_pid: 12345,
@@ -93,7 +93,7 @@ describe("renderSidecarStatus (pure)", () => {
 		};
 		const text = renderSidecarStatus(status);
 		expect(text).toContain("state=ready");
-		expect(text).toContain("vllm=qwen3.6-35b-a3b@v3.1-default");
+		expect(text).toContain("vllm=gemma-4-26b-a4b-it@v2.1");
 		expect(text).toContain("kv=34%");
 		expect(text).toContain("temp=64");
 		expect(text).toContain("in_flight=2");
@@ -209,12 +209,12 @@ describe("registerStartCommand", () => {
 		const cmd = registered.find((r) => r.name === "start");
 		expect(cmd).toBeDefined();
 		const { ctx, notifyCalls } = makeSidecarCtx();
-		await cmd!.options.handler("qwen3.6-35b-a3b", ctx);
+		await cmd!.options.handler("gemma-4-26b-a4b-it", ctx);
 		expect(runStartCalled).toBe(false);
 		expect(notifyCalls.length).toBe(1);
 		expect(notifyCalls[0]![0]).toBe("error");
 		expect(notifyCalls[0]![1]).toMatch(/requires <profileId>@<variant>/);
-		expect(notifyCalls[0]![1]).toMatch(/qwen3\.6-35b-a3b@v3\.1-default/);
+		expect(notifyCalls[0]![1]).toMatch(/gemma-4-26b-a4b-it@v2.1/);
 	});
 
 	test("parses '<id>@<variant>' → profile_id=id, variant=variant", async () => {
@@ -229,10 +229,10 @@ describe("registerStartCommand", () => {
 		});
 		const cmd = registered.find((r) => r.name === "start")!;
 		const { ctx } = makeSidecarCtx();
-		await cmd.options.handler("qwen3.6-35b-a3b@v3.1-default", ctx);
+		await cmd.options.handler("gemma-4-26b-a4b-it@v2.1", ctx);
 		expect(calls[0]).toEqual({
-			profile_id: "qwen3.6-35b-a3b",
-			variant: "v3.1-default",
+			profile_id: "gemma-4-26b-a4b-it",
+			variant: "v2.1",
 		});
 	});
 
@@ -266,8 +266,8 @@ describe("registerStartCommand", () => {
 			},
 			getStatus: async () => ({
 				state: "ready",
-				profile_id: "qwen3.6-35b-a3b",
-				profile_variant: "v3.1-default",
+				profile_id: "gemma-4-26b-a4b-it",
+				profile_variant: "v2.1",
 				vllm_up: true,
 			}),
 		});
@@ -277,7 +277,7 @@ describe("registerStartCommand", () => {
 		expect(runStartCalled).toBe(false);
 		expect(notifyCalls.length).toBe(1);
 		expect(notifyCalls[0]![0]).toBe("error");
-		expect(notifyCalls[0]![1]).toMatch(/already running qwen3\.6-35b-a3b@v3\.1-default/);
+		expect(notifyCalls[0]![1]).toMatch(/already running gemma-4-26b-a4b-it@v2.1/);
 		expect(notifyCalls[0]![1]).toMatch(/use \/profile gemma-4-26b-a4b-it@v2-default/);
 	});
 
@@ -292,14 +292,14 @@ describe("registerStartCommand", () => {
 			},
 			getStatus: async () => ({
 				state: "ready",
-				profile_id: "qwen3.6-35b-a3b",
-				profile_variant: "v3.1-default",
+				profile_id: "gemma-4-26b-a4b-it",
+				profile_variant: "v2.1",
 				vllm_up: true,
 			}),
 		});
 		const cmd = registered.find((r) => r.name === "start")!;
 		const { ctx, notifyCalls } = makeSidecarCtx();
-		await cmd.options.handler("qwen3.6-35b-a3b@v3.1-default", ctx);
+		await cmd.options.handler("gemma-4-26b-a4b-it@v2.1", ctx);
 		expect(runStartCalled).toBe(true);
 		// Notified "started ..." (info), not "refused" (error).
 		expect(notifyCalls[0]![0]).toBe("info");
@@ -338,8 +338,8 @@ describe("registerStartCommand", () => {
 			},
 			getStatus: async () => ({
 				state: "ready",
-				profile_id: "qwen3.6-35b-a3b",
-				profile_variant: "v3.1-default",
+				profile_id: "gemma-4-26b-a4b-it",
+				profile_variant: "v2.1",
 				vllm_up: false,
 			}),
 		});
@@ -385,7 +385,7 @@ describe("registerStartCommand", () => {
 		});
 		const cmd = registered.find((r) => r.name === "start")!;
 		const { ctx, notifyCalls } = makeSidecarCtx({ isIdle: false });
-		await cmd.options.handler("qwen3.6-35b-a3b", ctx);
+		await cmd.options.handler("gemma-4-26b-a4b-it", ctx);
 		expect(runStartCalled).toBe(false);
 		expect(notifyCalls.some(([t, m]) => t === "warning" && /deferred/.test(m ?? ""))).toBe(true);
 	});
@@ -398,9 +398,9 @@ describe("registerStartCommand", () => {
 		});
 		const cmd = registered.find((r) => r.name === "start")!;
 		const { ctx, notifyCalls, statusCalls } = makeSidecarCtx();
-		await cmd.options.handler("qwen3.6-35b-a3b@v3.1-default", ctx);
+		await cmd.options.handler("gemma-4-26b-a4b-it@v2.1", ctx);
 		expect(notifyCalls.some(([t, m]) =>
-			t === "info" && /started qwen3\.6-35b-a3b@v3\.1-default/.test(m ?? ""),
+			t === "info" && /started gemma-4-26b-a4b-it@v2.1/.test(m ?? ""),
 		)).toBe(true);
 		// Final clear of emmy.swap status (undefined value).
 		expect(statusCalls.some(([k, t]) => k === "emmy.swap" && t === undefined)).toBe(true);
@@ -416,7 +416,7 @@ describe("registerStartCommand", () => {
 		const { ctx, notifyCalls } = makeSidecarCtx();
 		// Phase 04.2 follow-up — supply @variant; bare profile_id now refused
 		// client-side before reaching runStart (variant is required).
-		await cmd.options.handler("qwen3.6-35b-a3b@v3.1-default", ctx);
+		await cmd.options.handler("gemma-4-26b-a4b-it@v2.1", ctx);
 		expect(notifyCalls.some(([t, m]) =>
 			t === "error" && /start failed.*exit 1/.test(m ?? ""),
 		)).toBe(true);
@@ -544,8 +544,8 @@ describe("registerStatusCommand", () => {
 		const { pi, registered } = makeFakePi();
 		const status: SidecarStatus = {
 			state: "ready",
-			profile_id: "qwen3.6-35b-a3b",
-			profile_variant: "v3.1-default",
+			profile_id: "gemma-4-26b-a4b-it",
+			profile_variant: "v2.1",
 			profile_hash: "a".repeat(64),
 			vllm_up: true,
 			vllm_pid: 1,

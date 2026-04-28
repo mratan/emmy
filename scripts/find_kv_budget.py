@@ -6,7 +6,7 @@ writes ``serving.yaml.engine.gpu_memory_utilization``. Every other edit
 to that field is blocked by the immutability validator + CI hash check.
 
 Usage (Phase B on DGX Spark):
-    ./scripts/find_kv_budget.py --profile profiles/qwen3.6-35b-a3b/v1 \
+    ./scripts/find_kv_budget.py --profile profiles/gemma-4-26b-a4b-it/v2 \
         --drive-minutes 10 --max-iters 12
 
 Wall-clock budget per RESEARCH.md §8 "Wall-clock budget estimate":

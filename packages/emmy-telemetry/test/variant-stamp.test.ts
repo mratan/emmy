@@ -34,7 +34,7 @@ function newHarness() {
 	const provider = new BasicTracerProvider({
 		spanProcessors: [
 			new EmmyProfileStampProcessor({
-				id: "qwen3.6-35b-a3b",
+				id: "gemma-4-26b-a4b-it",
 				version: "v3.1",
 				hash: "sha256:basebasebase",
 			}),
@@ -56,7 +56,7 @@ describe("EmmyProfileStampProcessor — variant + role stamping (Plan 04-04 D-12
 	test("stamps emmy.profile.variant + emmy.profile.variant_hash + emmy.role when context is set", () => {
 		const { memExporter, tracer } = newHarness();
 		setCurrentTurnRoleContext({
-			variant: "v3.1-reason",
+			variant: "v2.1",
 			variantHash: "sha256:deadbeef",
 			role: "plan",
 		});
@@ -66,10 +66,10 @@ describe("EmmyProfileStampProcessor — variant + role stamping (Plan 04-04 D-12
 		const finished = memExporter.getFinishedSpans();
 		expect(finished.length).toBe(1);
 		const attrs = finished[0]!.attributes;
-		expect(attrs["emmy.profile.id"]).toBe("qwen3.6-35b-a3b");
+		expect(attrs["emmy.profile.id"]).toBe("gemma-4-26b-a4b-it");
 		expect(attrs["emmy.profile.version"]).toBe("v3.1");
 		expect(attrs["emmy.profile.hash"]).toBe("sha256:basebasebase");
-		expect(attrs["emmy.profile.variant"]).toBe("v3.1-reason");
+		expect(attrs["emmy.profile.variant"]).toBe("v2.1");
 		expect(attrs["emmy.profile.variant_hash"]).toBe("sha256:deadbeef");
 		expect(attrs["emmy.role"]).toBe("plan");
 	});
@@ -91,7 +91,7 @@ describe("EmmyProfileStampProcessor — variant + role stamping (Plan 04-04 D-12
 	test("clearCurrentTurnRoleContext() makes subsequent spans drop variant/role attrs", () => {
 		const { memExporter, tracer } = newHarness();
 		setCurrentTurnRoleContext({
-			variant: "v3.1-precise",
+			variant: "v2.1",
 			variantHash: "sha256:feed",
 			role: "edit",
 		});
@@ -104,12 +104,12 @@ describe("EmmyProfileStampProcessor — variant + role stamping (Plan 04-04 D-12
 
 		const [attrsA, attrsB] = memExporter.getFinishedSpans().map((s) => s.attributes);
 		// Span A carries variant attrs.
-		expect(attrsA!["emmy.profile.variant"]).toBe("v3.1-precise");
+		expect(attrsA!["emmy.profile.variant"]).toBe("v2.1");
 		expect(attrsA!["emmy.role"]).toBe("edit");
 		// Span B does NOT carry them (context cleared between spans).
 		expect("emmy.profile.variant" in attrsB!).toBe(false);
 		expect("emmy.role" in attrsB!).toBe(false);
 		// But the base profile stamp still fires on span B.
-		expect(attrsB!["emmy.profile.id"]).toBe("qwen3.6-35b-a3b");
+		expect(attrsB!["emmy.profile.id"]).toBe("gemma-4-26b-a4b-it");
 	});
 });

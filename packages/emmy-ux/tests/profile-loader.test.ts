@@ -39,10 +39,10 @@ function writeProfile(
   const profileYaml =
     overrides.profileYaml ??
     `profile:
-  id: qwen3.6-35b-a3b
+  id: gemma-4-26b-a4b-it
   version: v2
   family: qwen3.6
-  base_model: Qwen/Qwen3.6-35B-A3B-FP8
+  base_model: Qwen/gemma-4-26B-A4B-it
   description: test
   created: '2026-04-21'
   hash: ${HASH}
@@ -53,7 +53,7 @@ function writeProfile(
   const servingYaml =
     overrides.servingYaml ??
     `engine:
-  served_model_name: qwen3.6-35b-a3b
+  served_model_name: gemma-4-26b-a4b-it
   max_model_len: 131072
 sampling_defaults:
   temperature: 0.2
@@ -94,11 +94,11 @@ describe("loadProfile — happy path", () => {
     const dir = join(tmp, "v2");
     writeProfile(dir);
     const snap = await loadProfile(dir);
-    expect(snap.ref.id).toBe("qwen3.6-35b-a3b");
+    expect(snap.ref.id).toBe("gemma-4-26b-a4b-it");
     expect(snap.ref.version).toBe("v2");
     expect(snap.ref.hash).toBe(HASH);
     expect(snap.ref.path).toBe(dir);
-    expect(snap.serving.engine.served_model_name).toBe("qwen3.6-35b-a3b");
+    expect(snap.serving.engine.served_model_name).toBe("gemma-4-26b-a4b-it");
     expect(snap.serving.engine.max_model_len).toBe(131072);
     expect(snap.serving.sampling_defaults.temperature).toBe(0.2);
     expect(snap.serving.sampling_defaults.top_p).toBe(0.95);
@@ -114,7 +114,7 @@ describe("loadProfile — W4: required max_model_len", () => {
     const dir = join(tmp, "v2");
     writeProfile(dir, {
       servingYaml: `engine:
-  served_model_name: qwen3.6-35b-a3b
+  served_model_name: gemma-4-26b-a4b-it
 sampling_defaults:
   temperature: 0.2
   top_p: 0.95

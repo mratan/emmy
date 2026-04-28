@@ -9,7 +9,7 @@
 // lands in PROFILE_NOTES.md "Harness (Phase 2)" provenance table.
 //
 // Usage:
-//   bun scripts/compute_max_input_tokens.ts profiles/qwen3.6-35b-a3b/v2
+//   bun scripts/compute_max_input_tokens.ts profiles/gemma-4-26b-a4b-it/v2
 //
 // Also used by Plan-04's un-skipped max-model-len regression test to double-
 // check the committed harness.yaml value against the current formula (SC-5
@@ -20,7 +20,7 @@ import { resolve } from "node:path";
 import yaml from "js-yaml";
 import { computeMaxInputTokens } from "@emmy/ux";
 
-const profileDir = resolve(process.argv[2] ?? "profiles/qwen3.6-35b-a3b/v2");
+const profileDir = resolve(process.argv[2] ?? "profiles/gemma-4-26b-a4b-it/v2");
 
 const serving = yaml.load(readFileSync(`${profileDir}/serving.yaml`, "utf8")) as {
 	engine?: { max_model_len?: number };

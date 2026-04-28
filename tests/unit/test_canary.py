@@ -24,10 +24,10 @@ def test_result_schema():
         check="sp_ok",
         ok=True,
         elapsed_ms=42,
-        profile_id="qwen3.6-35b-a3b",
+        profile_id="gemma-4-26b-a4b-it",
         profile_version="v1",
         profile_hash="sha256:abc",
-        served_model_name="qwen3.6-35b-a3b",
+        served_model_name="gemma-4-26b-a4b-it",
         ts="2026-04-20T00:00:00Z",
     )
     # All 8 fields per 01-RESEARCH.md §7.6

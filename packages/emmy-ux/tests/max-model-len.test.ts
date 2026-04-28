@@ -76,7 +76,7 @@ describe("computeMaxInputTokens — error cases", () => {
 // without re-running scripts/compute_max_input_tokens.ts surfaces here.
 describe("Plan-07 regression — harness.yaml v2 SC-5 consistency", () => {
   test("harness.yaml v2 context.max_input_tokens matches computeMaxInputTokens", () => {
-    const profileDir = resolve(__dirname, "../../../profiles/qwen3.6-35b-a3b/v2");
+    const profileDir = resolve(__dirname, "../../../profiles/gemma-4-26b-a4b-it/v2");
     const serving = yaml.load(
       readFileSync(`${profileDir}/serving.yaml`, "utf8"),
     ) as { engine: { max_model_len: number } };

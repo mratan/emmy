@@ -68,7 +68,7 @@ def test_all_shipped_profiles_validate():
 def test_serving_yaml_valid(profile_path: Path):
     """PROFILE-03: serving.yaml loads and all required engine fields are present."""
     cfg = loader.load_serving(profile_path / "serving.yaml")
-    assert cfg.engine.served_model_name == "qwen3.6-35b-a3b"
+    assert cfg.engine.served_model_name == "gemma-4-26b-a4b-it"
     assert cfg.engine.load_format == "fastsafetensors"
     assert cfg.engine.kv_cache_dtype == "fp8"
     assert cfg.engine.enable_prefix_caching is True

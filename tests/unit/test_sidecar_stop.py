@@ -97,8 +97,8 @@ async def _into_ready_with_pid() -> None:
     await _ctl.state.transition_to(SidecarState.STARTING)
     await _ctl.state.transition_to(SidecarState.READY)
     _ctl._vllm_pid = 12345
-    _ctl._current_profile_id = "qwen3.6-35b-a3b"
-    _ctl._current_variant = "v3.1-default"
+    _ctl._current_profile_id = "gemma-4-26b-a4b-it"
+    _ctl._current_variant = "v2.1"
 
 
 # --- D-01 happy drain -------------------------------------------------------

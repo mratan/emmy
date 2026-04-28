@@ -109,11 +109,11 @@ async def test_idempotent_same_variant(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """READY + same profile + same variant + vllm_up=true → single SSE ready frame, no orch spawn."""
-    # Pre-position: READY, profile=qwen3.6-35b-a3b, variant=v3.1-default.
+    # Pre-position: READY, profile=gemma-4-26b-a4b-it, variant=v3.1-default.
     await _ctl.state.transition_to(SidecarState.STARTING)
     await _ctl.state.transition_to(SidecarState.READY)
-    _ctl._current_profile_id = "qwen3.6-35b-a3b"
-    _ctl._current_variant = "v3.1-default"
+    _ctl._current_profile_id = "gemma-4-26b-a4b-it"
+    _ctl._current_variant = "v2.1"
 
     # Phase 04.2 follow-up — idempotent gate now also checks vllm_up via the
     # cached metrics fetch. Mock fetch_vllm_metrics_cached to return a
@@ -126,7 +126,7 @@ async def test_idempotent_same_variant(
     with client.stream(
         "POST",
         "/start",
-        json={"profile_id": "qwen3.6-35b-a3b", "variant": "v3.1-default"},
+        json={"profile_id": "gemma-4-26b-a4b-it", "variant": "v2.1"},
     ) as r:
         assert r.status_code == 200
         lines = _consume_sse(r)
@@ -158,8 +158,8 @@ async def test_idempotent_same_variant_but_vllm_dead_falls_through_to_cold_start
     # Pre-position: READY, profile + variant set as if last /start succeeded.
     await _ctl.state.transition_to(SidecarState.STARTING)
     await _ctl.state.transition_to(SidecarState.READY)
-    _ctl._current_profile_id = "qwen3.6-35b-a3b"
-    _ctl._current_variant = "v3.1-default"
+    _ctl._current_profile_id = "gemma-4-26b-a4b-it"
+    _ctl._current_variant = "v2.1"
 
     # vLLM is dead: probe raises (mimics ECONNREFUSED on the loopback metrics
     # endpoint when the container is gone).
@@ -181,7 +181,7 @@ async def test_idempotent_same_variant_but_vllm_dead_falls_through_to_cold_start
     with client.stream(
         "POST",
         "/start",
-        json={"profile_id": "qwen3.6-35b-a3b", "variant": "v3.1-default"},
+        json={"profile_id": "gemma-4-26b-a4b-it", "variant": "v2.1"},
     ) as r:
         assert r.status_code == 200
         _consume_sse(r)
@@ -192,11 +192,11 @@ async def test_idempotent_same_variant_but_vllm_dead_falls_through_to_cold_start
     # treats the operation as a fresh cold-start).
     call = spy.calls[0]
     assert call["from_path"] is None, f"expected from_path=None (cold-start), got {call}"
-    assert call["to_path"] == "profiles/qwen3.6-35b-a3b/v3.1-default"
+    assert call["to_path"] == "profiles/gemma-4-26b-a4b-it/v2.1"
     # Final state should be READY, with bookkeeping repopulated.
     assert _ctl.state.state == SidecarState.READY
-    assert _ctl._current_profile_id == "qwen3.6-35b-a3b"
-    assert _ctl._current_variant == "v3.1-default"
+    assert _ctl._current_profile_id == "gemma-4-26b-a4b-it"
+    assert _ctl._current_variant == "v2.1"
 
 
 # --- D-02 cold start --------------------------------------------------------
@@ -216,7 +216,7 @@ async def test_cold_start_argv(client: TestClient, spy: _OrchestratorSpy) -> Non
     with client.stream(
         "POST",
         "/start",
-        json={"profile_id": "qwen3.6-35b-a3b", "variant": "v3.1-default"},
+        json={"profile_id": "gemma-4-26b-a4b-it", "variant": "v2.1"},
     ) as r:
         assert r.status_code == 200
         lines = _consume_sse(r)
@@ -225,7 +225,7 @@ async def test_cold_start_argv(client: TestClient, spy: _OrchestratorSpy) -> Non
     # Orchestrator was called exactly once with from_path=None (cold start).
     assert len(spy.calls) == 1
     assert spy.calls[0]["from_path"] is None
-    assert spy.calls[0]["to_path"] == "profiles/qwen3.6-35b-a3b/v3.1-default"
+    assert spy.calls[0]["to_path"] == "profiles/gemma-4-26b-a4b-it/v2.1"
     assert spy.calls[0]["port"] == 8002
 
     # 4 frames: 3 phases + exit.
@@ -234,8 +234,8 @@ async def test_cold_start_argv(client: TestClient, spy: _OrchestratorSpy) -> Non
 
     # Final state: READY with current_profile/variant updated.
     assert _ctl.state.state == SidecarState.READY
-    assert _ctl._current_profile_id == "qwen3.6-35b-a3b"
-    assert _ctl._current_variant == "v3.1-default"
+    assert _ctl._current_profile_id == "gemma-4-26b-a4b-it"
+    assert _ctl._current_variant == "v2.1"
 
 
 # --- WARNING #10 fix: variant required --------------------------------------
@@ -244,12 +244,12 @@ async def test_cold_start_argv(client: TestClient, spy: _OrchestratorSpy) -> Non
 async def test_start_without_variant_returns_400(client: TestClient, spy: _OrchestratorSpy) -> None:
     """variant missing OR empty → 400; orchestrator NEVER invoked."""
     # Body 1: variant omitted entirely (Pydantic default = None).
-    r1 = client.post("/start", json={"profile_id": "qwen3.6-35b-a3b"})
+    r1 = client.post("/start", json={"profile_id": "gemma-4-26b-a4b-it"})
     assert r1.status_code == 400, r1.text
     assert "variant is required" in r1.text
 
     # Body 2: variant explicitly empty string.
-    r2 = client.post("/start", json={"profile_id": "qwen3.6-35b-a3b", "variant": ""})
+    r2 = client.post("/start", json={"profile_id": "gemma-4-26b-a4b-it", "variant": ""})
     assert r2.status_code == 400, r2.text
     assert "variant is required" in r2.text
 
@@ -281,11 +281,14 @@ async def test_swap_emits_d02_phases(client: TestClient, spy: _OrchestratorSpy) 
     Verifies the 4 D-02 LOCKED phases ('stopping vLLM', 'loading weights',
     'warmup', 'ready') flow through unchanged.
     """
-    # Pre-position: READY on the OLD variant.
+    # Pre-position: READY on the audit variant v2; swap to operational v2.1.
+    # (After the 2026-04-28 Qwen-MoE drop, Gemma's v2 (KV-bisection audit) and
+    # v2.1 (operational 256K + gmu=0.55) are the only sibling pair that
+    # exercises the cross-variant code path.)
     await _ctl.state.transition_to(SidecarState.STARTING)
     await _ctl.state.transition_to(SidecarState.READY)
-    _ctl._current_profile_id = "qwen3.6-35b-a3b"
-    _ctl._current_variant = "v3.1-default"
+    _ctl._current_profile_id = "gemma-4-26b-a4b-it"
+    _ctl._current_variant = "v2"
 
     spy.set_yields(
         [
@@ -300,7 +303,7 @@ async def test_swap_emits_d02_phases(client: TestClient, spy: _OrchestratorSpy) 
     with client.stream(
         "POST",
         "/start",
-        json={"profile_id": "qwen3.6-35b-a3b", "variant": "v3.1-reason"},
+        json={"profile_id": "gemma-4-26b-a4b-it", "variant": "v2.1"},
     ) as r:
         assert r.status_code == 200
         lines = _consume_sse(r)
@@ -308,8 +311,8 @@ async def test_swap_emits_d02_phases(client: TestClient, spy: _OrchestratorSpy) 
 
     # Cross-variant: orchestrator got --from path.
     assert len(spy.calls) == 1
-    assert spy.calls[0]["from_path"] == "profiles/qwen3.6-35b-a3b/v3.1-default"
-    assert spy.calls[0]["to_path"] == "profiles/qwen3.6-35b-a3b/v3.1-reason"
+    assert spy.calls[0]["from_path"] == "profiles/gemma-4-26b-a4b-it/v2"
+    assert spy.calls[0]["to_path"] == "profiles/gemma-4-26b-a4b-it/v2.1"
 
     # 5 SSE frames: 4 phases + exit.
     assert len(frames) == 5
@@ -318,7 +321,7 @@ async def test_swap_emits_d02_phases(client: TestClient, spy: _OrchestratorSpy) 
 
     # Final state: READY with updated tracking.
     assert _ctl.state.state == SidecarState.READY
-    assert _ctl._current_variant == "v3.1-reason"
+    assert _ctl._current_variant == "v2.1"
 
 
 # --- 409 / error state ------------------------------------------------------
@@ -330,7 +333,7 @@ async def test_409_when_state_invalid(client: TestClient, spy: _OrchestratorSpy)
     await _ctl.state.transition_to(SidecarState.READY)
     await _ctl.state.transition_to(SidecarState.SWAPPING)
 
-    r = client.post("/start", json={"profile_id": "qwen3.6-35b-a3b", "variant": "v3.1-default"})
+    r = client.post("/start", json={"profile_id": "gemma-4-26b-a4b-it", "variant": "v2.1"})
     assert r.status_code == 409
     assert "swapping" in r.text
     assert spy.calls == []
@@ -348,7 +351,7 @@ async def test_error_state_on_orchestrator_exit_5(client: TestClient, spy: _Orch
     with client.stream(
         "POST",
         "/start",
-        json={"profile_id": "qwen3.6-35b-a3b", "variant": "v3.1-default"},
+        json={"profile_id": "gemma-4-26b-a4b-it", "variant": "v2.1"},
     ) as r:
         lines = _consume_sse(r)
     frames = _data_frames(lines)

@@ -94,7 +94,7 @@ describe("runSpOk — wire shape + happy/failure paths", () => {
           { headers: { "content-type": "application/json" } },
         ),
     );
-    const out = await runSpOk(`http://127.0.0.1:${server.port}`, "qwen3.6-35b-a3b");
+    const out = await runSpOk(`http://127.0.0.1:${server.port}`, "gemma-4-26b-a4b-it");
     expect(out.ok).toBe(true);
     expect(out.responseText).toContain("[SP_OK]");
   });
@@ -118,7 +118,7 @@ describe("runSpOk — wire shape + happy/failure paths", () => {
           { headers: { "content-type": "application/json" } },
         ),
     );
-    const out = await runSpOk(`http://127.0.0.1:${server.port}`, "qwen3.6-35b-a3b");
+    const out = await runSpOk(`http://127.0.0.1:${server.port}`, "gemma-4-26b-a4b-it");
     expect(out.ok).toBe(false);
     expect(out.responseText).toContain("Thinking Process");
   });
@@ -139,7 +139,7 @@ describe("runSpOk — wire shape + happy/failure paths", () => {
         { headers: { "content-type": "application/json" } },
       );
     });
-    await runSpOk(`http://127.0.0.1:${server.port}`, "qwen3.6-35b-a3b");
+    await runSpOk(`http://127.0.0.1:${server.port}`, "gemma-4-26b-a4b-it");
     expect(captured.chat_template_kwargs).toBeDefined();
     expect((captured.chat_template_kwargs as { enable_thinking?: boolean }).enable_thinking).toBe(
       false,
@@ -169,7 +169,7 @@ describe("runSpOk — wire shape + happy/failure paths", () => {
     globalThis.fetch = (() => Promise.reject(new DOMException("aborted", "AbortError"))) as typeof fetch;
     let thrown: unknown;
     try {
-      await runSpOk(`http://127.0.0.1:${server.port}`, "qwen3.6-35b-a3b");
+      await runSpOk(`http://127.0.0.1:${server.port}`, "gemma-4-26b-a4b-it");
     } catch (e) {
       thrown = e;
     } finally {

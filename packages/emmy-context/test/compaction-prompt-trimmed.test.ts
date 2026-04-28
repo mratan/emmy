@@ -15,7 +15,7 @@ import type { ProfileSnapshot } from "@emmy/provider";
 const REPO_ROOT = resolve(__dirname, "../../..");
 
 const PROFILES = [
-	"profiles/qwen3.6-35b-a3b/v3.1/prompts/compact.md",
+	"profiles/gemma-4-26b-a4b-it/v2.1/prompts/compact.md",
 	"profiles/qwen3.6-27b/v1.1/prompts/compact.md",
 	"profiles/gemma-4-26b-a4b-it/v2/prompts/compact.md",
 	"profiles/gemma-4-31b-it/v1.1/prompts/compact.md",
@@ -104,7 +104,7 @@ function buildStubCtx(args: {
 
 describe("V1 — compaction trigger fires within ±5% of soft threshold", () => {
 	const max = 100_000;
-	const PROFILE_DIR = resolve(REPO_ROOT, "profiles/qwen3.6-35b-a3b/v3.1");
+	const PROFILE_DIR = resolve(REPO_ROOT, "profiles/gemma-4-26b-a4b-it/v2.1");
 
 	test("skips at 5% below threshold (0.94 × 0.75 = 0.705)", async () => {
 		const ctx = buildStubCtx({

@@ -29,7 +29,7 @@ OUT_DIR="$ROOT_DIR/runs/phase3.1-02"
 OUT_FILE="$OUT_DIR/walkthrough.md"
 mkdir -p "$OUT_DIR"
 
-V3_1_PROFILE_NOTES="profiles/qwen3.6-35b-a3b/v3.1/PROFILE_NOTES.md"
+V3_1_PROFILE_NOTES="profiles/gemma-4-26b-a4b-it/v2.1/PROFILE_NOTES.md"
 
 pause() {
   echo
@@ -55,7 +55,7 @@ write_header() {
     echo
     echo "- Run date: $(date -u +%FT%TZ)"
     echo "- Host: $(hostname)"
-    echo "- Profile: qwen3.6-35b-a3b/v3.1"
+    echo "- Profile: gemma-4-26b-a4b-it/v2.1"
     echo "- Driver: scripts/phase3_1_02_walkthrough.sh"
     echo
   } > "$OUT_FILE"
@@ -234,7 +234,7 @@ Final verdict: type EXACTLY 'p3.1-02 searxng green' (with single spaces) to comp
 EOF
 pause
 read -r -p "Verdict: " verdict
-append_section "Step 8 — Verdict + validation_run entry" "- Verdict: \`$verdict\`" "- v3.1 hash at walkthrough time: \`$(uv run emmy profile hash profiles/qwen3.6-35b-a3b/v3.1/ 2>&1 | tail -1)\`"
+append_section "Step 8 — Verdict + validation_run entry" "- Verdict: \`$verdict\`" "- v3.1 hash at walkthrough time: \`$(uv run emmy profile hash profiles/gemma-4-26b-a4b-it/v2.1/ 2>&1 | tail -1)\`"
 
 echo
 echo "============================================================"

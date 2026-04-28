@@ -20,7 +20,7 @@ export function classifyArch(profileId: string): ArchClass {
 	// CLAUDE.md "Phase 4.1 dense siblings" — both Qwen 3.6 35B-A3B and
 	// Gemma 4 26B-A4B are MoE Mamba-hybrid (the A3B/A4B suffixes denote the
 	// small active params + Mamba layers per Pitfall #22 spike 2026-04-26).
-	if (profileId.startsWith("qwen3.6-35b-a3b")) return "mamba-hybrid";
+	if (profileId.startsWith("gemma-4-26b-a4b-it")) return "mamba-hybrid";
 	if (profileId.startsWith("gemma-4-26b-a4b-it")) return "mamba-hybrid";
 	// Dense siblings are pure-attention.
 	if (profileId.startsWith("qwen3.6-27b")) return "attention-only";
@@ -60,7 +60,7 @@ export function v4Pass(args: {
 
 describe("V4 — architecture-aware prefix-cache gate", () => {
 	test("classifies the four shipped profiles correctly", () => {
-		expect(classifyArch("qwen3.6-35b-a3b")).toBe("mamba-hybrid");
+		expect(classifyArch("gemma-4-26b-a4b-it")).toBe("mamba-hybrid");
 		expect(classifyArch("qwen3.6-27b")).toBe("attention-only");
 		expect(classifyArch("gemma-4-26b-a4b-it")).toBe("mamba-hybrid");
 		expect(classifyArch("gemma-4-31b-it")).toBe("attention-only");
@@ -91,14 +91,14 @@ describe("V4 — architecture-aware prefix-cache gate", () => {
 
 	test("mamba-hybrid profile passes regardless of hit_rate (measure-and-acknowledge)", () => {
 		const r0 = v4Pass({
-			profileId: "qwen3.6-35b-a3b",
+			profileId: "gemma-4-26b-a4b-it",
 			hitsBefore: 0,
 			queriesBefore: 0,
 			hitsAfter: 0,
 			queriesAfter: 100,
 		});
 		const r80 = v4Pass({
-			profileId: "qwen3.6-35b-a3b",
+			profileId: "gemma-4-26b-a4b-it",
 			hitsBefore: 0,
 			queriesBefore: 0,
 			hitsAfter: 80,

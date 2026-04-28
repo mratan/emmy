@@ -18,14 +18,14 @@ import type { ChatRequest, ProfileSnapshot } from "@emmy/provider";
 function makeProfile(): ProfileSnapshot {
 	return {
 		ref: {
-			id: "qwen3.6-35b-a3b",
+			id: "gemma-4-26b-a4b-it",
 			version: "v1",
 			hash: "sha256:abc",
 			path: "/tmp/whatever",
 		},
 		serving: {
 			engine: {
-				served_model_name: "qwen3.6-35b-a3b",
+				served_model_name: "gemma-4-26b-a4b-it",
 				max_model_len: 131072,
 			},
 			sampling_defaults: {
@@ -130,6 +130,6 @@ describe("registerEmmyProvider request shaping", () => {
 			temperature: 0.1,
 			max_tokens: 16,
 		});
-		expect(body.model).toBe("qwen3.6-35b-a3b");
+		expect(body.model).toBe("gemma-4-26b-a4b-it");
 	});
 });

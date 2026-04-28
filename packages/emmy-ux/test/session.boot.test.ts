@@ -39,9 +39,9 @@ import { NATIVE_TOOL_NAMES } from "@emmy/tools";
 
 function makeProfile(path: string): ProfileSnapshot {
 	return {
-		ref: { id: "qwen3.6-35b-a3b", version: "v2", hash: "sha256:abc", path },
+		ref: { id: "gemma-4-26b-a4b-it", version: "v2", hash: "sha256:abc", path },
 		serving: {
-			engine: { served_model_name: "qwen3.6-35b-a3b", max_model_len: 131072 },
+			engine: { served_model_name: "gemma-4-26b-a4b-it", max_model_len: 131072 },
 			sampling_defaults: { temperature: 0.2, top_p: 0.95, max_tokens: 8192, stop: [] },
 			quirks: { strip_thinking_tags: false, promote_reasoning_to_content: false, buffer_tool_streams: false },
 		},
@@ -212,7 +212,7 @@ describe("createEmmySession — Wave 1 wire-through boot contract", () => {
 		});
 		const snap = (out.runtime as unknown as IntrospectableRuntime).introspect();
 		expect(snap.registeredProviders.length).toBe(1);
-		expect(snap.registeredProviders[0]!.name).toBe("emmy:qwen3.6-35b-a3b@v2");
+		expect(snap.registeredProviders[0]!.name).toBe("emmy:gemma-4-26b-a4b-it@v2");
 		// And the impl has a chat() method (the actual wire path).
 		expect(typeof (snap.registeredProviders[0]!.impl as { chat?: unknown }).chat).toBe("function");
 	});

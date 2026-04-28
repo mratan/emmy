@@ -57,7 +57,7 @@ mock.module("@modelcontextprotocol/sdk/client/index.js", () => ({
 // RED: `buildMcpToolDefs` does not exist yet. Task 2 (GREEN) adds it.
 const { buildMcpToolDefs } = await import("@emmy/tools");
 
-const PROFILE_REF = { id: "qwen3.6-35b-a3b", version: "v2", hash: "sha256:abc" };
+const PROFILE_REF = { id: "gemma-4-26b-a4b-it", version: "v2", hash: "sha256:abc" };
 
 beforeEach(() => {
 	mockState.toolsByServer = {};

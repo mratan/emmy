@@ -12,7 +12,7 @@
 //   shape) and `extra_body.guided_decoding.grammar` only on the reactive retry.
 
 export interface ProfileRef {
-	id: string; // "qwen3.6-35b-a3b"
+	id: string; // "gemma-4-26b-a4b-it"
 	version: string; // "v1" | "v2"
 	hash: string; // "sha256:<64-hex>"
 	path: string; // absolute path to bundle dir

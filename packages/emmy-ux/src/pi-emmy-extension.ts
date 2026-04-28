@@ -308,7 +308,7 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 	}
 
 	// Lazy per-variant snapshot cache. Keys on the RESOLVED variant path
-	// (e.g. "profiles/qwen3.6-35b-a3b/v3.1-reason") so the cache survives
+	// (e.g. "profiles/gemma-4-26b-a4b-it/v2.1") so the cache survives
 	// /profile swaps where only the default might move (the variants still
 	// live on disk and produce byte-identical serving.yaml).
 	const variantCache = new Map<string, VariantSnapshot>();

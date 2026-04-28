@@ -32,12 +32,12 @@ import type { SwapResult } from "./profile-swap-runner";
  * sidecar happens to share with the client).
  *
  * Examples:
- *   "/Users/me/code/emmy/profiles/qwen3.6-35b-a3b/v3.1-default"
- *     → "profiles/qwen3.6-35b-a3b/v3.1-default"
+ *   "/Users/me/code/emmy/profiles/gemma-4-26b-a4b-it/v2.1"
+ *     → "profiles/gemma-4-26b-a4b-it/v2.1"
  *   "/data/projects/emmy/profiles/gemma-4-26b-a4b-it/v2-default"
  *     → "profiles/gemma-4-26b-a4b-it/v2-default"
- *   "profiles/qwen3.6-35b-a3b/v3.1-default" (already relative)
- *     → "profiles/qwen3.6-35b-a3b/v3.1-default"
+ *   "profiles/gemma-4-26b-a4b-it/v2.1" (already relative)
+ *     → "profiles/gemma-4-26b-a4b-it/v2.1"
  *   "" (empty — cold-start has no `from` path)
  *     → ""
  *

@@ -21,16 +21,27 @@ const REPO_ROOT = resolve(HERE, "..", "..", "..");
 const SHIPPED_ROUTES = join(REPO_ROOT, "profiles", "routes.yaml");
 
 describe("loadRoutes", () => {
-	test("loads the repo's shipped routes.yaml with the expected Qwen variant refs", () => {
+	// 2026-04-28: routes.yaml deleted as part of dropping Qwen 35B-A3B MoE
+	// (the only profile with shipping role variants). Loader's documented
+	// ENOENT fallback path takes over (default-only mode per D-08); tests
+	// that asserted the SHIPPED_ROUTES content are obsolete. The synthetic-
+	// routes.yaml tests below still exercise the loader's parse + validate
+	// paths so the loader logic stays under test for any future Gemma-variant
+	// re-introduction (Phase 5+).
+	test.skip("loads the repo's shipped routes.yaml — DROPPED 2026-04-28 along with Qwen MoE", () => {
 		const cfg = loadRoutes(SHIPPED_ROUTES);
-		expect(cfg.default.profileId).toBe("qwen3.6-35b-a3b");
-		expect(cfg.default.variant).toBe("v3.1-default");
-		expect(cfg.roles.plan.profileId).toBe("qwen3.6-35b-a3b");
-		expect(cfg.roles.plan.variant).toBe("v3.1-reason");
-		expect(cfg.roles.edit.profileId).toBe("qwen3.6-35b-a3b");
-		expect(cfg.roles.edit.variant).toBe("v3.1-precise");
-		expect(cfg.roles.critic.profileId).toBe("qwen3.6-35b-a3b");
-		expect(cfg.roles.critic.variant).toBe("v3.1-default");
+		expect(cfg.default.profileId).toBe("gemma-4-26b-a4b-it");
+	});
+
+	test("ENOENT fallback when routes.yaml is absent (D-08 default-only mode)", () => {
+		let err: Error | null = null;
+		try {
+			loadRoutes(SHIPPED_ROUTES);
+		} catch (e) {
+			err = e as Error;
+		}
+		expect(err).toBeInstanceOf(RoutesLoadError);
+		expect(err?.message).toContain("ENOENT");
 	});
 
 	test("throws RoutesLoadError when the `default` key is missing", () => {
@@ -73,14 +84,14 @@ describe("loadRoutes", () => {
 		const tmp = mkdtempSync(join(tmpdir(), "emmy-routes-"));
 		try {
 			const p = join(tmp, "routes.yaml");
-			writeFileSync(p, "default: qwen3.6-35b-a3b@v3.1-default\n", "utf8");
+			writeFileSync(p, "default: gemma-4-26b-a4b-it@v2.1\n", "utf8");
 			const cfg = loadRoutes(p);
-			expect(cfg.default.profileId).toBe("qwen3.6-35b-a3b");
-			expect(cfg.default.variant).toBe("v3.1-default");
+			expect(cfg.default.profileId).toBe("gemma-4-26b-a4b-it");
+			expect(cfg.default.variant).toBe("v2.1");
 			// All three roles fall back to default when roles: is omitted.
-			expect(cfg.roles.plan.variant).toBe("v3.1-default");
-			expect(cfg.roles.edit.variant).toBe("v3.1-default");
-			expect(cfg.roles.critic.variant).toBe("v3.1-default");
+			expect(cfg.roles.plan.variant).toBe("v2.1");
+			expect(cfg.roles.edit.variant).toBe("v2.1");
+			expect(cfg.roles.critic.variant).toBe("v2.1");
 		} finally {
 			rmSync(tmp, { recursive: true, force: true });
 		}
@@ -163,26 +174,29 @@ describe("loadRoutes", () => {
 			}
 		});
 
-		test("accepts the shipped refs (regression guard)", () => {
-			// The 3 shipped variant names must all pass hardening.
+		test("accepts representative variant refs (regression guard)", () => {
+			// Uses synthetic Gemma-style variant names that exercise the same
+			// safe-ident regex (dashes, dots, alphanumeric). Replaced the prior
+			// Qwen-shipped variant strings (v3.1-default/reason/precise) when
+			// Qwen MoE was dropped 2026-04-28.
 			const tmp = mkdtempSync(join(tmpdir(), "emmy-routes-"));
 			try {
 				const p = join(tmp, "routes.yaml");
 				writeFileSync(
 					p,
 					[
-						"default: qwen3.6-35b-a3b@v3.1-default",
+						"default: gemma-4-26b-a4b-it@v2.1",
 						"roles:",
-						"  plan: qwen3.6-35b-a3b@v3.1-reason",
-						"  edit: qwen3.6-35b-a3b@v3.1-precise",
-						"  critic: qwen3.6-35b-a3b@v3.1-default",
+						"  plan: gemma-4-26b-a4b-it@v3-plan",
+						"  edit: gemma-4-26b-a4b-it@v3-precise",
+						"  critic: gemma-4-26b-a4b-it@v2.1",
 						"",
 					].join("\n"),
 					"utf8",
 				);
 				const cfg = loadRoutes(p);
-				expect(cfg.default.profileId).toBe("qwen3.6-35b-a3b");
-				expect(cfg.default.variant).toBe("v3.1-default");
+				expect(cfg.default.profileId).toBe("gemma-4-26b-a4b-it");
+				expect(cfg.default.variant).toBe("v2.1");
 			} finally {
 				rmSync(tmp, { recursive: true, force: true });
 			}

@@ -34,9 +34,9 @@ import {
 
 function makeProfile(path: string, grammarMode: "reactive" | "disabled" | null = "reactive"): ProfileSnapshot {
 	return {
-		ref: { id: "qwen3.6-35b-a3b", version: "v2", hash: "sha256:abc", path },
+		ref: { id: "gemma-4-26b-a4b-it", version: "v2", hash: "sha256:abc", path },
 		serving: {
-			engine: { served_model_name: "qwen3.6-35b-a3b", max_model_len: 131072 },
+			engine: { served_model_name: "gemma-4-26b-a4b-it", max_model_len: 131072 },
 			sampling_defaults: { temperature: 0.2, top_p: 0.95, max_tokens: 8192, stop: [] },
 			quirks: { strip_thinking_tags: false, promote_reasoning_to_content: false, buffer_tool_streams: false },
 		},
@@ -63,7 +63,7 @@ describe("handleBeforeProviderRequest — Test 4 (enable_thinking + system overw
 		const tmp = mkdtempSync(join(tmpdir(), "emmy-hook-"));
 		try {
 			const payload: BeforeProviderRequestPayload = {
-				model: "qwen3.6-35b-a3b",
+				model: "gemma-4-26b-a4b-it",
 				messages: [{ role: "system", content: "pi-default-system" }],
 				chat_template_kwargs: {},
 			};
@@ -84,7 +84,7 @@ describe("handleBeforeProviderRequest — Test 4 (enable_thinking + system overw
 		try {
 			const assembled = makeAssembled();
 			const payload: BeforeProviderRequestPayload = {
-				model: "qwen3.6-35b-a3b",
+				model: "gemma-4-26b-a4b-it",
 				messages: [
 					{ role: "system", content: "pi-default-system" },
 					{ role: "user", content: "hello" },
@@ -110,7 +110,7 @@ describe("handleBeforeProviderRequest — Test 4 (enable_thinking + system overw
 		try {
 			const assembled = makeAssembled();
 			const payload: BeforeProviderRequestPayload = {
-				model: "qwen3.6-35b-a3b",
+				model: "gemma-4-26b-a4b-it",
 				messages: [{ role: "user", content: "hi" }],
 			};
 			handleBeforeProviderRequest({
@@ -135,7 +135,7 @@ describe("handleBeforeProviderRequest — Test 5 (reactive grammar injection)", 
 			mkdirSync(join(tmp, "grammars"), { recursive: true });
 			writeFileSync(join(tmp, "grammars", "tool_call.lark"), "start: \"OK\"\n", "utf8");
 			const payload: BeforeProviderRequestPayload = {
-				model: "qwen3.6-35b-a3b",
+				model: "gemma-4-26b-a4b-it",
 				messages: [{ role: "system", content: "pi-sys" }],
 			};
 			const retryState: RetryState = { wantsGrammar: true };
@@ -156,7 +156,7 @@ describe("handleBeforeProviderRequest — Test 5 (reactive grammar injection)", 
 		const tmp = mkdtempSync(join(tmpdir(), "emmy-hook-"));
 		try {
 			const payload: BeforeProviderRequestPayload = {
-				model: "qwen3.6-35b-a3b",
+				model: "gemma-4-26b-a4b-it",
 				messages: [{ role: "system", content: "pi-sys" }],
 			};
 			handleBeforeProviderRequest({
@@ -175,7 +175,7 @@ describe("handleBeforeProviderRequest — Test 5 (reactive grammar injection)", 
 		const tmp = mkdtempSync(join(tmpdir(), "emmy-hook-"));
 		try {
 			const payload: BeforeProviderRequestPayload = {
-				model: "qwen3.6-35b-a3b",
+				model: "gemma-4-26b-a4b-it",
 				messages: [{ role: "system", content: "pi-sys" }],
 			};
 			handleBeforeProviderRequest({
@@ -197,7 +197,7 @@ describe("handleBeforeProviderRequest — Test 6 (SP_OK canary pass-through)", (
 		try {
 			const originalSystem = "canary-raw-sp-ok-prompt";
 			const payload: BeforeProviderRequestPayload = {
-				model: "qwen3.6-35b-a3b",
+				model: "gemma-4-26b-a4b-it",
 				messages: [
 					{ role: "system", content: originalSystem },
 					{ role: "user", content: "ping" },

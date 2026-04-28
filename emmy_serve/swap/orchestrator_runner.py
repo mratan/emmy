@@ -46,7 +46,7 @@ async def run_orchestrator_subprocess(
 
     Args:
         from_path: profile bundle directory currently loaded (e.g.
-            ``"profiles/qwen3.6-35b-a3b/v3.1-default"``). ``None`` for cold
+            ``"profiles/gemma-4-26b-a4b-it/v2.1"``). ``None`` for cold
             start (no `--from` arg passed; orchestrator skips the docker
             stop step).
         to_path: profile bundle directory to load.

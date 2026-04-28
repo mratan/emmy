@@ -5,7 +5,7 @@ Used by the air-gap CI workflow (`.github/workflows/airgap.yml`) and by
 hand during the Phase 1 local proof (see `docs/profile-immutability.md`).
 
 Usage:
-    scripts/airgap_probe.py pre-boot --profile profiles/qwen3.6-35b-a3b/v1
+    scripts/airgap_probe.py pre-boot --profile profiles/gemma-4-26b-a4b-it/v2
     scripts/airgap_probe.py post-boot --container emmy-serve --out report.json
 
 Exit codes match emmy_serve.airgap.validator.main:

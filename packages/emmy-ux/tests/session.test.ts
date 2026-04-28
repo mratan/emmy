@@ -31,13 +31,13 @@ import { createEmmySession, SpOkCanaryError, type ProfileSnapshot } from "@emmy/
 function makeProfile(path: string): ProfileSnapshot {
   return {
     ref: {
-      id: "qwen3.6-35b-a3b",
+      id: "gemma-4-26b-a4b-it",
       version: "v2",
       hash: "sha256:abc",
       path,
     },
     serving: {
-      engine: { served_model_name: "qwen3.6-35b-a3b", max_model_len: 131072 },
+      engine: { served_model_name: "gemma-4-26b-a4b-it", max_model_len: 131072 },
       sampling_defaults: { temperature: 0.2, top_p: 0.95, max_tokens: 8192, stop: [] },
       quirks: { strip_thinking_tags: false, promote_reasoning_to_content: false, buffer_tool_streams: false },
     },
@@ -253,7 +253,7 @@ describe("createEmmySession — transcript capture (B2)", () => {
     expect(lines.length).toBeGreaterThanOrEqual(1);
     const firstTurn = JSON.parse(lines[0]!) as { role: string; profile: { id: string } };
     expect(firstTurn.role).toBe("system");
-    expect(firstTurn.profile.id).toBe("qwen3.6-35b-a3b");
+    expect(firstTurn.profile.id).toBe("gemma-4-26b-a4b-it");
   });
 
   test("pi.on('turn'|'tool_call'|'tool_result') emissions append to transcript", async () => {

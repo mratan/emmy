@@ -34,7 +34,7 @@ from emmy_serve.swap.preflight import PreflightResult
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-V31_PROFILE = REPO_ROOT / "profiles" / "qwen3.6-35b-a3b" / "v3.1"
+V31_PROFILE = REPO_ROOT / "profiles" / "gemma-4-26b-a4b-it" / "v2.1"
 
 
 class _FakeSubprocess:

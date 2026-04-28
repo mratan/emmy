@@ -22,7 +22,7 @@ import type { ProfileSnapshot } from "@emmy/provider";
 function makeProfile(path: string): ProfileSnapshot {
 	return {
 		ref: {
-			id: "qwen3.6-35b-a3b",
+			id: "gemma-4-26b-a4b-it",
 			version: "v3.1",
 			hash: "sha256:b91e74730c6460be1454c857dd64459eea3754ef5844de15e7a42e691cb21913",
 			path,

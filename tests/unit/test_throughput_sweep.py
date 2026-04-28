@@ -128,7 +128,7 @@ def test_measure_warm_throughput_records_all_three_canaries(monkeypatch):
 
     out = mod.measure_warm_throughput(
         "http://localhost:8002",
-        "qwen3.6-35b-a3b",
+        "gemma-4-26b-a4b-it",
         candidate_id="k1-flashinfer-moe",
         n_samples=3,
         warmup_discard=0,
@@ -166,7 +166,7 @@ def test_measure_warm_throughput_runs_warmup_discard(monkeypatch):
 
     mod.measure_warm_throughput(
         "http://localhost:8002",
-        "qwen3.6-35b-a3b",
+        "gemma-4-26b-a4b-it",
         n_samples=3,
         warmup_discard=1,
     )
@@ -194,7 +194,7 @@ def test_measure_warm_throughput_captures_httpx_exception(monkeypatch):
 
     out = mod.measure_warm_throughput(
         "http://localhost:8002",
-        "qwen3.6-35b-a3b",
+        "gemma-4-26b-a4b-it",
         candidate_id="k2-hybrid-kv-cache",
         n_samples=1,
         warmup_discard=0,
@@ -223,7 +223,7 @@ def test_measure_warm_throughput_rejects_zero_completion_tokens(monkeypatch):
 
     out = mod.measure_warm_throughput(
         "http://localhost:8002",
-        "qwen3.6-35b-a3b",
+        "gemma-4-26b-a4b-it",
         n_samples=1,
         warmup_discard=0,
     )
@@ -253,7 +253,7 @@ def test_measure_warm_throughput_sends_phase_c_payload_shape(monkeypatch):
 
     mod.measure_warm_throughput(
         "http://localhost:8002/",
-        "qwen3.6-35b-a3b",
+        "gemma-4-26b-a4b-it",
         n_samples=1,
         warmup_discard=0,
     )

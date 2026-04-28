@@ -82,14 +82,14 @@ function stubProfile(
 	}
 	return {
 		ref: {
-			id: "qwen3.6-35b-a3b",
+			id: "gemma-4-26b-a4b-it",
 			version: "v2",
 			hash: "sha256:aaa",
 			path: tmpDir,
 		},
 		serving: {
 			engine: {
-				served_model_name: "qwen3.6-35b-a3b",
+				served_model_name: "gemma-4-26b-a4b-it",
 				max_model_len: 131072,
 			},
 			sampling_defaults: {
@@ -113,7 +113,7 @@ function stubProfile(
 
 function stubReq(): ChatRequest {
 	return {
-		model: "qwen3.6-35b-a3b",
+		model: "gemma-4-26b-a4b-it",
 		messages: [{ role: "user", content: "read /tmp/x" }],
 		temperature: 0,
 		max_tokens: 32,
@@ -282,7 +282,7 @@ describe("callWithReactiveGrammar", () => {
 		const e1 = events[1] as { event: string };
 		expect(e0.event).toBe("grammar.retry");
 		expect(e1.event).toBe("grammar.retry.success");
-		expect(e0.profile.id).toBe("qwen3.6-35b-a3b");
+		expect(e0.profile.id).toBe("gemma-4-26b-a4b-it");
 		expect(e0.profile.version).toBe("v2");
 		expect(e0.profile.hash).toBe("sha256:aaa");
 	});

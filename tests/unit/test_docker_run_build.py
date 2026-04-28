@@ -19,9 +19,9 @@ runner = pytest.importorskip("emmy_serve.boot.runner")
 
 _VALID_SERVING_YAML = """\
 engine:
-  model: /models/Qwen3.6-35B-A3B-FP8
-  model_hf_id: Qwen/Qwen3.6-35B-A3B-FP8
-  served_model_name: qwen3.6-35b-a3b
+  model: /models/gemma-4-26B-A4B-it
+  model_hf_id: Qwen/gemma-4-26B-A4B-it
+  served_model_name: gemma-4-26b-a4b-it
   container_image: emmy-serve/vllm:26.03.post1-fst
   container_image_digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
   max_model_len: 131072

@@ -506,7 +506,7 @@ export interface RegisterStatusCommandOpts {
  * fields so a stopped sidecar doesn't smear "vllm=null kv=null …" across the
  * TUI.
  *
- * Format: "sidecar: state=ready vllm=qwen3.6-35b-a3b@v3.1-default kv=34% temp=64°C in_flight=2"
+ * Format: "sidecar: state=ready vllm=gemma-4-26b-a4b-it@v3.1-default kv=34% temp=64°C in_flight=2"
  *
  * T-04.2-S2 mitigation: last_error.msg is sliced to 40 chars to prevent a
  * malicious / long error string from line-wrapping the TUI. Math.round on
@@ -579,7 +579,7 @@ export function registerStartCommand(
 			if (variant === undefined || variant.length === 0) {
 				cmdCtx.ui.notify(
 					`/start requires <profileId>@<variant>. ` +
-						`Try: /start ${profile_id}@v3.1-default ` +
+						`Try: /start ${profile_id}@v2.1 ` +
 						`(or look in profiles/${profile_id}/ for available variants).`,
 					"error",
 				);

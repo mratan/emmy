@@ -21,8 +21,8 @@ import {
 // (the source of truth — TS interface MUST match field-by-field).
 const D07_READY_SAMPLE: SidecarStatus = {
 	state: "ready",
-	profile_id: "qwen3.6-35b-a3b",
-	profile_variant: "v3.1-default",
+	profile_id: "gemma-4-26b-a4b-it",
+	profile_variant: "v2.1",
 	profile_hash:
 		"a".repeat(64),
 	vllm_up: true,
@@ -86,8 +86,8 @@ describe("getSidecarStatus (Plan 04.2-04 Task 1)", () => {
 			expect(status).toEqual(D07_READY_SAMPLE);
 			// Spot-check key fields.
 			expect(status.state).toBe("ready");
-			expect(status.profile_id).toBe("qwen3.6-35b-a3b");
-			expect(status.profile_variant).toBe("v3.1-default");
+			expect(status.profile_id).toBe("gemma-4-26b-a4b-it");
+			expect(status.profile_variant).toBe("v2.1");
 			expect(status.vllm_up).toBe(true);
 			expect(status.kv_used_pct).toBe(0.34);
 			expect(status.gpu_temp_c).toBe(64.2);

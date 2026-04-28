@@ -17,19 +17,19 @@ mkdir -p "$RUN_DIR"
 REPORT_JSON="$RUN_DIR/report.json"
 
 # Routes.yaml pins (must match the shipped file; any change breaks SC-3).
-DEFAULT_VARIANT="v3.1-default"
-PLAN_VARIANT="v3.1-reason"
-EDIT_VARIANT="v3.1-precise"
-CRITIC_VARIANT="v3.1-default"
+DEFAULT_VARIANT="v2.1"
+PLAN_VARIANT="v2.1"
+EDIT_VARIANT="v2.1"
+CRITIC_VARIANT="v2.1"
 
 echo "[sc3] Phase 4 SC-3 walkthrough — within-model role routing"
 echo "[sc3] Run dir: $RUN_DIR"
-echo "[sc3] Base profile: profiles/qwen3.6-35b-a3b/v3.1-default/"
-echo "[sc3] vLLM endpoint: http://127.0.0.1:8002 (Qwen3.6-35B-A3B-FP8)"
+echo "[sc3] Base profile: profiles/gemma-4-26b-a4b-it/v2.1/"
+echo "[sc3] vLLM endpoint: http://127.0.0.1:8002 (gemma-4-26B-A4B-it)"
 echo ""
 
 # Sanity: Qwen is up
-if ! curl -sS -m 3 http://127.0.0.1:8002/v1/models | grep -q qwen3.6-35b-a3b; then
+if ! curl -sS -m 3 http://127.0.0.1:8002/v1/models | grep -q gemma-4-26b-a4b-it; then
   echo "[sc3] FATAL: Qwen3.6 not responding on :8002" >&2
   exit 1
 fi
@@ -74,7 +74,7 @@ for KEY in 1_plan 2_edit 3_critic 4_default; do
   SESSIONS_BEFORE=$(ls -d runs/2026-*-sha256:* 2>/dev/null | wc -l)
 
   timeout 120 bun run packages/emmy-ux/bin/pi-emmy.ts \
-    --profile profiles/qwen3.6-35b-a3b/v3.1-default \
+    --profile profiles/gemma-4-26b-a4b-it/v2.1 \
     --base-url http://127.0.0.1:8002 \
     --print "$PROMPT" \
     > "$TURN_OUT" 2> "$TURN_ERR" || {

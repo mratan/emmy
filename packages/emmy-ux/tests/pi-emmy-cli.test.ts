@@ -58,7 +58,7 @@ function writeValidProfile(path: string): void {
   writeFileSync(
     join(path, "profile.yaml"),
     `profile:
-  id: qwen3.6-35b-a3b
+  id: gemma-4-26b-a4b-it
   version: v2
   hash: sha256:b91e74730c6460be1454c857dd64459eea3754ef5844de15e7a42e691cb21913
   hash_algorithm: sha256
@@ -69,7 +69,7 @@ function writeValidProfile(path: string): void {
   writeFileSync(
     join(path, "serving.yaml"),
     `engine:
-  served_model_name: qwen3.6-35b-a3b
+  served_model_name: gemma-4-26b-a4b-it
   max_model_len: 131072
 sampling_defaults:
   temperature: 0.2
@@ -123,7 +123,7 @@ beforeAll(() => {
       const path = new URL(r.url).pathname;
       if (path === "/v1/models") {
         return new Response(
-          JSON.stringify({ data: [{ id: "qwen3.6-35b-a3b" }] }),
+          JSON.stringify({ data: [{ id: "gemma-4-26b-a4b-it" }] }),
           { headers: { "content-type": "application/json" } },
         );
       }

@@ -54,7 +54,7 @@ def test_dry_run_succeeds_with_searxng_compose_present():
     """Dry-run validates config only — compose file present + digest-pinned."""
     # Use the default profile path; module main() returns 0 on valid config.
     exit_code = ci_verify_research_egress.main(
-        ["--dry-run", "--profile", "qwen3.6-35b-a3b/v3.1"]
+        ["--dry-run", "--profile", "gemma-4-26b-a4b-it/v2.1"]
     )
     assert exit_code == 0, "dry-run against v3.1 profile should pass"
 

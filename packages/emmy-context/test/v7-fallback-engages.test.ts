@@ -12,7 +12,7 @@ import {
 import type { ProfileSnapshot } from "@emmy/provider";
 
 const REPO_ROOT = resolve(__dirname, "../../..");
-const PROFILE_DIR = resolve(REPO_ROOT, "profiles/qwen3.6-35b-a3b/v3.1");
+const PROFILE_DIR = resolve(REPO_ROOT, "profiles/gemma-4-26b-a4b-it/v2.1");
 
 function buildProfile(): ProfileSnapshot {
 	const harness: Record<string, unknown> = {

@@ -94,7 +94,7 @@ describe("appendSessionTurn", () => {
 
   test("preserves optional profile field when provided", () => {
     const { path } = openTranscript(tmp);
-    const profile = { id: "qwen3.6-35b-a3b", version: "v2", hash: "sha256:abc" };
+    const profile = { id: "gemma-4-26b-a4b-it", version: "v2", hash: "sha256:abc" };
     appendSessionTurn(path, { role: "system", content: "hi", profile });
     const line = readFileSync(path, "utf8").trim();
     const parsed = JSON.parse(line) as { profile: typeof profile };

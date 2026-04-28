@@ -194,7 +194,7 @@ import { NATIVE_TOOL_NAMES } from "@emmy/tools";
 
 function makeProfile(path: string): ProfileSnapshot {
 	return {
-		ref: { id: "qwen3.6-35b-a3b", version: "v3", hash: "sha256:2beb99c7mock", path },
+		ref: { id: "gemma-4-26b-a4b-it", version: "v3", hash: "sha256:2beb99c7mock", path },
 		serving: {
 			engine: { served_model_name: "qwen3-coder-35b-a3b-instruct-fp8", max_model_len: 131072 },
 			sampling_defaults: { temperature: 0.2, top_p: 0.95, max_tokens: 8192, stop: [] },

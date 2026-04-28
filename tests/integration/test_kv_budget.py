@@ -24,7 +24,7 @@ def test_zero_preemption(base_url: str):
     """SERVE-08: 30-min load with the finder-selected KV budget → zero preemptions.
 
     Looks up the served model name from /v1/models rather than hardcoding
-    "qwen3.6-35b-a3b" — the same test is meant to run across profiles.
+    "gemma-4-26b-a4b-it" — the same test is meant to run across profiles.
     """
     models = httpx.get(f"{base_url}/v1/models", timeout=10.0).json()
     served_model_name = models["data"][0]["id"]

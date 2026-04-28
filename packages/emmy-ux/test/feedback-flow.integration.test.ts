@@ -24,7 +24,7 @@ function turnMeta(session_id: string, turnIndex: number, overrides: Partial<Turn
 	return {
 		turn_id: `${session_id}:${turnIndex}`,
 		session_id,
-		profile_id: "qwen3.6-35b-a3b",
+		profile_id: "gemma-4-26b-a4b-it",
 		profile_version: "v2",
 		profile_hash:
 			"24be3eea0067102f1f61bd32806a875d019fe02cb114697cd5f3ca4e39985d8b",
@@ -68,7 +68,7 @@ describe("feedback flow — 3 turns, rate the last one (Alt+Up)", () => {
 			expect(row.comment).toBe("");
 
 			// All 13 TELEM-02 fields populated:
-			expect(row.profile_id).toBe("qwen3.6-35b-a3b");
+			expect(row.profile_id).toBe("gemma-4-26b-a4b-it");
 			expect(row.profile_version).toBe("v2");
 			expect(row.profile_hash.length).toBe(64);
 			expect(row.model_response).toBe("turn-2 response text");

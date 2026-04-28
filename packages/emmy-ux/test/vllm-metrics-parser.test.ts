@@ -29,7 +29,7 @@ import {
 
 describe("parseMetrics (Prometheus text -> MetricSnapshot)", () => {
 	test("parses labeled metric line: `vllm:gpu_cache_usage_perc{model_name=\"x\"} 0.34`", () => {
-		const text = `vllm:gpu_cache_usage_perc{model_name="qwen3.6-35b-a3b"} 0.34`;
+		const text = `vllm:gpu_cache_usage_perc{model_name="gemma-4-26b-a4b-it"} 0.34`;
 		const out: MetricSnapshot = parseMetrics(text);
 		expect(out["vllm:gpu_cache_usage_perc"]).toBe(0.34);
 	});
@@ -38,9 +38,9 @@ describe("parseMetrics (Prometheus text -> MetricSnapshot)", () => {
 		const text = [
 			'# HELP vllm:gpu_cache_usage_perc GPU KV-cache usage percentage',
 			'# TYPE vllm:gpu_cache_usage_perc gauge',
-			'vllm:gpu_cache_usage_perc{model_name="qwen3.6-35b-a3b"} 0.34',
-			'vllm:num_requests_running{model_name="qwen3.6-35b-a3b"} 1',
-			'vllm:generation_tokens_total{model_name="qwen3.6-35b-a3b"} 15823',
+			'vllm:gpu_cache_usage_perc{model_name="gemma-4-26b-a4b-it"} 0.34',
+			'vllm:num_requests_running{model_name="gemma-4-26b-a4b-it"} 1',
+			'vllm:generation_tokens_total{model_name="gemma-4-26b-a4b-it"} 15823',
 		].join("\n");
 		const out = parseMetrics(text);
 		expect(out["vllm:gpu_cache_usage_perc"]).toBe(0.34);

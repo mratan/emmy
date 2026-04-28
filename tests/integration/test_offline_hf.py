@@ -12,7 +12,7 @@ pytestmark = pytest.mark.integration
 
 transformers = pytest.importorskip("transformers")
 
-MODEL_PATH = Path(os.environ.get("EMMY_MODEL_PATH", "/data/models/Qwen3.6-35B-A3B-FP8"))
+MODEL_PATH = Path(os.environ.get("EMMY_MODEL_PATH", "/data/models/gemma-4-26B-A4B-it"))
 
 
 def test_tokenizer_loads_offline(monkeypatch):

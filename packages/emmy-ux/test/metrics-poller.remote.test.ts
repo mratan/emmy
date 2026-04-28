@@ -70,8 +70,8 @@ function makeStatusImpl(payloads: SidecarStatus[]): {
 function readyStatus(overrides: Partial<SidecarStatus> = {}): SidecarStatus {
 	return {
 		state: "ready",
-		profile_id: "qwen3.6-35b-a3b",
-		profile_variant: "v3.1-default",
+		profile_id: "gemma-4-26b-a4b-it",
+		profile_variant: "v2.1",
 		profile_hash: "a".repeat(64),
 		vllm_up: true,
 		vllm_pid: 1,

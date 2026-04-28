@@ -23,9 +23,9 @@ import {
 
 function makeProfile(path: string): ProfileSnapshot {
 	return {
-		ref: { id: "qwen3.6-35b-a3b", version: "v3.1", hash: "sha256:abc", path },
+		ref: { id: "gemma-4-26b-a4b-it", version: "v3.1", hash: "sha256:abc", path },
 		serving: {
-			engine: { served_model_name: "qwen3.6-35b-a3b", max_model_len: 131072 },
+			engine: { served_model_name: "gemma-4-26b-a4b-it", max_model_len: 131072 },
 			sampling_defaults: { temperature: 0.2, top_p: 0.95, max_tokens: 8192 },
 			quirks: {
 				strip_thinking_tags: false,
@@ -53,13 +53,13 @@ describe("handleBeforeProviderRequest — variant snapshot application", () => {
 		const tmp = mkdtempSync(join(tmpdir(), "emmy-variant-"));
 		try {
 			const payload: BeforeProviderRequestPayload = {
-				model: "qwen3.6-35b-a3b",
+				model: "gemma-4-26b-a4b-it",
 				messages: [{ role: "system", content: "pi-sys" }],
 				temperature: 0.8, // incoming default (caller-supplied)
 			};
 			const variantSnapshot: VariantSnapshot = {
-				profileId: "qwen3.6-35b-a3b",
-				variant: "v3.1-precise",
+				profileId: "gemma-4-26b-a4b-it",
+				variant: "v2.1",
 				variantHash: "sha256:precise",
 				role: "edit",
 				harness: {
@@ -83,13 +83,13 @@ describe("handleBeforeProviderRequest — variant snapshot application", () => {
 		const tmp = mkdtempSync(join(tmpdir(), "emmy-variant-"));
 		try {
 			const payload: BeforeProviderRequestPayload = {
-				model: "qwen3.6-35b-a3b",
+				model: "gemma-4-26b-a4b-it",
 				messages: [{ role: "system", content: "pi-sys" }],
 				chat_template_kwargs: { some_other_key: "value" },
 			};
 			const variantSnapshot: VariantSnapshot = {
-				profileId: "qwen3.6-35b-a3b",
-				variant: "v3.1-reason",
+				profileId: "gemma-4-26b-a4b-it",
+				variant: "v2.1",
 				variantHash: "sha256:reason",
 				role: "plan",
 				harness: {
@@ -117,7 +117,7 @@ describe("handleBeforeProviderRequest — variant snapshot application", () => {
 		const tmp = mkdtempSync(join(tmpdir(), "emmy-variant-"));
 		try {
 			const payload: BeforeProviderRequestPayload = {
-				model: "qwen3.6-35b-a3b",
+				model: "gemma-4-26b-a4b-it",
 				messages: [{ role: "system", content: "pi-sys" }],
 				temperature: 0.5,
 			};
@@ -143,13 +143,13 @@ describe("handleBeforeProviderRequest — variant snapshot application", () => {
 		const tmp = mkdtempSync(join(tmpdir(), "emmy-variant-"));
 		try {
 			const payload: BeforeProviderRequestPayload = {
-				model: "qwen3.6-35b-a3b",
+				model: "gemma-4-26b-a4b-it",
 				messages: [{ role: "system", content: "pi-sys" }],
 				temperature: 0.4,
 			};
 			const variantSnapshot: VariantSnapshot = {
-				profileId: "qwen3.6-35b-a3b",
-				variant: "v3.1-default",
+				profileId: "gemma-4-26b-a4b-it",
+				variant: "v2.1",
 				variantHash: "sha256:default",
 				role: "default",
 				harness: {

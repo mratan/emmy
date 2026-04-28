@@ -68,16 +68,16 @@ describe("runSidecarStartHttp (Plan 04.2-04 Task 2)", () => {
 		]);
 		await runSidecarStartHttp({
 			baseUrl: "http://127.0.0.1:8003",
-			profile_id: "qwen3.6-35b-a3b",
-			variant: "v3.1-default",
+			profile_id: "gemma-4-26b-a4b-it",
+			variant: "v2.1",
 			onProgress: () => {},
 			fetchSseImpl,
 		});
 		expect(lastUrl.url).toBe("http://127.0.0.1:8003/start");
 		const body = JSON.parse(lastUrl.init?.body as string);
 		expect(body).toEqual({
-			profile_id: "qwen3.6-35b-a3b",
-			variant: "v3.1-default",
+			profile_id: "gemma-4-26b-a4b-it",
+			variant: "v2.1",
 		});
 		expect(lastUrl.init?.method).toBe("POST");
 		const headers = lastUrl.init?.headers as Record<string, string>;
@@ -107,12 +107,12 @@ describe("runSidecarStartHttp (Plan 04.2-04 Task 2)", () => {
 		]);
 		await runSidecarStartHttp({
 			baseUrl: "http://127.0.0.1:8003",
-			profile_id: "qwen3.6-35b-a3b",
+			profile_id: "gemma-4-26b-a4b-it",
 			onProgress: () => {},
 			fetchSseImpl,
 		});
 		const body = JSON.parse(lastUrl.init?.body as string);
-		expect(body.profile_id).toBe("qwen3.6-35b-a3b");
+		expect(body.profile_id).toBe("gemma-4-26b-a4b-it");
 		// JSON.stringify drops undefined values; Pydantic uses default None.
 		expect(body.variant).toBeUndefined();
 	});

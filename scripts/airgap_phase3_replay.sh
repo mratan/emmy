@@ -16,7 +16,7 @@
 #   bash scripts/airgap_phase3_replay.sh [--turns N]
 #
 # Environment:
-#   EMMY_PROFILE     — profile name (default: qwen3.6-35b-a3b/v3)
+#   EMMY_PROFILE     — profile name (default: gemma-4-26b-a4b-it/v2)
 #   EMMY_BASE_URL    — vLLM endpoint (default: http://127.0.0.1:8002)
 #   EMMY_TURNS       — how many turns to replay (default: 50)
 #
@@ -28,7 +28,7 @@
 
 set -euo pipefail
 
-EMMY_PROFILE="${EMMY_PROFILE:-qwen3.6-35b-a3b/v3}"
+EMMY_PROFILE="${EMMY_PROFILE:-gemma-4-26b-a4b-it/v2}"
 EMMY_BASE_URL="${EMMY_BASE_URL:-http://127.0.0.1:8002}"
 EMMY_TURNS="${EMMY_TURNS:-50}"
 
