@@ -1,7 +1,7 @@
 # Emmy
 
 Fully-local coding agent on NVIDIA DGX Spark. Two architecturally separate parts:
-1. **Specialized vLLM serving** (`emmy-serve`) for Qwen 3.6 (daily driver) and Gemma 4 (alternate) in digest-pinned containers — coding-tuned sampling, grammar-constrained tool output, long-context optimization.
+1. **Specialized vLLM serving** (`emmy-serve`) for Gemma 4 (daily driver — switched from Qwen on 2026-04-28; see `.planning/phases/04.4-…/runs/V-RESULTS-v8-matrix-complete.md`) and Qwen 3.6 (alternate) in digest-pinned containers — coding-tuned sampling, grammar-constrained tool output, long-context optimization.
 2. **pi-mono based harness** (`pi-emmy`) exposing all eight customization surfaces opinionated harnesses hide.
 
 **Done bar:** daily-driver replacement for Claude Code AND research-grade reproducible artifact. **No cloud INFERENCE anywhere in the loop.** Local-first egress via a self-hosted SearxNG instance is the single authorized outbound component; everything else the harness talks to is loopback.
@@ -16,9 +16,9 @@ Fully-local coding agent on NVIDIA DGX Spark. Two architecturally separate parts
 - **Node/Bun:** Bun 1.3+ for the TS harness (`curl -fsSL https://bun.sh/install | bash`).
 - **Python:** 3.11+ via `uv` (`curl -LsSf https://astral.sh/uv/install.sh | sh`).
 - **Model weights:**
-  - Qwen 3.6-35B-A3B-FP8 (daily driver, MoE) → `/models/Qwen3.6-35B-A3B-FP8` (≈35 GB).
+  - Gemma 4 26B-A4B-it (daily driver since 2026-04-28, MoE) → `/models/gemma-4-26B-A4B-it` (≈52 GB BF16; vLLM runtime-quants to FP8 on boot).
+  - Qwen 3.6-35B-A3B-FP8 (alternate MoE — faster but with documented compliance gap, MoE) → `/models/Qwen3.6-35B-A3B-FP8` (≈35 GB).
   - Qwen 3.6-27B-FP8 (Phase 4.1 dense sibling, opt-in) → `/models/Qwen3.6-27B-FP8` (≈29 GB).
-  - Gemma 4 26B-A4B-it (Phase 4 alternate, MoE) → `/models/gemma-4-26B-A4B-it` (≈52 GB BF16; vLLM runtime-quants to FP8 on boot).
   - Gemma 4 31B-it (Phase 4.1 dense sibling, opt-in) → `/models/gemma-4-31B-it` (≈61 GB BF16; runtime FP8 quant).
 - **vLLM containers** (digest pinned in `profiles/*/serving.yaml` — never upstream PyPI):
   - **Qwen (both MoE + dense)** → `nvcr.io/nvidia/vllm:26.03.post1-py3` (NGC, fastsafetensors loader, ~3 min cold start).
@@ -31,10 +31,11 @@ Fully-local coding agent on NVIDIA DGX Spark. Two architecturally separate parts
 Three stacks boot independently:
 
 ```bash
-# 1. Inference server (~2-3 min cold start via fastsafetensors)
+# 1. Inference server (~8 min cold start; Gemma uses upstream image without fastsafetensors)
 bash scripts/start_emmy.sh
-# Default profile is v3.1 (daily-driver). Override with --profile profiles/qwen3.6-35b-a3b/v3 for Phase-3-locked
-# Ready banner: "emmy-serve ready — profile profiles/qwen3.6-35b-a3b/v3.1 on http://127.0.0.1:8002"
+# Default profile is gemma-4-26b-a4b-it/v2 (daily-driver since 2026-04-28). Override with
+# --profile profiles/qwen3.6-35b-a3b/v3.1 for the faster alternate MoE.
+# Ready banner: "emmy-serve ready — profile profiles/gemma-4-26b-a4b-it/v2 on http://127.0.0.1:8002"
 
 # 2. Observability (Langfuse v3; optional but recommended)
 bash scripts/start_observability.sh
@@ -107,26 +108,26 @@ docker stop emmy-serve              # stops vLLM serving
 
 Every non-trivial knob lives in a profile. Profile bundles are immutable per version (D-02 from Phase 1); operational changes ship as sibling versions.
 
-### `profiles/qwen3.6-35b-a3b/` (primary — daily driver)
+### `profiles/qwen3.6-35b-a3b/` (alternate MoE — faster but compliance gap; was daily-driver until 2026-04-28)
 
 | Version | Status | Daily-driver? | Notes |
 |---------|--------|---------------|-------|
 | v1 | Phase 1 locked | no | Baseline: schema + SP_OK canary + thermal-validated sampling floors. `sha256:b91e747...21913` |
 | v2 | Phase 2 locked | no | Harness MVP baseline. Strict web_fetch allowlist (none). `sha256:24be3eea...85d8b` |
 | v3 | Phase 3 locked | no | Adds OTel telemetry + compaction policy + offline badge + 5-host doc allowlist. `sha256:2beb99c7...d4d3718` |
-| **v3.1** | **daily-driver** | **yes (default)** | **RAM-tuned + live auto-compaction + web_search + web_fetch returned-URL bypass + 3-state badge. `sha256:f9dcabd1...01fc73`** |
+| v3.1 | alternate (was daily-driver until 2026-04-28) | no | RAM-tuned + live auto-compaction + web_search + web_fetch returned-URL bypass + 3-state badge. `sha256:f9dcabd1...01fc73`. V-RESULTS-v8: V1 memory adoption 55%, V3 rot 5/5. Phase 4 SC-3 within-model role routing (`profiles/routes.yaml`) only activates when this profile is loaded. |
 | v3.2 | Phase 5 A/B candidate | no | Same as v3.1 but `max_num_batched_tokens: 16384` (doubled from v3.1's 8192) — kept for eval comparison. |
 
 v1, v2, v3, v3.1, v3.2 are byte-identical to their commit-of-record; `uv run emmy profile validate profiles/qwen3.6-35b-a3b/<ver>/` exits 0 for all five.
 
-### `profiles/gemma-4-26b-a4b-it/` (alternate — Phase 4)
+### `profiles/gemma-4-26b-a4b-it/` (primary — daily driver since 2026-04-28)
 
 | Version | Status | Bootable? | Notes |
 |---------|--------|-----------|-------|
 | v1 | superseded | **no** | Targets NGC `26.03.post1-py3` whose Transformers pre-dates `Gemma4ForCausalLM` — engine won't start. Kept only as historical record. |
-| **v2** | Phase 4 locked | **yes** | Upstream `vllm/vllm-openai:gemma4-0409-arm64-cu130` (vLLM 0.19.1.dev6, Transformers 5.5.0). `gpu_memory_utilization=0.86` measured via 11-iter KV bisection on spark-ff85; decode floors (p50 35.9 tok/s, p1 33.3 tok/s) + GPU clock floor (p5 2405 MHz) validated by two consecutive 2-hour thermal replays. `sha256:8f9c23f500...` |
+| **v2** | **daily-driver since 2026-04-28** | **yes** | Upstream `vllm/vllm-openai:gemma4-0409-arm64-cu130` (vLLM 0.19.1.dev6, Transformers 5.5.0). `gpu_memory_utilization=0.86` measured via 11-iter KV bisection on spark-ff85; decode floors (p50 35.9 tok/s, p1 33.3 tok/s) + GPU clock floor (p5 2405 MHz) validated by two consecutive 2-hour thermal replays. **V-RESULTS-v8: V1 memory adoption 100% (20/20), V3 rot 5/5.** Promoted to daily-driver when the matrix showed Qwen MoE plateaued at 55% V1 adoption; throughput trade-off (~36 vs ~48 tok/s) is the operator-accepted cost of higher compliance. `sha256:8f9c23f500...` |
 
-To swap from Qwen 3.6 → Gemma 4 v2, use `/profile gemma-4-26b-a4b-it` inside a running pi-emmy TUI — that's the atomic 4-phase path that actually restarts emmy-serve. First cold boot is ~8 min because upstream doesn't ship fastsafetensors; subsequent boots are similar (no in-container compile cache yet). `pi-emmy --profile <bundle>` at launch is harness-side only (prompts / tools / sampling) and assumes emmy-serve is already booted on a matching `served_model_name` — it will 404 otherwise; see Quickstart for the full sequence.
+`scripts/start_emmy.sh` and `pi-emmy` both default to `gemma-4-26b-a4b-it/v2`. To opt back into Qwen 3.6 → use `/profile qwen3.6-35b-a3b` inside a running pi-emmy TUI (the atomic 4-phase path that restarts emmy-serve), or pass `--profile profiles/qwen3.6-35b-a3b/v3.1` to both `start_emmy.sh` and `pi-emmy` at launch. First Gemma cold boot is ~8 min because upstream doesn't ship fastsafetensors; subsequent boots are similar (no in-container compile cache yet). `pi-emmy --profile <bundle>` at launch is harness-side only (prompts / tools / sampling) and assumes emmy-serve is already booted on a matching `served_model_name` — it will 404 otherwise; see Quickstart for the full sequence.
 
 ### `profiles/qwen3.6-27b/` (Phase 4.1 dense sibling — eval-only, opt-in)
 

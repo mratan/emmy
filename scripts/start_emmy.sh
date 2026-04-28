@@ -2,7 +2,7 @@
 # start_emmy.sh — Phase 1 one-command contract (REPRO-01, RESEARCH.md §14).
 #
 # Usage:
-#   ./scripts/start_emmy.sh [--profile profiles/qwen3.6-35b-a3b/v1] [--port 8002] [--airgap]
+#   ./scripts/start_emmy.sh [--profile profiles/gemma-4-26b-a4b-it/v2] [--port 8002] [--airgap]
 #   ./scripts/start_emmy.sh --install-sidecar-unit  # one-time: install systemd user unit for emmy-sidecar
 #
 # Exit codes:
@@ -23,7 +23,10 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
-PROFILE="profiles/qwen3.6-35b-a3b/v3.1"
+# 2026-04-28: default switched from qwen3.6-35b-a3b/v3.1 to
+# gemma-4-26b-a4b-it/v2 per V-RESULTS-v8 4-profile matrix (Gemma MoE
+# clears V1 memory adoption 100%; Qwen MoE 55%). Override via --profile.
+PROFILE="profiles/gemma-4-26b-a4b-it/v2"
 PORT=8002
 AIRGAP=0
 INSTALL_SIDECAR=0

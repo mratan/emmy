@@ -54,12 +54,19 @@ function emmyInstallRoot(): string {
 }
 
 function defaultProfilePath(): string {
-	// Phase 3.1 (Plan 03.1-03 post-close fix): default bumped v2 → v3.1 so
-	// `pi-emmy` with no `--profile` runs on the daily-driver profile that
-	// includes web_search + live compaction + allowlist bypass. Previously
-	// the default was v2 (Phase 2 baseline, no web_search). Users can still
-	// opt into v1/v2/v3 explicitly via `--profile` or `EMMY_PROFILE_ROOT`.
-	return resolve(emmyInstallRoot(), "profiles/qwen3.6-35b-a3b/v3.1");
+	// 2026-04-28: default switched from `qwen3.6-35b-a3b/v3.1` to
+	// `gemma-4-26b-a4b-it/v2` per the 4-profile V-protocol matrix at
+	// `.planning/phases/04.4-…/runs/V-RESULTS-v8-matrix-complete.md`.
+	// Gemma MoE clears V1 memory adoption at 100% vs Qwen MoE 55%; V3 rot
+	// 5/5 on both. Throughput trade-off (~36 vs ~48 tok/s) is the
+	// operator-accepted cost of higher compliance. Users can still opt
+	// into Qwen 35B-A3B v3.1 explicitly via `--profile` or
+	// `EMMY_PROFILE_ROOT`. Phase 4 SC-3 within-model role routing in
+	// `profiles/routes.yaml` only activates with the Qwen profile loaded.
+	// Previous default progression: v2 (Phase 2 baseline) → v3.1 (Phase
+	// 3.1 web_search + live compaction + allowlist bypass) →
+	// gemma-4-26b-a4b-it/v2 (this entry).
+	return resolve(emmyInstallRoot(), "profiles/gemma-4-26b-a4b-it/v2");
 }
 
 type Mode = "tui" | "print" | "json";
@@ -137,7 +144,7 @@ function parseArgs(argv: string[]): ParsedArgs {
 function usage(): string {
 	return `pi-emmy — Emmy harness (daily-driver)
   Usage: pi-emmy [--profile <dir>] [--base-url <url>] [--print <prompt>|--json <prompt>|--print-environment|--export-hf <out_dir>] [--no-memory|--memory-snapshot <dir>]
-  Defaults: --profile <emmy-install>/profiles/qwen3.6-35b-a3b/v3.1 (override via $EMMY_PROFILE_ROOT or --profile), --base-url http://127.0.0.1:8002
+  Defaults: --profile <emmy-install>/profiles/gemma-4-26b-a4b-it/v2 (override via $EMMY_PROFILE_ROOT or --profile), --base-url http://127.0.0.1:8002
   --export-hf <out_dir>: export ~/.emmy/telemetry/feedback.jsonl as a HuggingFace datasets-loadable artifact (TELEM-02) and exit.
   --no-memory: disable filesystem memory tool registration (eval-baseline mode).
   --memory-snapshot <dir>: mirror <dir>/{project,global} into live memory roots before run; revert after (eval reproducibility, V6).
