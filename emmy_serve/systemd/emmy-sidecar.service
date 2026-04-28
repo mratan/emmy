@@ -12,6 +12,16 @@ Restart=on-failure
 RestartSec=5
 TimeoutStopSec=40
 KillSignal=SIGTERM
+# 2026-04-28 follow-up to POSTMORTEM-sidecar-oom-cascade-2026-04-28.md.
+# systemd's app.slice default oom_score_adj is 200, which made the sidecar
+# python (a tiny ~20 MiB RSS process) score higher than 5 GiB user processes
+# and the kernel OOM-killer reaped it during the Gemma 26B swap when bio-
+# pipeline contention pushed UMA over the cliff. Shifting to -200 marks
+# the controller as preferred-to-survive — the kernel will reap user-slice
+# defaults (and eventually larger workloads) before this. Net swing ~400
+# points. The controller is intentionally lightweight; even at -200 a true
+# total-OOM will eventually find it, but only after much larger candidates.
+OOMScoreAdjust=-200
 Environment=PYTHONUNBUFFERED=1
 Environment=VLLM_NO_USAGE_STATS=1
 Environment=VLLM_LOAD_FORMAT=fastsafetensors

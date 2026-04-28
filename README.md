@@ -60,22 +60,23 @@ pi-emmy
 # One-shot
 pi-emmy --print "Summarize the package.json and tell me which package has the most deps"
 
-# Launch against a non-default Qwen profile (serving must ALREADY be booted on
+# Launch with an explicit profile pointer (serving must ALREADY be booted on
 # that profile — `pi-emmy --profile` is harness-side only, it does NOT swap
-# the vLLM engine). For a live swap, use /profile inside the TUI instead.
-pi-emmy --profile profiles/qwen3.6-35b-a3b/v3
+# the vLLM engine). For a live engine swap, use /profile inside the TUI instead.
+pi-emmy --profile profiles/qwen3.6-35b-a3b/v3.1   # alternate Qwen MoE
 
-# Run against Gemma 4 26B-A4B-it — TWO separate steps:
+# Run against Qwen 3.6 35B-A3B (alternate MoE — faster but documented
+# compliance gap per V-RESULTS-v8) — TWO separate steps:
 #   1) swap the serving engine (one of the following)
-#      (a) `/profile gemma-4-26b-a4b-it` inside an already-running pi-emmy TUI
-#          — atomic 4-phase swap, ~7 min cold boot (not fastsafetensors)
-#      (b) stop + re-start emmy-serve with the Gemma bundle:
+#      (a) `/profile qwen3.6-35b-a3b` inside an already-running pi-emmy TUI
+#          — atomic 4-phase swap, ~3 min cold boot (NGC fastsafetensors)
+#      (b) stop + re-start emmy-serve with the Qwen bundle:
 #          docker stop emmy-serve
-#          bash scripts/start_emmy.sh --profile profiles/gemma-4-26b-a4b-it/v2
-#   2) only if you used (b), launch pi-emmy pointed at the Gemma bundle:
-#          pi-emmy --profile profiles/gemma-4-26b-a4b-it/v2
-# See docs/runbook.md § "Swapping profiles" (+ "First-time swap to Gemma 4")
-# for the D-02 progress phases and exit-code taxonomy.
+#          bash scripts/start_emmy.sh --profile profiles/qwen3.6-35b-a3b/v3.1
+#   2) only if you used (b), launch pi-emmy pointed at the Qwen bundle:
+#          pi-emmy --profile profiles/qwen3.6-35b-a3b/v3.1
+# See docs/runbook.md § "Swapping profiles" for the D-02 progress phases
+# and exit-code taxonomy.
 
 # Environment inspection
 pi-emmy --print-environment
@@ -143,13 +144,15 @@ v1, v2, v3, v3.1, v3.2 are byte-identical to their commit-of-record; `uv run emm
 | **v1.1** | Phase 4.1 follow-up — DEFAULT_VARIANT | **yes** | RAM-headroom retune of v1 (gmu 0.86 → 0.55, D-29-equivalent). Targets ~70 GB emmy-serve footprint, leaves >40 GiB system headroom on 128 GiB UMA. All other fields byte-identical to v1 — `container_entrypoint_override=""` + `strip_thinking_tags=true` quirks preserved. `sha256:55d5f8cc...` **This is the variant `/profile gemma-4-31b-it` resolves to.** |
 | v1 | Phase 4.1 locked — KV-ceiling audit | yes | Upstream `vllm/vllm-openai:gemma4-0409-arm64-cu130` (same image as Gemma 26B MoE v2). `gpu_memory_utilization=0.86` via 11-iter KV bisection on spark-ff85; 2×2h thermal "All floors pass" with preemptions=0, oom=0; decode p50 6.4 tok/s p1 6.2 tok/s (after warm-cache), GPU clock p5/p50 2405/2496 MHz. `sha256:fe9eded6...` BF16 publisher weights → runtime FP8 quant. **Reserves ~110 GiB UMA** — frozen as bisection-result audit artifact. |
 
-**Phase 4.1 dense profiles are additive + opt-in.** Daily-driver default stays on Qwen 35B-A3B v3.1; the dense siblings exist for Phase 5 dense-vs-MoE A/B comparison. Per operator directive (saved in user memory), throughput on the dense profiles is **informational only** — NOT an acceptance gate. Phase 5 eval matrix in `eval/MATRIX.md` enumerates all participants. Side finding: all 4 KV-bisected profiles (35B-A3B v3, 27B v1, 26B-A4B v2, 31B v1) converge to gmu=0.86 → that's a hardware-level vLLM allocation ceiling on GB10 / 128 GB UMA, not a model knob. v3.1 / v1.1 back off to gmu=0.55 for system-RAM headroom (Pitfall #3 trumps Pitfall #1 sole-writer for sibling re-targets that prioritize operator comfort).
+**Phase 4.1 dense profiles are additive + opt-in.** Daily-driver default is Gemma 4 26B-A4B v2 (since 2026-04-28); the dense siblings exist for Phase 5 dense-vs-MoE A/B comparison and were both V1-memory cleared in V-RESULTS-v8 (Qwen 27B 100%, Gemma 31B 95%). Per operator directive (saved in user memory), throughput on the dense profiles is **informational only** — NOT an acceptance gate. Phase 5 eval matrix in `eval/MATRIX.md` enumerates all participants. Side finding: all 4 KV-bisected profiles (35B-A3B v3, 27B v1, 26B-A4B v2, 31B v1) converge to gmu=0.86 → that's a hardware-level vLLM allocation ceiling on GB10 / 128 GB UMA, not a model knob. v3.1 / v1.1 back off to gmu=0.55 for system-RAM headroom (Pitfall #3 trumps Pitfall #1 sole-writer for sibling re-targets that prioritize operator comfort).
 
 To swap to a dense profile inside a running pi-emmy TUI: `/profile qwen3.6-27b` or `/profile gemma-4-31b-it` (both have a `DEFAULT_VARIANT=v1` family marker). Each respects its family's container — Qwen lands on the NGC fastsafetensors image, Gemma on the upstream Day-1 image.
 
 ### Role routing (Phase 4 + Phase 4.1)
 
-`profiles/routes.yaml` maps role heuristics (plan / edit / critic / default) to Qwen 3.6 v3.1 sibling variants (same engine bytes, different sampling + prompt). Phase 4.1 added an optional `dense:` role that maps to `qwen3.6-27b@v1` for callers that explicitly want dense behavior (no MoE expert routing variance) — opt-in only; default unchanged.
+`profiles/routes.yaml` maps role heuristics (plan / edit / critic / default) to Qwen 3.6 v3.1 sibling variants (same engine bytes, different sampling + prompt). Phase 4.1 added an optional `dense:` role that maps to `qwen3.6-27b@v1` for callers that explicitly want dense behavior (no MoE expert routing variance) — opt-in only.
+
+**As of the 2026-04-28 daily-driver switch to Gemma 4 26B-A4B v2, role routing degrades to a no-op on the default path** because Gemma has no role-variant siblings yet — engine byte-identity prevents the Qwen overlays from applying meaningfully to a Gemma engine. Routes still fire when the loaded engine is Qwen (e.g. `pi-emmy --profile profiles/qwen3.6-35b-a3b/v3.1` or `/profile qwen3.6-35b-a3b` from the TUI). Authoring Gemma plan/edit/critic siblings is Phase 5+ work.
 
 ---
 
@@ -236,7 +239,7 @@ cd emmy && bun install
 
 # 3. Confirm Tailscale + Spark reachability:
 curl -sf https://<spark>.<tailnet>.ts.net/v1/models | head -c 200
-#   {"object":"list","data":[{"id":"qwen3.6-35b-a3b",...
+#   {"object":"list","data":[{"id":"gemma-4-26b-a4b-it",...   (or "qwen3.6-35b-a3b" if Spark is on the alternate)
 
 # 4. One-shot smoke test:
 EMMY_SKIP_PROFILE_VALIDATE=1 \
@@ -299,12 +302,15 @@ emmy --print "Summarize this repo"  # one-shot
 
 **Agent returns 400 "context length is only 131072 tokens, maximum input length 114688"**
 Phase 3.1's live auto-compaction fires at the 75% soft threshold (86016 tokens). If it didn't trigger:
-- confirm you're on v3.1 (`pi-emmy --print-environment`); v2 has no compaction
+- confirm you're on a profile that has compaction wired (`pi-emmy --print-environment`): Qwen `v3.1`+ or Gemma `v2`+. The Phase 2 Qwen `v2` baseline has no compaction.
 - use `/clear` (emmy slash command) or `/compact` (pi built-in) from inside the TUI
 - restart: press `Ctrl-D` on empty editor to exit, re-launch
 
 **`free -h` shows <10 GiB available, swap in use**
-vLLM `gpu_memory_utilization` is too aggressive for DGX Spark UMA. v3.1 sets it to 0.55 (was 0.88 in v3). If tuning further: edit `profiles/qwen3.6-35b-a3b/v3.1/serving.yaml`, restart emmy-serve. See `docs/runbook.md § RAM tuning`.
+vLLM `gpu_memory_utilization` is too aggressive for DGX Spark UMA. The shipping daily-driver Gemma `v2` runs at gmu=0.86 (~103 GiB UMA reserve) by design — that's the bisected ceiling. The alternate Qwen `v3.1` runs at gmu=0.55 (~70 GiB) for headroom. If you need extra system RAM under Gemma, either swap to Qwen `v3.1` (`/profile qwen3.6-35b-a3b`) or cut a `gemma-4-26b-a4b-it/v2.1` sibling at gmu=0.55 (mirrors Qwen v3→v3.1 / dense v1→v1.1 precedent). See `docs/runbook.md § RAM tuning`.
+
+**Sidecar at 127.0.0.1:8003 is dead but vLLM still serves**
+Recent operating experience surfaced a kernel-OOM cascade where global memory pressure from concurrent workloads kills the sidecar (small RSS, score_adj=200) while vLLM (large RSS, in a separate docker cgroup at score_adj=0) survives. The 2026-04-28 fix added `OOMScoreAdjust=-200` to `emmy-sidecar.service` so the sidecar is reaped last. To recover: `journalctl -k -n 100 \| grep oom-kill` to confirm; if user-systemd itself was killed, `loginctl enable-linger $USER` + re-login (or `sudo systemctl restart user@$(id -u).service`) to bring it back; then `systemctl --user start emmy-sidecar`. vLLM is unaffected — `pi-emmy --base-url http://127.0.0.1:8002` keeps working through the outage. See `.planning/phases/04.2-remote-client-mode-parity/POSTMORTEM-sidecar-oom-cascade-2026-04-28.md`.
 
 **Profile hash mismatch on validate**
 Profile was edited in place — D-02 immutability requires a NEW sibling version. Either revert the edit (git restore) or `cp -r profiles/qwen3.6-35b-a3b/v3.1/ profiles/qwen3.6-35b-a3b/v3.2/` and work on v3.2.
@@ -322,10 +328,10 @@ See `docs/runbook.md` for deeper daily-ops material (log locations, rotation, en
 ## Where things live
 
 ```
-profiles/qwen3.6-35b-a3b/v{1,2,3,3.1,3.2}/  # Daily-driver Qwen MoE (v3.1 default)
-profiles/qwen3.6-27b/v1/                    # Phase 4.1 dense Qwen sibling (opt-in)
-profiles/gemma-4-26b-a4b-it/v{1,2}/         # Phase 4 Gemma MoE (v2 bootable)
-profiles/gemma-4-31b-it/v1/                 # Phase 4.1 dense Gemma sibling (opt-in)
+profiles/gemma-4-26b-a4b-it/v{1,2}/         # Daily-driver Gemma MoE (v2 default since 2026-04-28; v1 historical)
+profiles/qwen3.6-35b-a3b/v{1,2,3,3.1,3.2}/  # Alternate Qwen MoE (v3.1 was prior daily-driver; faster but compliance gap)
+profiles/qwen3.6-27b/v{1,1.1}/              # Phase 4.1 dense Qwen sibling (opt-in)
+profiles/gemma-4-31b-it/v{1,1.1}/           # Phase 4.1 dense Gemma sibling (opt-in)
 emmy_serve/                              # vLLM container wrapper, profile loader, air-gap validators
   swap/                                  # FastAPI sidecar (Phase 04.2): /start /stop /status /profile/swap; D-01 graceful drain; SSE progress
   systemd/                               # emmy-sidecar.service user unit (Phase 04.2): always-on control plane
@@ -374,16 +380,17 @@ See `.planning/phases/03-observability-agent-loop-hardening-lived-experience/03-
 
 ## Roadmap
 
-Emmy ships in 7 phases across v1 milestones. Cumulative progress: 5/7 phases complete (Phases 1, 2, 3, 3.1, 4, 4.1) + Phase 04.2 CLOSURE PENDING (3 operator-gated SCs deferred). 43/68 v1 REQ-IDs Done; TOOLS-10/UX-04/UX-07 at Done† pending Phase 04.2 SC operator confirmation.
+Emmy ships in 7 phases across v1 milestones. Cumulative progress: 5/7 base phases complete (1, 2, 3, 4) plus four mid-milestone insertions (3.1, 4.1, 04.2, 04.4). 43/68 v1 REQ-IDs Done; TOOLS-10/UX-04/UX-07 at Done† pending Phase 04.2 SC operator confirmation.
 
 - **Phase 1** (CLOSED): serving foundation + profile schema
 - **Phase 2** (CLOSED): pi-harness MVP — daily-driver baseline
 - **Phase 3** (CLOSED): observability + agent-loop hardening + lived-experience
 - **Phase 3.1** (CLOSED): operational polish — RAM + live compaction + SearxNG + docs
 - **Phase 4** (CLOSED): Gemma 4 profile + profile system maturity (all 4 operator carry-forwards resolved 2026-04-24)
-- **Phase 4.1** (CLOSED 2026-04-25): dense-variant model profiles — Qwen 3.6-27B-FP8 + Gemma 4 31B-it dense siblings authored, KV-bisected (gmu=0.86 each, identical to MoE ceiling), 2×2h thermal-validated. `eval/MATRIX.md` enumerates the 4-profile Phase 5 participant matrix. Daily-driver default UNCHANGED.
-- **Phase 04.2** (CLOSURE PENDING 2026-04-25/26): remote-client mode parity — FastAPI sidecar (`emmy-sidecar` on 8003) + always-on systemd unit + Mac TS dispatcher + `/start /stop /status` slash commands + `install-client.sh` one-press wrapper + `EMMY_SEARXNG_URL` Tailscale override (D-33 LOCKED preserved in local mode). 250 Python + 620 TS tests green; 3 SC walkthroughs deferred.
-- **Phase 5** (next): eval harness (terminal-bench, SWE-bench Verified, LiveCodeBench)
+- **Phase 4.1** (CLOSED 2026-04-25): dense-variant model profiles — Qwen 3.6-27B-FP8 + Gemma 4 31B-it dense siblings authored, KV-bisected (gmu=0.86 each, identical to MoE ceiling), 2×2h thermal-validated. `eval/MATRIX.md` enumerates the 4-profile Phase 5 participant matrix.
+- **Phase 04.2** (CLOSURE PENDING 2026-04-25/26): remote-client mode parity — FastAPI sidecar (`emmy-sidecar` on 8003) + always-on systemd unit + Mac TS dispatcher + `/start /stop /status` slash commands + `install-client.sh` one-press wrapper + `EMMY_SEARXNG_URL` Tailscale override (D-33 LOCKED preserved in local mode). 250 Python + 620 TS tests green; 3 SC walkthroughs deferred. 2026-04-28 follow-up: `OOMScoreAdjust=-200` added to `emmy-sidecar.service` after the OOM-cascade postmortem.
+- **Phase 04.4** (EXEC LANDED, CLOSURE PENDING — operator-gated): filesystem-memory tool + append-only-prefix invariant + compaction polish (9 plans across 4 waves; 4 profile bundles updated with `memory:` block; D-3X prefix-hash + telemetry shipped). **2026-04-28 V-protocol matrix complete (V-RESULTS-v8):** 4-profile V1+V3 evidence — Gemma MoE 100%/5/5, Qwen dense 100%/5/5, Gemma dense 95%/5/5, Qwen MoE 55%/5/5. Falsified the v7 active-params hypothesis; **daily-driver switched from Qwen 35B-A3B v3.1 to Gemma 4 26B-A4B v2** based on the matrix. Remaining V2/V8 compaction + V8 memory protocols are operator-time work.
+- **Phase 5** (next): eval harness (terminal-bench, SWE-bench Verified, LiveCodeBench) — first phase to A/B-evaluate the new Gemma daily-driver against Qwen.
 - **Phase 6**: speculative decoding (Qwen3-MTP + EAGLE-3)
 - **Phase 7**: publication + reproducibility artifact
 
@@ -400,7 +407,7 @@ Emmy uses GSD for phase planning (`/gsd-*` slash commands inside Claude Code). K
 - `/gsd-execute-phase <N>` — execute all plans in a phase
 - `/gsd-verify-work` — UAT after a phase closes
 
-Every profile knob is documented in `profiles/qwen3.6-35b-a3b/<version>/PROFILE_NOTES.md` with provenance (`Retrieved` date + source URL) per REPRO-02 discipline.
+Every profile knob is documented in each bundle's `PROFILE_NOTES.md` (e.g. `profiles/gemma-4-26b-a4b-it/v2/PROFILE_NOTES.md` and `profiles/qwen3.6-35b-a3b/v3.1/PROFILE_NOTES.md`) with provenance (`Retrieved` date + source URL) per REPRO-02 discipline.
 
 ---
 
