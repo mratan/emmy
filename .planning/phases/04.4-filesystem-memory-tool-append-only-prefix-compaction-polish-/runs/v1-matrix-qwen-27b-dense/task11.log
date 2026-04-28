@@ -1,0 +1,28 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-27b@v1.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=471ea3f12a9f172f8f1f2f2fa93b9b539ea9f3be82fbb8340c24bf2257b8900e
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=471ea3f12a9f172f8f1f2f2fa93b9b539ea9f3be82fbb8340c24bf2257b8900e, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T00-12-15-857Z.jsonl
+grep: .: Is a directory
+grep: .: Is a directory
+grep: profiles: Is a directory
+After a thorough search of the entire codebase, I can now give you a definitive answer:
+
+**There is no function in this codebase that decides whether to "fall back to vLLM" after a tool-call parse failure.**
+
+Here's what the codebase actually does:
+
+### The reactive grammar retry path (`callWithReactiveGrammar`)
+
+The function that handles tool-call parse failures is **`callWithReactiveGrammar`** in [`packages/emmy-provider/src/grammar-retry.ts`](packages/emmy-provider/src/grammar-retry.ts) (line 82). Its behavior is:
+
+1. **First call**: POST to vLLM's `/v1/chat/completions` **without** a grammar constraint (unconstrained).
+2. **Parse check**: It tries `JSON.parse()` on each `tool_call.arguments`. If any fails, it triggers a retry.
+3. **Retry (once)**: POST the **same request to the same vLLM endpoint**, but this time with `extra_body.guided_decoding.grammar` populated from the profile's Lark grammar file.
+4. **If retry still fails**: Throws `GrammarRetryExhaustedError` — no further fallback.
+
+There is **no secondary model or alternative backend** to fall back to. The "retry" is always to the **same vLLM instance**, just with grammar-guided decoding enabled on the second attempt. The provider is wired through `registerEmmyProvider` in [`packages/emmy-provider/src/index.ts`](packages/emmy-provider/src/index.ts) (line 62), which routes every `chat()` call through `callWithReactiveGrammar`.
+
+If you're looking for a concept where the system switches from one model provider to another (e.g., from a cloud API to a local vLLM) after a parse failure — that functionality does not exist in this codebase. The only "fallback" related to parse failures is the grammar-guided retry to the same vLLM endpoint.

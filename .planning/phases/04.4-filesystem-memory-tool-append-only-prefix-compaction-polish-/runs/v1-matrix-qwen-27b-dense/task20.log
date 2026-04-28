@@ -1,0 +1,58 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-27b@v1.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=1b08ff4985b8fb589ba5ee2a9795b35735f11d01fe9fff89f9eae7acbae5bc8f
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=1b08ff4985b8fb589ba5ee2a9795b35735f11d01fe9fff89f9eae7acbae5bc8f, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T01-17-38-540Z.jsonl
+Here's the complete answer:
+
+## Registered Native Tools in `@emmy/tools`
+
+The native tool set is defined as a frozen constant `NATIVE_TOOL_NAMES` in `packages/emmy-tools/src/native-tools.ts`:
+
+| # | Tool | Description |
+|---|------|-------------|
+| 1 | **read** | Read a file; tags each line with an 8-hex content hash for hash-anchored edits |
+| 2 | **write** | Atomic file overwrite (open → writeFile → fsync → close) |
+| 3 | **edit** | Hash-anchored edit — references line hashes from a prior `read`; stale hashes rejected |
+| 4 | **bash** | Shell execution with builtin denylist (`rm -rf /`, fork bomb) + user-extensible list; output truncated to 50 lines head+tail |
+| 5 | **grep** | ripgrep-style search against a path |
+| 6 | **find** | Filesystem find with `-name` and `-type` filters |
+| 7 | **ls** | Directory listing with `-l` and `-a` flags |
+| 8 | **web_fetch** | HTTP GET → markdown, allowlist-gated (profile.harness.tools.web_fetch.allowlist + loopback) |
+| 9 | **web_search** | SearxNG web search — **conditional**: only registered when `profile.harness.tools.web_search.enabled === true` AND env kill-switches (`EMMY_WEB_SEARCH=off`, `EMMY_TELEMETRY=off`) are not engaged |
+
+## Runtime Discovery Mechanism
+
+There are **two entry points** in `native-tools.ts`, serving different consumption patterns:
+
+### 1. `registerNativeTools(pi, opts)` — Imperative
+Calls `pi.registerTool(spec)` for each tool directly. Each tool is defined inline as a `PiToolSpec` with `{name, description, parameters, invoke}`. Every invocation is wrapped in a telemetry harness that emits `tool.invoke` events with latency and outcome.
+
+### 2. `buildNativeToolDefs(opts)` — Declarative (the primary path)
+This is the key function used at session boot. It uses a **collector shim pattern**:
+1. Creates an empty `PiToolSpec[]` array
+2. Calls `registerNativeTools` with a mock `pi` whose `registerTool` just pushes specs into the array
+3. Maps each collected spec through `toolSpecToDefinition()` (from `tool-definition-adapter.ts`) to produce `ToolDefinitionLike[]` objects
+
+The adapter converts the Phase-2 `PiToolSpec` shape into pi 0.68's `ToolDefinition` shape:
+- `invoke(args)` → `execute(toolCallId, params, signal, onUpdate, ctx)`
+- Result is wrapped in `AgentToolResultLike { content: [{type: "text", text}], details }`
+
+### Session Wiring (`session.ts`)
+
+The consumer in `packages/emmy-ux/src/session.ts` assembles the final tool array:
+
+```
+customTools = [
+  ...buildNativeToolDefs(nativeToolOpts),   // 8-9 native tools
+  ...buildMcpToolDefs(mcpCfg, { registeredToolNames }),  // MCP tools (collision-checked)
+  ...memoryTools,                            // conditional memory tool
+  // subagent tool added inside buildRealPiRuntime when profile has subagents
+]
+```
+
+This `customTools` array is passed to `createAgentSessionFromServices({ customTools })`, making it the **authoritative tool registry** — the "pi's customTools as the authoritative tool registry" flip from Plan 03-01.
+
+The `NATIVE_TOOL_NAMES` constant also serves as the **collision source of truth** consumed by `mcp-bridge.ts` (D-15) to prevent MCP tools from shadowing native tool names.

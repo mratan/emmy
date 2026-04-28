@@ -1,0 +1,40 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-27b@v1.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=4e2cd39739bae61aae62e1698f30cb381a085cc57c2a7515e4d6c30a2857381d
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=4e2cd39739bae61aae62e1698f30cb381a085cc57c2a7515e4d6c30a2857381d, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T01-14-27-590Z.jsonl
+grep: .: Is a directory
+Based on the files I've read, here's the difference between `harness.yaml` and `serving.yaml` in profile bundles:
+
+---
+
+## `harness.yaml` — Agent-side configuration
+
+This configures **how the coding agent interacts with the model**. It's consumed by the agent framework (the "harness") at runtime. Key sections:
+
+| Section | Purpose |
+|---|---|
+| **`prompts`** | Paths to system prompt, edit format, tool descriptions; flags like `use_system_role` |
+| **`context`** | Context window management: `max_input_tokens`, pruning strategy, compaction policy (thresholds, summarization) |
+| **`tools`** | Tool call format (`openai`), schema paths, grammar config, per-tool sampling overrides (e.g. `edit: { temperature: 0.0 }`), web_fetch allowlist, web_search settings |
+| **`agent_loop`** | Agent behavior: `max_iterations`, retry budgets, self-correction policy |
+| **`advanced_settings_whitelist`** | Per-call settings the agent can adjust without restarting the engine |
+
+## `serving.yaml` — Inference-server configuration
+
+This configures **how the model is served** (vLLM in this case). It's consumed by the serving infrastructure/container. Key sections:
+
+| Section | Purpose |
+|---|---|
+| **`engine`** | Model identity (`model`, `model_hf_id`, `served_model_name`), container image, context/memory settings (`max_model_len`, `gpu_memory_utilization`, `kv_cache_dtype`), loader format, quantization, tool-call parser, attention backend, network bind |
+| **`sampling_defaults`** | Default generation parameters: `temperature`, `top_p`, `top_k`, `repetition_penalty`, `max_tokens`, `stop` tokens |
+| **`speculative`** | Speculative decoding config (deferred in current profiles) |
+| **`guided_decoding`** | Backend for structured output (e.g. `xgrammar`) |
+| **`quirks`** | Model-specific workarounds: `strip_thinking_tags`, `promote_reasoning_to_content`, `buffer_tool_streams` |
+| **`env`** | Environment variables passed to the serving container |
+
+---
+
+**In short:** `harness.yaml` is the **agent's playbook** (prompts, tools, context management, loop behavior), while `serving.yaml` is the **server's spec** (model loading, GPU memory, sampling defaults, network config). They're two halves of the same profile — one tells the agent *how to use* the model, the other tells the infrastructure *how to run* it.

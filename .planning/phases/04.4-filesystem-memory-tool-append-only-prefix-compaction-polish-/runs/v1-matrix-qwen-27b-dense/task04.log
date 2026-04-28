@@ -1,0 +1,44 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-27b@v1.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=b69f5e18d10bbf8d3d31502799aebc805e79eddec95be96ff24a484657789328
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=b69f5e18d10bbf8d3d31502799aebc805e79eddec95be96ff24a484657789328, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-27T23-42-10-786Z.jsonl
+Now I have a clear picture. Here's the convention:
+
+## OTel Span Attribute Naming Convention
+
+This codebase follows a **two-tier** naming strategy, explicitly documented in the comments of `span-factory.ts`:
+
+### 1. **OTel GenAI Semantic Convention attributes** (canonical, no prefix)
+Use the official OTel GenAI semconv names whenever one exists. These use `snake_case` and the `gen_ai.` prefix:
+
+| Attribute | Example |
+|---|---|
+| `gen_ai.system` | `"vllm"` |
+| `gen_ai.request.model` | model name |
+| `gen_ai.operation.name` | `"execute_tool"` |
+| `gen_ai.tool.name` | tool name |
+| `gen_ai.usage.input_tokens` | number |
+| `gen_ai.usage.output_tokens` | number |
+| `gen_ai.response.finish_reasons` | string array |
+
+### 2. **Emmy-specific extensions** (custom prefix)
+When semconv has no coverage, use the `emmy.` prefix with `snake_case` sub-keys:
+
+| Attribute | Example |
+|---|---|
+| `emmy.prompt.sha256` | prompt hash |
+| `emmy.profile.id` | profile identifier |
+| `emmy.profile.version` | profile version |
+| `emmy.profile.hash` | profile content hash |
+| `emmy.profile.variant` | variant name |
+| `emmy.profile.variant_hash` | variant hash |
+| `emmy.role` | turn role |
+| `emmy.tool.args_hash` | tool arguments hash |
+
+### Key rule (from the code comments):
+> "Rather than stamp the attributes ad-hoc at every call site (D-10 anti-pattern — inventing emmy-specific names where OTel semconv already has canonical ones), we funnel span creation through the helpers below and only add emmy-specific attrs where semconv has no coverage."
+
+In short: **use `gen_ai.*` from OTel semconv first; fall back to `emmy.*` with `snake_case` only when no canonical attribute exists.**

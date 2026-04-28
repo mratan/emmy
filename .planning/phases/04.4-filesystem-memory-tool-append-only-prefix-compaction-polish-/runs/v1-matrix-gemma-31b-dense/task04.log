@@ -1,0 +1,225 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=gemma-4-31b-it@v1.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=b69f5e18d10bbf8d3d31502799aebc805e79eddec95be96ff24a484657789328
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=b69f5e18d10bbf8d3d31502799aebc805e79eddec95be96ff24a484657789328, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T03-22-45-580Z.jsonl
+grep: ./.venv/lib/python3.12/site-packages/charset_normalizer/cd.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/charset_normalizer/md.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/requests/__pycache__/status_codes.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/requests/__pycache__/models.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/requests/__pycache__/adapters.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/h11/__pycache__/_util.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/h11/__pycache__/_events.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/yaml/__pycache__/constructor.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/yaml/__pycache__/tokens.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/yaml/__pycache__/events.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/yaml/_yaml.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/transformers/generation/__pycache__/configuration_utils.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/transformers/utils/__pycache__/auto_docstring.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/transformers/utils/__pycache__/kernel_config.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/transformers/utils/__pycache__/import_utils.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/transformers/utils/__pycache__/generic.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/transformers/__pycache__/tokenization_utils_tokenizers.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/transformers/__pycache__/modeling_gguf_pytorch_utils.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/transformers/__pycache__/tokenization_utils_base.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/transformers/__pycache__/configuration_utils.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/transformers/__pycache__/_typing.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/transformers/models/auto/__pycache__/auto_factory.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/transformers/models/auto/__pycache__/configuration_auto.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/_core/_multiarray_umath.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/_core/_rational_tests.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/_core/_struct_ufunc_tests.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/_core/_umath_tests.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/_core/_simd.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/_core/_multiarray_tests.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/_core/__pycache__/_add_newdocs.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/_core/__pycache__/_type_aliases.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/_core/__pycache__/overrides.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/_core/__pycache__/records.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/_core/__pycache__/numeric.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/_core/__pycache__/multiarray.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/_core/__pycache__/_internal.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/_core/__pycache__/function_base.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/_core/_operand_flag_tests.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/fft/_pocketfft_umath.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/random/_generator.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/random/mtrand.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/random/_bounded_integers.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/random/bit_generator.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/random/_pcg64.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/random/_mt19937.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/random/_common.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/random/_sfc64.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/random/_philox.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/_utils/__pycache__/_inspect.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/lib/__pycache__/_polynomial_impl.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/lib/__pycache__/_iotools.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/lib/__pycache__/_format_impl.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/lib/__pycache__/__init__.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/lib/__pycache__/_npyio_impl.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/__pycache__/_globals.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/__pycache__/_expired_attrs_2_0.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/__pycache__/__init__.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/linalg/lapack_lite.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/linalg/_umath_linalg.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy/linalg/__pycache__/_linalg.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/huggingface_hub/__pycache__/__init__.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/huggingface_hub/__pycache__/hf_api.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/rich/__pycache__/style.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/rich/__pycache__/console.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/rich/__pycache__/spinner.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/rich/__pycache__/__init__.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/rich/__pycache__/segment.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/urllib3/util/__pycache__/timeout.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/urllib3/__pycache__/exceptions.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/urllib3/__pycache__/connection.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/urllib3/__pycache__/response.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/httptools/parser/url_parser.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/httptools/parser/parser.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/lark/__pycache__/lark.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/lark/__pycache__/tree.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/lark/__pycache__/visitors.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/lark/__pycache__/utils.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/lark/__pycache__/exceptions.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/watchfiles/_rust_notify.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/watchfiles/__pycache__/run.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/click/__pycache__/types.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/click/__pycache__/__init__.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/click/__pycache__/utils.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/click/__pycache__/core.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/click/__pycache__/_compat.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/anyio/streams/__pycache__/stapled.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/anyio/streams/__pycache__/tls.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/anyio/streams/__pycache__/tls.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/anyio/streams/__pycache__/stapled.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/anyio/_core/__pycache__/_typedattr.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/anyio/_core/__pycache__/_exceptions.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/anyio/_core/__pycache__/_typedattr.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/anyio/_core/__pycache__/_exceptions.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/anyio/abc/__pycache__/_sockets.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/anyio/abc/__pycache__/_sockets.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/anyio/__pycache__/__init__.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/anyio/__pycache__/__init__.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/regex/_regex.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/uvicorn/__pycache__/main.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/uvicorn/__pycache__/importer.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/websockets/legacy/__pycache__/protocol.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/websockets/speedups.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/websockets/__pycache__/imports.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/websockets/__pycache__/exceptions.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/sse_starlette/__pycache__/sse.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/numpy.libs/libgfortran-daac5196-038a5e3c.so.5.0.0: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/hf_xet/hf_xet.abi3.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/81d243bd2c585b0f4821__mypyc.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/httpx/__pycache__/_models.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/starlette/__pycache__/status.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/starlette/__pycache__/datastructures.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/safetensors/_safetensors_rust.abi3.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pluggy/__pycache__/_hooks.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/tokenizers/tokenizers.abi3.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/fastapi/openapi/__pycache__/models.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/fastapi/__pycache__/encoders.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/fastapi/__pycache__/routing.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/fastapi/__pycache__/applications.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/fastapi/__pycache__/datastructures.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/fastapi/_compat/__pycache__/v2.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pygments/lexers/__pycache__/python.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pygments/lexers/__pycache__/__init__.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pygments/__pycache__/token.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pygments/__pycache__/formatter.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pygments/__pycache__/console.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pygments/__pycache__/lexer.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/__pycache__/typing_extensions.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/annotated_doc/__pycache__/main.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/prometheus_client/__pycache__/decorator.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/mark/__pycache__/structures.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/mark/__pycache__/__init__.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/assertion/__pycache__/rewrite.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/assertion/__pycache__/util.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/_code/__pycache__/code.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/__pycache__/outcomes.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/__pycache__/reports.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/__pycache__/junitxml.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/__pycache__/python.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/__pycache__/_argcomplete.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/__pycache__/hookspec.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/__pycache__/terminal.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/__pycache__/fixtures.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/__pycache__/monkeypatch.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/__pycache__/capture.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/__pycache__/pytester.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/__pycache__/compat.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/__pycache__/legacypath.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/__pycache__/nodes.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/__pycache__/deprecated.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/__pycache__/doctest.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/config/__pycache__/__init__.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/_pytest/config/__pycache__/argparsing.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/uvloop/loop.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/uvloop/__pycache__/__init__.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/v1/__pycache__/class_validators.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/v1/__pycache__/dataclasses.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/v1/__pycache__/fields.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/v1/__pycache__/utils.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/v1/__pycache__/main.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/_internal/__pycache__/_dataclasses.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/_internal/__pycache__/_namespace_utils.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/_internal/__pycache__/_config.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/_internal/__pycache__/_generate_schema.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/_internal/__pycache__/_repr.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/_internal/__pycache__/_generics.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/_internal/__pycache__/_utils.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/_internal/__pycache__/_docs_extraction.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/_internal/__pycache__/_decorators.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/_internal/__pycache__/_discriminated_union.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/_internal/__pycache__/_model_construction.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/_internal/__pycache__/_validators.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/_internal/__pycache__/_typing_extra.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/_internal/__pycache__/_fields.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/_internal/__pycache__/_core_utils.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/plugin/__pycache__/__init__.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/__pycache__/config.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/__pycache__/fields.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/__pycache__/types.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/__pycache__/_migration.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/__pycache__/json_schema.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/__pycache__/main.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/__pycache__/type_adapter.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic/__pycache__/warnings.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic_core/_pydantic_core.cpython-312-aarch64-linux-gnu.so: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/pydantic_core/__pycache__/core_schema.cpython-312.pyc: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task13.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task15.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task12.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task07.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task13.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task15.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task02.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task12.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task04.jsonl: binary file matches
+Based on the codebase, the convention for naming OTel span attributes is to use a **namespaced dot-notation**, specifically prefixing attributes with `emmy.`.
+
+### Key Conventions:
+1.  **General Attributes**: Most attributes are automatically prefixed with `emmy.` when emitted via `emitEvent`.
+    *   *Example*: A record key `foo` becomes the span attribute `emmy.foo`.
+2.  **Profile Attributes**: Attributes derived from the `profile` object are prefixed with `emmy.profile.`.
+    *   *Example*: `profile: { id: "..." }` becomes `emmy.profile.id`.
+3.  **Span Names**: Span names also follow this namespacing convention, using the format `emmy.{event_name}`.
+
+### Evidence from `packages/emmy-telemetry/src/index.ts`:
+```typescript
+// For profile attributes
+span.setAttribute(`emmy.profile.${pk}`, coerceAttr(pv));
+
+// For general attributes
+span.setAttribute(`emmy.${k}`, coerceAttr(v));
+
+// For span names
+function spanNameFor(event: string): string {
+    return `emmy.${event}`;
+}
+```
+
+Additionally, tests in `packages/emmy-tools/tests/subagent/otel-propagation.test.ts` show the use of other namespaces like `gen_ai.*` (e.g., `gen_ai.agent.name`, `gen_ai.tool.name`), suggesting that while `emmy.` is the internal project convention, the codebase also adheres to broader `gen_ai` semantic conventions for specific agent/tool telemetry.

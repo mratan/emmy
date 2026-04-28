@@ -1,0 +1,8 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-27b@v1.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=6df7a98122f58a270476b4f3582a50d1e7915ea1abef525b2af8dc992b8d4f7d
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=6df7a98122f58a270476b4f3582a50d1e7915ea1abef525b2af8dc992b8d4f7d, layers=system.md,tool_defs,user)
+pi-emmy transcript=/tmp/v3-rot-test/runs/phase2-sc3-capture/session-2026-04-28T01-28-29-631Z.jsonl
+So in short: **`DEBUG=1`** is what you need. Set it as an environment variable before starting the app (e.g., `DEBUG=1 node dist/index.js` or via your `.env` file).

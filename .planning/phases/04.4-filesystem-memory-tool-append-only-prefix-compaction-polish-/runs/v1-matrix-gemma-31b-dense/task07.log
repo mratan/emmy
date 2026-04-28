@@ -1,0 +1,32 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=gemma-4-31b-it@v1.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=a2396002dd43431cb1550480b343683e7ecbe301b589e7df41bb1f5bd4c45ed8
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=a2396002dd43431cb1550480b343683e7ecbe301b589e7df41bb1f5bd4c45ed8, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T03-26-23-920Z.jsonl
+The difference between `buildRealPiRuntime` and `buildRealPiRuntimeTui` in `session.ts` lies in the **final factory shape** and the **intended execution mode** (non-interactive vs. interactive), although they share identical input wiring for providers, tools, and extensions.
+
+### 1. `buildRealPiRuntime` (The `--print` / `--json` path)
+This function is used for one-shot, non-interactive executions.
+- **Core Mechanism**: It uses `createAgentSessionFromServices` to construct a session.
+- **Primary Interface**: It implements `runPrint`, which sends a prompt, waits for the `agent_end` event, and returns the final assistant text or a JSON dump.
+- **Use Case**: Powers `pi-emmy --print` and `pi-emmy --json`.
+
+### 2. `buildRealPiRuntimeTui` (The Interactive path)
+This function is used for the full interactive terminal experience.
+- **Core Mechanism**: It graduates to the full `createAgentSessionRuntime` (pi's main runtime factory).
+- **Primary Interface**: It implements `runTui`, which binds the runtime to `new InteractiveMode(runtime).run()`, launching the interactive loop where the user can type commands and interact with the agent in real-time.
+- **Namespace Isolation**: It calls `ensureEmmyAgentDir()` to place pi's settings and session state in `~/.emmy/agent` rather than the global `~/.pi/agent`, maintaining "air-gap discipline."
+- **Use Case**: Powers the standard interactive TUI mode.
+
+### Summary Comparison
+
+| Feature | `buildRealPiRuntime` | `buildRealPiRuntimeTui` |
+| :--- | :--- | :--- |
+| **Target Mode** | `--print` / `--json` | Interactive TUI |
+| **Pi Entry Point** | `createAgentSessionFromServices` | `createAgentSessionRuntime` |
+| **Key Method** | `runPrint()` | `runTui()` |
+| **State Location** | In-memory / Session-scoped | `~/.emmy/agent` |
+| **Interaction** | One-shot (Prompt $\rightarrow$ Result) | Continuous loop (`InteractiveMode`) |
+| **Wiring** | Identical (Same tools, providers, extensions) | Identical (Same tools, providers, extensions) |

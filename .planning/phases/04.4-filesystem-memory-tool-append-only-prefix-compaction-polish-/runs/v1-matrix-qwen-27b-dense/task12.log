@@ -1,0 +1,34 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-27b@v1.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=633cd206018031b46117d99dab77a0309a7b138be0ed69b7a8ba96dd9cfc9dfc
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=633cd206018031b46117d99dab77a0309a7b138be0ed69b7a8ba96dd9cfc9dfc, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T00-26-04-761Z.jsonl
+## Answer
+
+`gen_ai.system` is hardcoded to `"vllm"` in **two places**:
+
+### 1. As an OTel Resource attribute (`otel-sdk.ts`, line 72)
+```ts
+resource: resourceFromAttributes({
+  [ATTR_SERVICE_NAME]: "emmy",
+  "gen_ai.system": "vllm",
+}),
+```
+This is set at the SDK level, so it applies to **every span** emitted by the process. The comment explains the literal string (rather than importing from semconv/incubating) is intentional to avoid breakage when the incubating surface moves between semconv releases.
+
+### 2. As a Span attribute (`span-factory.ts`, line 60)
+```ts
+span.setAttributes({
+  "gen_ai.system": "vllm",
+  "gen_ai.request.model": args.model,
+  "emmy.prompt.sha256": args.promptSha256,
+});
+```
+
+### Why "vllm" and not the model family?
+
+This is a **deliberate design choice**: `gen_ai.system` identifies the **inference engine/backend** (vLLM), while the model family is captured separately in `gen_ai.request.model` (which receives `args.model` dynamically). In the OTel GenAI semantic conventions, `gen_ai.system` is meant to identify the provider or serving system (e.g., "openai", "anthropic", "vllm"), not the model itself. The model name lives in `gen_ai.request.model`.
+
+So if you're seeing "vllm" and expecting to see something like "llama" or "mistral" there — that information is in `gen_ai.request.model` instead.

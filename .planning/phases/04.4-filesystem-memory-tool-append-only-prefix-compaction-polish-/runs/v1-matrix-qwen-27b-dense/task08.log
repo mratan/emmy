@@ -1,0 +1,64 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-27b@v1.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=7165a41451eafbed75335e9dd044136b91ef6b3f8007281740775689e2927976
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=7165a41451eafbed75335e9dd044136b91ef6b3f8007281740775689e2927976, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T00-06-41-369Z.jsonl
+grep: ./emmy_serve/airgap/__pycache__/ci_verify_research_egress.cpython-312.pyc: binary file matches
+Here's a comprehensive answer:
+
+---
+
+## The Air-Gap STRICT Validator
+
+The air-gap STRICT validator lives in the package **`emmy_serve/airgap/`** and is composed of several files:
+
+### Core Files
+
+| File | Role |
+|---|---|
+| **`emmy_serve/airgap/validator.py`** | CLI entry point with `pre-boot` (static policy check) and `post-boot` (4-layer live probe) subcommands |
+| **`emmy_serve/airgap/probe.py`** | The 4 D-12 layer probes (a/b/c/d) |
+| **`emmy_serve/airgap/ci_verify_phase3.py`** | Phase 3 extension — dual-stack (emmy-serve + Langfuse) zero-outbound validator |
+| **`emmy_serve/airgap/ci_verify_research_egress.py`** | Phase 3.1 extension — research-egress-permissive validator with `STRICT_DENY_HOSTS` |
+
+---
+
+### What It Blocks (4 D-12 Layers)
+
+The core validator (`probe.py`) enforces **four layers**:
+
+| Layer | Name | What it blocks |
+|---|---|---|
+| **(a)** | `network_devices` | Any non-loopback network interface (`eth*`, `ens*`, `wlan*`, `enp*`, `wlp*`). The container must have `--network none` with only `lo` present. |
+| **(b)** | `dns_audit` | External DNS resolution. `/etc/resolv.conf` must have no non-`127.*` nameservers, and `getent hosts huggingface.co` must fail. |
+| **(c)** | `telemetry_env` | Telemetry leakage. Requires `VLLM_NO_USAGE_STATS=1` and `DO_NOT_TRACK=1`. |
+| **(d)** | `hf_offline_env` | Hugging Face Hub access. Requires `HF_HUB_OFFLINE=1` and `TRANSFORMERS_OFFLINE=1`. |
+
+### What `STRICT_DENY_HOSTS` Blocks (Phase 3.1)
+
+The research-egress validator (`ci_verify_research_egress.py`) defines a **`STRICT_DENY_HOSTS`** frozenset of 14 cloud-inference endpoints that must **never** receive outbound traffic from any emmy-owned container:
+
+- `api.openai.com`
+- `api.anthropic.com`
+- `generativelanguage.googleapis.com`
+- `ai.google.dev`
+- `api.mistral.ai`
+- `api.groq.com`
+- `bedrock-runtime.amazonaws.com`
+- `bedrock.amazonaws.com`
+- `api-inference.huggingface.co`
+- `api.deepseek.com`
+- `api.cohere.com`
+- `api.fireworks.ai`
+
+This validator is **permissive** for SearxNG's outbound traffic to search engines (Google, DuckDuckGo, Brave, Bing) but **hard-blocks** all cloud inference endpoints. It uses `tcpdump` captures to verify zero packets to any of these hosts.
+
+### Pre-Boot Policy Check
+
+The `pre-boot` subcommand in `validator.py` additionally checks that `serving.yaml` has all four env vars set to `"1"`:
+- `VLLM_NO_USAGE_STATS=1`
+- `DO_NOT_TRACK=1`
+- `HF_HUB_OFFLINE=1`
+- `TRANSFORMERS_OFFLINE=1`

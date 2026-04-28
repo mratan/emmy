@@ -1,0 +1,14 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=gemma-4-31b-it@v1.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=e739426de4f44b88d3746d7c6600b1f2c523eb29eca7d0bdafb4f9c377ce0988
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=e739426de4f44b88d3746d7c6600b1f2c523eb29eca7d0bdafb4f9c377ce0988, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T03-25-24-502Z.jsonl
+Based on the tool definitions provided, the `web_search` and `web_fetch` tools work together to allow you to access content that might not be on the pre-approved allowlist. Here is how the bypass mechanism works:
+
+1.  **The Restriction:** The `web_fetch` tool is gated by a strict allowlist (`profile.harness.tools.web_fetch.allowlist`). Normally, if you try to fetch a URL from a host that isn't on that list, the request is blocked and returns an error.
+2.  **The Bypass:** When you use the `web_search` tool, it returns a list of results containing titles, snippets, and **URLs**. 
+3.  **The Mechanism:** Any URL returned as a result of a `web_search` call is temporarily granted a "bypass." This means you can immediately use `web_fetch` on that specific URL, even if the host is not in the permanent allowlist.
+
+In short: **`web_search` acts as a discovery mechanism that "unlocks" specific URLs for `web_fetch`**, allowing you to dive deeper into search results without needing to manually update the system's allowlist.

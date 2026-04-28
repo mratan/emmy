@@ -1,0 +1,26 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=gemma-4-31b-it@v1.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=0a07fc3f6ef89ac140a066012b615221d91526d90253054399f46693000e409d
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=0a07fc3f6ef89ac140a066012b615221d91526d90253054399f46693000e409d, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T03-20-33-575Z.jsonl
+The project's hash-anchored edit pattern is a mechanism used by the `edit` tool to ensure precise and safe modifications to files. Here is how it works and how it differs from a plain string-replace:
+
+### How it Works
+1.  **Reading with Hashes**: When you use the `read` tool, the system doesn't just return the text; it prefixes every single line with a unique 8-character hexadecimal content hash (e.g., `a1b2c3d4  const x = 10;`).
+2.  **Targeting by Hash**: When you want to change a line, you don't provide the text you want to replace. Instead, you provide the **hash** of the line you are targeting.
+3.  **Atomic Edits**:
+    *   **`edits`**: You map a specific hash to `new_content`. If `new_content` is `null`, the line is deleted.
+    *   **`inserts`**: You specify a hash (`after_hash`) and a list of strings to insert immediately following that line.
+
+### Differences from Plain String-Replace
+
+| Feature | Plain String-Replace | Hash-Anchored Edit |
+| :--- | :--- | :--- |
+| **Targeting** | Matches a string pattern (e.g., "find 'foo' replace with 'bar'"). | Matches a unique line identifier (the hash). |
+| **Ambiguity** | If the same string appears 5 times, a plain replace might change all of them or the wrong one. | Each line has a unique hash based on its content and position; there is no ambiguity. |
+| **Safety (Staleness)** | Will apply the replace as long as the string exists, even if the surrounding context has changed. | If the line content changes, the hash changes. The tool will reject the edit with a "stale hash" error, forcing a re-read. |
+| **Precision** | Difficult to handle whitespace or similar-looking lines. | Exact. It targets the specific line instance regardless of how similar other lines look. |
+
+**In short:** Plain string-replace is "search and replace," whereas hash-anchored editing is "point and replace." It prevents the AI from accidentally corrupting code when multiple lines look similar or when the file has changed since it was last read.

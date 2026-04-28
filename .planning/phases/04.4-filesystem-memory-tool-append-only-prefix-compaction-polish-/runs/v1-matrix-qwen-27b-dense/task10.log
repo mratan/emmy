@@ -1,0 +1,15 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=qwen3.6-27b@v1.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=36e48f1504608c68bb9690a7b2f41a696971812b950735276f392ac65b2517a6
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=36e48f1504608c68bb9690a7b2f41a696971812b950735276f392ac65b2517a6, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T00-11-40-905Z.jsonl
+The `memory` tool does **not emit any telemetry per operation**.
+
+Looking at its function definition, the `memory` tool supports six commands (`view`, `create`, `str_replace`, `insert`, `delete`, `rename`) that operate on two scopes:
+
+- **`/memories/project/...`** — repo-specific knowledge (conventions, hard-won findings, dead-ends)
+- **`/memories/global/...`** — cross-project preferences
+
+Each operation simply reads from or writes to persistent note files. There is no mention of telemetry, analytics, metrics collection, or any external data emission in the tool's specification. The tool is designed as a local, persistent key-value-style note system for the agent to retain knowledge across sessions.

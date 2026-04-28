@@ -1,0 +1,39 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=gemma-4-31b-it@v1.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=4e2cd39739bae61aae62e1698f30cb381a085cc57c2a7515e4d6c30a2857381d
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=4e2cd39739bae61aae62e1698f30cb381a085cc57c2a7515e4d6c30a2857381d, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T03-33-56-050Z.jsonl
+In profile bundles, `harness.yaml` and `serving.yaml` separate the **agentic logic/behavior** from the **infrastructure/model deployment** configuration.
+
+### `harness.yaml` (The "Brain" & "Tools")
+This file defines how the model is used as an agent. It focuses on the interaction loop, prompt engineering, and tool orchestration.
+*   **Prompts:** Paths to system prompts, tool descriptions, and compaction/summarization prompts.
+*   **Context Management:** Defines `max_input_tokens`, compaction thresholds (e.g., `soft_threshold_pct`), and memory settings (project/global roots).
+*   **Tool Configuration:** 
+    *   Defines the tool format (e.g., `openai`) and paths to JSON schemas.
+    *   Configures tool-specific sampling (e.g., forcing `temperature: 0.0` for `edit` and `bash` to ensure determinism).
+    *   Manages the `web_fetch` allowlist and `web_search` settings.
+*   **Agent Loop:** Sets `max_iterations`, retry budgets for unparseable tool calls, and self-correction settings.
+*   **Subagents:** Defines the available personas (e.g., `research`, `code_reviewer`), their tool allowlists, and their specific prompt directories.
+
+### `serving.yaml` (The "Engine" & "Hardware")
+This file defines how the model is hosted and executed on the hardware. It focuses on the vLLM engine and GPU resource allocation.
+*   **Engine Identity:** Specifies the model path, HuggingFace ID, container image, and the `served_model_name`.
+*   **Resource Allocation:** 
+    *   `gpu_memory_utilization`: Controls how much VRAM is reserved for the KV cache (e.g., `0.55` to leave system headroom).
+    *   `max_model_len`: The hard limit of the model's context window (e.g., `131072`).
+*   **Performance Tuning:** Configures `kv_cache_dtype` (e.g., `fp8`), prefix caching, chunked prefill, and `max_num_seqs`.
+*   **Quantization:** Defines the runtime quantization method (e.g., `fp8`).
+*   **Sampling Priors:** Sets the global default `temperature`, `top_p`, and `top_k` as recommended by the model card.
+*   **Engine Quirks:** Handles model-specific parser bugs (e.g., `strip_thinking_tags` to clean up leaked reasoning tokens from the vLLM parser).
+
+### Summary Comparison
+
+| Feature | `harness.yaml` | `serving.yaml` |
+| :--- | :--- | :--- |
+| **Primary Focus** | Agent Behavior & Tooling | Model Hosting & Performance |
+| **Key Concern** | "How should the agent think/act?" | "How should the model be served?" |
+| **Typical Changes** | Updating prompts, adding tools, tuning subagents | Changing GPU memory, updating images, tuning VRAM |
+| **Scope** | UX $\rightarrow$ LLM Interface | LLM $\rightarrow$ Hardware/vLLM |

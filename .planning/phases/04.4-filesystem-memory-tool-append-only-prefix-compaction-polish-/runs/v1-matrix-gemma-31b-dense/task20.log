@@ -1,0 +1,29 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=gemma-4-31b-it@v1.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=1b08ff4985b8fb589ba5ee2a9795b35735f11d01fe9fff89f9eae7acbae5bc8f
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=1b08ff4985b8fb589ba5ee2a9795b35735f11d01fe9fff89f9eae7acbae5bc8f, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T03-37-06-021Z.jsonl
+The registered set of native tools in `@emmy/tools` is defined in `packages/emmy-tools/src/native-tools.ts`.
+
+### Registered Native Tools
+The set of native tools is explicitly listed in the `NATIVE_TOOL_NAMES` constant:
+1.  `read`: Reads a file and tags each line with an 8-hex content hash.
+2.  `write`: Overwrites a file atomically using `fsync`.
+3.  `edit`: Performs hash-anchored edits (the default edit mechanism).
+4.  `bash`: Executes shell commands with a built-in denylist and output truncation.
+5.  `grep`: Searches for patterns in files.
+6.  `find`: Finds files/directories by name or type.
+7.  `ls`: Lists directory contents.
+8.  `web_fetch`: Performs HTTP GET requests to markdown, gated by a hostname allowlist.
+9.  `web_search`: Performs web searches (registered conditionally based on profile settings and kill-switches).
+
+### Runtime Discovery
+The tools are discovered and registered at runtime through the `registerNativeTools` function. 
+
+**The discovery process works as follows:**
+1.  **Registration Interface**: `registerNativeTools` accepts a `pi` object that provides a `registerTool` method.
+2.  **Tool Specification**: For each native tool, a `PiToolSpec` (containing the name, description, JSON schema for parameters, and the `invoke` handler) is passed to `pi.registerTool`.
+3.  **Conditional Registration**: Some tools, like `web_search`, are only registered if specific conditions are met (e.g., `opts.webSearchConfig` and `opts.webSearchEnabled` are truthy).
+4.  **Definition Building**: To provide these tools to an agent session, the `buildNativeToolDefs` helper function is used. It creates a "collector shim" that implements `registerTool` to capture all the `PiToolSpec` objects emitted by `registerNativeTools`, then adapts them into `ToolDefinitionLike` objects using `toolSpecToDefinition`. This ensures that the tool behavior and schemas are defined in one place but can be consumed by different parts of the system (like `createAgentSessionFromServices`).

@@ -1,0 +1,21 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=gemma-4-31b-it@v1.1, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=7165a41451eafbed75335e9dd044136b91ef6b3f8007281740775689e2927976
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=7165a41451eafbed75335e9dd044136b91ef6b3f8007281740775689e2927976, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T03-29-19-681Z.jsonl
+The **air-gap STRICT validator** (specifically the Phase 3 extension) is located at:
+`emmy_serve/airgap/ci_verify_phase3.py`
+
+### What it blocks
+The validator is designed to ensure a "zero-outbound" posture for the system. Specifically, it blocks and asserts against:
+
+1.  **Non-Loopback Outbound Connections:** It proves that neither the `emmy-serve` stack nor the Langfuse OTel observability stack makes any outbound network connections to addresses outside of the loopback interface (`127.0.0.1`) during operation.
+2.  **Unpinned Images:** It blocks the use of non-digest-pinned Docker images in the `docker-compose.yaml` (enforcing the **D-09** invariant), ensuring that the environment is immutable and reproducible.
+3.  **External Port Binding:** It asserts that non-web ports in the compose file are bound strictly to `127.0.0.1` (per **T-03-02-07**), preventing accidental exposure to the external network.
+
+### How it validates
+*   **Dry-run mode:** Performs a structural "lint" of the configuration, checking for the existence of required scripts and the presence of `@sha256:` pins and `127.0.0.1` bindings.
+*   **Full-run mode:** Orchestrates a 50-turn replay of system activity and uses `ss -tnp state established` (and `tcpdump` as a secondary measure) to detect any established TCP connections that are not loopback or SSH.
+*   **Memory Tool Subcheck:** It also integrates a specific check for the memory tool air-gap (via `tests/smoke/verify_memory_airgap.sh`) to ensure memory operations do not trigger outbound leaks.
