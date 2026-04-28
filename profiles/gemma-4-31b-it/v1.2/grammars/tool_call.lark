@@ -1,0 +1,48 @@
+// profiles/gemma-4-26b-a4b-it/v1/grammars/tool_call.lark
+// Reactive XGrammar Lark grammar (D-11): vLLM applies this ONLY when
+// @emmy/provider's callWithReactiveGrammar triggers a retry after the
+// unconstrained first attempt failed to parse. Baseline (no-grammar) is
+// the production path; this grammar is a correctness backstop per
+// CLAUDE.md Pitfall #6.
+//
+// Shape: Gemma 4 native function-calling format
+//   https://ai.google.dev/gemma/docs/capabilities/text/function-calling-gemma4
+// The model emits
+//   <|tool_call>call:FUNCTION_NAME{key:<|"|>VALUE<|"|>,num:42}<tool_call|>
+// per tool call. The grammar is deliberately OVER-ACCEPTING on the body
+// (any key:value pairs with JSON-ish primitives) — Phase 2 D-11 backstop
+// discipline: per-tool shape validation lives in ../tool_schemas/*.schema.json;
+// grammar only guarantees the envelope parses.
+//
+// Grammar covers all 9 native tools (read, write, edit, bash, grep, find,
+// ls, web_fetch, web_search). MCP tools fall back to the unconstrained path
+// with a diagnostic event (same posture as Qwen v3.1).
+
+start: tool_call+
+
+tool_call: TOOLCALL_OPEN "call:" NAME "{" body? "}" TOOLCALL_CLOSE
+
+TOOLCALL_OPEN: "<|tool_call>"
+TOOLCALL_CLOSE: "<tool_call|>"
+
+NAME: /[A-Za-z_][A-Za-z0-9_]*/
+
+body: entry ("," entry)*
+entry: KEY ":" value
+KEY: /[A-Za-z_][A-Za-z0-9_]*/
+
+// Gemma 4 wraps string values in the <|"|> delimiter pair (distinct from
+// plain JSON "). Numbers, booleans, and null land bare. Arrays and nested
+// objects are accepted minimally for future-proofing — the per-tool JSON
+// schema catches anything a real tool can't consume.
+value: QSTRING | NUMBER | BOOL | NULL | array | object
+QSTRING: /<\|"\|>[^<]*<\|"\|>/
+NUMBER: /-?(0|[1-9][0-9]*)(\.[0-9]+)?([eE][+-]?[0-9]+)?/
+BOOL: "true" | "false"
+NULL: "null"
+
+array: "[" (value ("," value)*)? "]"
+object: "{" (entry ("," entry)*)? "}"
+
+%import common.WS
+%ignore WS

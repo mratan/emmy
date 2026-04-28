@@ -1,0 +1,115 @@
+# profiles/gemma-4-26b-a4b-it/v2.1/serving.yaml
+# 2026-04-28 follow-up sibling — Gemma 4 26B A4B MoE v2.1 bundle.
+#
+# v2 → v2.1 delta (TWO COUPLED BEHAVIORAL CHANGES; new sibling per D-02):
+#   1. max_model_len 131072 → 262144 (128K → 256K). Gemma 4 declares
+#      max_position_embeddings=262144 in config.json with sliding_window=1024;
+#      the v2 cap at 128K was symmetric-with-Qwen, not architectural. KV
+#      math at 256K stays cheap because most layers are sliding-window-bounded
+#      (only full-attention layers scale with full context).
+#   2. gpu_memory_utilization 0.86 → 0.55. The v2 ceiling at 0.86 was the
+#      KV-bisection result preserved for audit; every other shipping daily-
+#      bootable profile (Qwen v3.1, dense v1.1) backs off to 0.55 for system
+#      RAM headroom (CLAUDE.md Pitfall #3 trumps Pitfall #1 for siblings that
+#      re-target operator comfort over no-preempt ceiling). The 2026-04-28
+#      bio-pipeline OOM cascade was the trigger to align Gemma MoE with the
+#      same operational pattern. v2 stays byte-identical at 0.86 as the
+#      audit artifact (hash sha256:5ff29567...).
+#
+# No KV re-bisection needed: 0.55 × 128 GiB ≈ 70 GiB KV pool, well above
+# the ~28-30 GiB needed for one full 256K-context sequence with sliding-
+# window attention bounds. See ai-muninn.com Gemma 4 26B benchmark for
+# baseline KV usage; sliding-window math from upstream config.
+#
+# v1 → v2 delta (PRESERVED for context): container upgrade from NGC
+# 26.03.post1-py3 (vLLM 0.17.1 + Transformers 4.57.x — pre-Gemma4ForCausalLM)
+# to upstream vllm/vllm-openai:gemma4-0409-arm64-cu130 (vLLM 0.19+ Day-1
+# Gemma 4 release, Transformers 5.5.0, aarch64, CUDA 13.0). Pinned by
+# digest per D-02. v1 could not boot on the NGC container — its Transformers
+# predates the `gemma4` model class. See runs/phase4-sc1/walkthrough.md for
+# the two failed boot attempts that surfaced this. Upstream vllm-openai
+# ships Day-1 Gemma 4 support with SM121 NVFP4 fixes + GB10-patched
+# FlashInfer (the patches that previously made NGC the only option have
+# since landed upstream per container-upgrade research 2026-04-23).
+#
+# References used by this bundle:
+#   - ai-muninn.com DGX Spark Gemma 4 26B NVFP4 benchmark (52 tok/s)
+#   - NVIDIA Developer Forum "Gemma 4 Day-1 Inference" thread #365503
+#   - eugr/spark-vllm-docker Gemma 4 recipe
+#   - vLLM PR #38826 (Gemma 4 loader), PR #38847 (tool-parser fix)
+#
+# Every non-default knob cites a community source in PROFILE_NOTES.md (SC-5).
+
+engine:
+  # --- immutable identity ---
+  model: /models/gemma-4-26B-A4B-it               # container-internal path (matches -v mount)
+  model_hf_id: google/gemma-4-26B-A4B-it          # HF ID (BF16 weights; FP8 is RUNTIME quant per STACK.md line 122)
+  served_model_name: gemma-4-26b-a4b-it            # name vLLM exposes on /v1/models
+  container_image: vllm/vllm-openai:gemma4-0409-arm64-cu130   # Upstream vLLM Day-1 Gemma 4 image (aarch64, CUDA 13.0); vLLM 0.19.1.dev6 + Transformers 5.5.0. Pulled 2026-04-23. RepoDigest: sha256:2970dd3c8fd00bccbc663345f9b4d87b35c491f4b13a2a4cdef60fe5c015f6e2
+  container_image_digest: sha256:db59febc6c476c9c93701cc9f54917533cee774d4e4bb27eff6fafeae37509f8                # LOCAL image ID (`docker inspect --format '{{.Id}}'`). render_image_ref uses bare-digest form here since the "vllm/vllm-openai" repo lacks a registry host dot in its first segment.
+  container_entrypoint_override: ""                # Upstream vllm-openai has ENTRYPOINT=[vllm serve] baked in; our runner.py's CMD is `vllm serve <flags>` so the concat becomes `vllm serve vllm serve <flags>` → "unrecognized arguments" CLI failure. Empty-string override clears the ENTRYPOINT so CMD runs as the full exec chain. NGC images don't need this (their /opt/nvidia/nvidia_entrypoint.sh wraps `exec "$@"`).
+
+  # --- context + memory ---
+  max_model_len: 262144                            # 256K; Gemma 4 native (config.json max_position_embeddings=262144). Sliding-window attention (window=1024) bounds per-layer KV regardless of context, so the marginal cost vs 128K is small relative to a full-attention model. Was 131072 in v2.
+  gpu_memory_utilization: 0.55                     # v2.1 RAM-headroom retune from v2's KV-ceiling 0.86 (D-29-equivalent; mirrors Qwen v3→v3.1 and dense v1→v1.1 precedent). Targets ~70 GB emmy-serve footprint, leaves >40 GiB system headroom on 128 GiB UMA. v2 hash sha256:5ff29567... preserved as KV-bisection audit. Trigger: 2026-04-28 bio-pipeline OOM cascade.
+  kv_cache_dtype: fp8                              # 04-RESEARCH.md §2 (Gemma 4 vLLM recipe)
+  enable_prefix_caching: true                      # SERVE-07
+  enable_chunked_prefill: true                     # SERVE-07
+  max_num_batched_tokens: 8192                     # 04-RESEARCH.md §2 — matches Qwen v3.1 RAM-headroom tuning
+  max_num_seqs: 4                                  # 04-RESEARCH.md §2 — NVIDIA Day-1 DGX Spark recipe; defensive against Gemma4ToolParser bug #39392 (pad-token leak under batch). PROFILE_NOTES.md documents max_num_seqs=1 as Phase-5 eval candidate if bug fires empirically.
+
+  # --- loader ---
+  load_format: safetensors                          # v2 — upstream vllm-openai container doesn't bundle fastsafetensors. Accept ~3× slower cold start (~8 min vs ~3 min) as the tradeoff for Day-1 Gemma 4 support. A derived image with fastsafetensors layered could reclaim this; deferred to a future v3 bump if cold-start wall-clock becomes operationally painful.
+
+  # --- quantization ---
+  quantization: fp8                                 # RUNTIME quant on BF16 HF weights (NVFP4 disqualified by D-13 / STACK.md 121-122)
+
+  # --- tool-call parser ---
+  tool_call_parser: gemma4                          # D-17 RESOLVED — vLLM 0.19 native Gemma 4 parser
+  reasoning_parser: gemma4                          # D-17 — vLLM attempts to strip reasoning tokens engine-side; on tool-call continuation paths it leaks literal "<|channel>thought\n<channel|>" / residual "thought\n" label (vLLM 0.19.1.dev6 bug repro'd 2026-04-24). Harness backstop via quirks.strip_thinking_tags=true below.
+  enable_auto_tool_choice: true                     # required alongside tool_call_parser
+
+  # --- attention + backends ---
+  # attention_backend: (unset — vLLM auto-selects)
+  # FlashInfer does not support Gemma 4's head_size on this container
+  # (observed 2026-04-23: ValueError "head_size not supported").
+  # Leaving unset lets vLLM pick FLASH_ATTN / TRITON_ATTN based on architecture.
+  # Qwen still uses flashinfer per its profile — this is per-profile, not global.
+
+  # --- network / runtime ---
+  host: 0.0.0.0                                     # container-internal bind
+  port: 8000                                        # container-internal
+
+  # --- what is NOT here (deferred) ---
+  # speculative: null       — Phase 6 (EAGLE-3 availability for 26B TBD)
+  # enable_lora: false      — no LoRA in v1
+
+sampling_defaults:
+  # Source: Google Gemma 4 model card (https://ai.google.dev/gemma/docs/core/model_card_4).
+  # These are PRIORS; harness per-tool sampling overrides them. Changing them = new profile version.
+  # Phase-5 eval candidate: temperature=1.5 (Unsloth HF discussion #21) — NOT shipped today.
+  temperature: 1.0                                  # Google card default (vs Qwen 0.2)
+  top_p: 0.95                                       # Google card
+  top_k: 64                                         # Google card (vs Qwen 40)
+  repetition_penalty: 1.0                           # Google card (NOT 1.05; no repetition dampening declared)
+  max_tokens: 8192
+  stop: []                                          # gemma4 parser handles stop tokens
+
+speculative: null                                   # Phase 6 per 04-CONTEXT.md deferred list
+
+guided_decoding:
+  default_backend: xgrammar                         # vLLM 0.19 default
+
+quirks:
+  strip_thinking_tags: true                         # vLLM 0.19.1.dev6's gemma4 reasoning_parser leaves `<|channel>thought\n<channel|>…` AND residual `thought\n` role label in content on tool-call continuation (2026-04-24 repro in runs/phase2-sc3-capture/session-2026-04-24T06-57-37-131Z.jsonl). Harness strip via stripGemma4ChannelBleed() at message_end backstops the parser gap.
+  promote_reasoning_to_content: false               # reasoning_parser already routes to content field
+  buffer_tool_streams: false                        # gemma4 parser streams tool_calls natively (04-RESEARCH.md §2)
+
+env:
+  VLLM_NO_USAGE_STATS: "1"                          # SERVE-09 / D-12 layer c (enforced by schema._airgap_policy)
+  DO_NOT_TRACK: "1"
+  VLLM_LOAD_FORMAT: safetensors
+  VLLM_FLASHINFER_MOE_BACKEND: latency
+  VLLM_DISABLE_COMPILE_CACHE: "1"
+  HF_HUB_OFFLINE: "1"                               # REPRO-04 (enforced by schema._airgap_policy)
+  TRANSFORMERS_OFFLINE: "1"

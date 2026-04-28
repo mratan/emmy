@@ -1,0 +1,51 @@
+profile:
+  id: gemma-4-26b-a4b-it
+  version: v2.1
+  family: gemma-4
+  base_model: google/gemma-4-26B-A4B-it
+  description: "Gemma 4 26B A4B MoE \u2014 v2.1 bundle (256K native context, gmu=0.55)\
+    \ on the upstream vllm-openai Day-1 Gemma 4 container (vLLM 0.19+ / Transformers\
+    \ 5.5.0 / arm64 / CUDA 13.0). v1 could not boot on NGC 26.03.post1 (Transformers\
+    \ pre-Gemma4ForCausalLM); see runs/phase4-sc1/walkthrough.md."
+  created: '2026-04-23'
+  hash: sha256:f5c11944f7c249243db111c8d8943caf2c63ed70da62a2636258bb4ed3064b55
+  hash_algorithm: sha256
+  hash_manifest_version: 1
+  tags:
+  - coding
+  - dgx-spark
+  - fp8
+  - gemma-4
+  - phase-4
+  - phase-4-followup
+  - phase-04.4-followup
+  - long-context-256k
+  - ram-headroom
+  community_sources:
+  - title: Google Gemma 4 model card
+    url: https://ai.google.dev/gemma/docs/core/model_card_4
+    retrieved: '2026-04-23'
+  - title: Gemma 4 function calling (native format)
+    url: https://ai.google.dev/gemma/docs/capabilities/text/function-calling-gemma4
+    retrieved: '2026-04-23'
+  - title: vLLM Gemma4 tool parser API docs
+    url: https://docs.vllm.ai/en/latest/api/vllm/tool_parsers/gemma4_tool_parser/
+    retrieved: '2026-04-23'
+  - title: vLLM Gemma 4 serving recipe
+    url: https://docs.vllm.ai/projects/recipes/en/latest/Google/Gemma4.html
+    retrieved: '2026-04-23'
+  - title: NVIDIA Gemma 4 Day-1 DGX Spark benchmarks (forum thread
+    url: https://forums.developer.nvidia.com/t/gemma-4-day-1-inference-on-nvidia-dgx-spark-preliminary-benchmarks/365503
+    retrieved: '2026-04-23'
+  - title: vLLM PR
+    url: https://github.com/vllm-project/vllm/pull/38826
+    retrieved: '2026-04-23'
+  - title: vLLM PR
+    url: https://github.com/vllm-project/vllm/pull/38847
+    retrieved: '2026-04-23'
+  - title: ai-muninn.com DGX Spark Gemma 4 26B benchmark (working container reference)
+    url: https://ai-muninn.com/en/blog/dgx-spark-gemma4-26b-nvfp4-52-toks
+    retrieved: '2026-04-23'
+  - title: eugr/spark-vllm-docker Gemma 4 26B recipe (FP8 runtime path reference)
+    url: https://github.com/eugr/spark-vllm-docker/blob/main/recipes/gemma4-26b-a4b.yaml
+    retrieved: '2026-04-23'
