@@ -1,0 +1,26 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=gemma-4-26b-a4b-it@v2, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=633cd206018031b46117d99dab77a0309a7b138be0ed69b7a8ba96dd9cfc9dfc
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=633cd206018031b46117d99dab77a0309a7b138be0ed69b7a8ba96dd9cfc9dfc, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T05-52-44-533Z.jsonl
+The reason `gen_ai.system` is appearing as `"vllm"` instead of the model family name (like `"llama"`, `"mistral"`, or `"gpt"`) in your OpenTelemetry (OTel) spans is due to how the **vLLM instrumentation layer** identifies the provider of the inference service.
+
+In the context of OpenTelemetry semantic conventions for Generative AI:
+
+1.  **`gen_ai.system` refers to the Inference Engine/Provider:** This attribute is intended to identify the software or service responsible for executing the model. Since vLLM is the engine performing the computation and serving the API, it identifies itself as the "system" providing the service.
+2.  **Model Family is a different attribute:** The model family (e.g., `llama-3`) is typically captured in a separate attribute, such as `gen_ai.model_name` or `gen_ai.family` (depending on the specific version of the semantic conventions being used).
+
+### Why this happens in vLLM specifically:
+When vLLM's built-in OpenTelemetry integration is enabled, it creates spans to track the lifecycle of a request. The instrumentation logic is hardcoded to populate the `gen_ai.system` attribute with the name of the engine being used to ensure that observability backends (like Langfuse, Arize Phoenix, or Honeycomb) can distinguish between requests coming from different inference backends (e.g., distinguishing a request handled by `vllm` vs. one handled by `openai` or `ollama`).
+
+### Summary of Attribute Mapping:
+If you are looking for the model identity, you should look for these other attributes in your spans rather than `gen_ai.system`:
+
+*   **`gen_ai.system`**: `vllm` (The engine/provider)
+*   **`gen_ai.model_name`**: `meta-llama/Llama-3-8B-Instruct` (The specific model identifier)
+*   **`gen_ai.family`**: (If supported by your instrumentation) `llama` (The architectural family)
+
+**If you need to change this behavior:**
+You would likely need to modify the vLLM source code where the OTel spans are initialized (specifically where the `attributes` dictionary is constructed for the span) or use an **OpenTelemetry Collector** with a `transform` processor to rewrite the attribute before it reaches your backend.

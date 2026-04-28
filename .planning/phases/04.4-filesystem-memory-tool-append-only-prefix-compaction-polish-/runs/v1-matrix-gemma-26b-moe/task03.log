@@ -1,0 +1,40 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=gemma-4-26b-a4b-it@v2, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=a2fdcb1ff1ffc7f7d11a886254f9e4128ef582a8dd4b8dc1859f9cad4b176332
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=a2fdcb1ff1ffc7f7d11a886254f9e4128ef582a8dd4b8dc1859f9cad4b176332, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T05-48-54-762Z.jsonl
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task13.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task15.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task14.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task12.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task17.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task07.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task13.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task15.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task02.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task12.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task04.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task16.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task17.jsonl: binary file matches
+grep: ./tests/unit/__pycache__/test_immutability.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./tests/unit/__pycache__/test_canary.cpython-312-pytest-9.0.2.pyc: binary file matches
+grep: ./tests/unit/__pycache__/test_canary.cpython-312-pytest-9.0.3.pyc: binary file matches
+grep: ./scripts/__pycache__/smoke_test.cpython-312.pyc: binary file matches
+grep: ./emmy_serve/canary/__pycache__/sp_ok.cpython-312.pyc: binary file matches
+The `[SP_OK]` canary check is implemented across several layers of the system to ensure that the system prompt is being correctly delivered and interpreted by the model.
+
+### Implementation Locations
+1.  **System Prompt (The Instruction):** It is defined as a literal instruction within the system prompt of every profile (e.g., `profiles/*/prompts/system.md`):
+    > `"When the user says 'ping' you must reply with the exact literal text [SP_OK] and nothing else."`
+2.  **Server-side (The Source of Truth):** The canonical definition of the prompt and the assertion string is located in the Python module `emmy_serve/canary/sp_ok.py`.
+3.  **Client-side (The Harness):** The TypeScript implementation used by the UX and test harnesses is in `packages/emmy-ux/src/sp-ok-canary.ts`.
+4.  **Testing:** It is verified in unit and integration tests, such as `packages/emmy-ux/tests/sp-ok-canary.test.ts` and `scripts/smoke_test.py`.
+
+### What it Gates
+The canary check acts as a **liveness and correctness gate** for the system prompt. Specifically, it gates:
+
+*   **System Prompt Delivery:** It prevents "silent system-prompt delivery failure" (Pitfall #6), where the model might appear to be functioning but is actually ignoring the system instructions due to chat template mismatches in vLLM (e.g., `/v1/messages` vs `/v1/chat/completions`).
+*   **Boot/Session Initialization:** Every session start (via `pi-emmy`) and every profile boot performs this check. If the model fails to echo `[SP_OK]` when sent the `"ping"` message, the session or boot process is aborted with a `SpOkCanaryError`.
+*   **Benchmark Integrity (EVAL-07):** In the evaluation harness, the canary gates every benchmark loop. If a canary fails during a batch, the entire batch is aborted to prevent recording invalid performance data (like throughput measurements that actually include "Thinking Process" CoT tokens).

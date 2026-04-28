@@ -1,0 +1,10 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=gemma-4-26b-a4b-it@v2, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=36e48f1504608c68bb9690a7b2f41a696971812b950735276f392ac65b2517a6
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=36e48f1504608c68bb9690a7b2f41a696971812b950735276f392ac65b2517a6, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T05-52-32-076Z.jsonl
+I do not have access to the internal implementation details or the telemetry specifications of the `memory` tool itself. My interaction with the tool is limited to the functional interface provided (the `command`, `path`, and arguments).
+
+If you are looking for information regarding how the tool reports its own success or failure to the system, that information is not exposed to me through the tool's output.

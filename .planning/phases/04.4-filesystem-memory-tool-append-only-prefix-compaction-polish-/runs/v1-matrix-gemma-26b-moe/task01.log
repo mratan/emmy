@@ -1,0 +1,24 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=gemma-4-26b-a4b-it@v2, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=0a07fc3f6ef89ac140a066012b615221d91526d90253054399f46693000e409d
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=0a07fc3f6ef89ac140a066012b615221d91526d90253054399f46693000e409d, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T05-48-07-224Z.jsonl
+The project's hash-anchored edit pattern is a mechanism designed for precise, reliable file modifications by referencing specific lines via unique content hashes rather than relying on text matching or line numbers.
+
+### How it works:
+1.  **Reading with Hashes:** When you use the `read` tool, the output doesn't just provide the text; it prefixes every single line with an 8-character hexadecimal content hash (e.g., `a1b2c3d4  line of code`).
+2.  **Targeted Edits:** When using the `edit` tool, you provide the specific hash of the line you wish to change. The tool looks for that exact hash in the file.
+3.  **Atomic Application:** The tool replaces the content associated with that hash.
+
+### How it differs from plain string-replace:
+
+| Feature | Plain String-Replace | Hash-Anchored Edit |
+| :--- | :--- | :--- |
+| **Precision** | **Low.** If the search string appears multiple times in a file, a standard replace might change all occurrences or the wrong one. | **High.** The hash is unique to that specific line's content at the time of reading, ensuring you target exactly what you intended. |
+| **Fragility** | **High.** If a developer changes a single character in the file between your "search" and your "replace," the string-replace will fail to find the target. | **Medium/Low.** While a change to the line will change its hash (causing a "stale hash" error), it prevents the accidental "silent" corruption that happens when a string-replace hits the wrong target. |
+| **Context Awareness** | **None.** It only cares about the characters in the string. | **High.** It treats the file as a collection of unique, identifiable blocks, making it much safer for large files or files with repetitive code structures. |
+| **Error Handling** | Often fails silently or replaces more than intended. | Explicitly fails with a "stale hash" error if the file has changed, forcing you to re-read and re-sync, which maintains data integrity. |
+
+**In short:** String-replace is "find this text and swap it," whereas hash-anchored editing is "find the line that looked exactly like *this* when I last checked, and change it."

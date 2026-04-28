@@ -1,0 +1,15 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=gemma-4-26b-a4b-it@v2, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=092ab0e538d0740748e34a1e0a408171f6e3f4361a504d7b74f22c8b3704aa01
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=092ab0e538d0740748e34a1e0a408171f6e3f4361a504d7b74f22c8b3704aa01, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T05-53-52-286Z.jsonl
+ls: cannot access '/memories': No such file or directory
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task15.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-matrix-gemma-26b-moe/task13.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-matrix-gemma-26b-moe/task06.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-matrix-gemma-26b-moe/task15.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-matrix-gemma-26b-moe/task14.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-matrix-gemma-26b-moe/task11.jsonl: binary file matches
+

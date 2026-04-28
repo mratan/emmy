@@ -1,0 +1,16 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=gemma-4-26b-a4b-it@v2, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=132d7e500c8b8a9569739e3dd18441e421b2be279c6ebb9fab5827768b87a05e
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=132d7e500c8b8a9569739e3dd18441e421b2be279c6ebb9fab5827768b87a05e, layers=system.md,tool_defs,user)
+pi-emmy transcript=/tmp/v3-rot-test/runs/phase2-sc3-capture/session-2026-04-28T06-01-27-765Z.jsonl
+ls: cannot access '/memories/project': No such file or directory
+Based on the existing code in `src/api/handler.ts` and `src/routes/users.ts`, the project appears to use **snake_case** for request payloads.
+
+Specifically, in `src/api/handler.ts`:
+```typescript
+const request_id = req.body.request_id;  // snake_case used here
+```
+
+While `src/routes/users.ts` uses simple fields like `name` and `email` (which are identical in both conventions), the explicit use of `request_id` in the API handler suggests that **snake_case** is the established convention for multi-word identifiers in request payloads.

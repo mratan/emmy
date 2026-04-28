@@ -1,0 +1,42 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=gemma-4-26b-a4b-it@v2, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=3e94ad16d32b99e82da9a1f0d295de58b7e80c0540a596adf95c1c7e6a94b2df
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=3e94ad16d32b99e82da9a1f0d295de58b7e80c0540a596adf95c1c7e6a94b2df, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T05-48-26-399Z.jsonl
+The use of `TextEncoder().encode(s)` before passing a string to a SHA-256 function (like the Web Crypto API's `crypto.subtle.digest`) is necessary because **cryptographic hash functions operate on bytes (binary data), not on high-level character strings.**
+
+Here is the breakdown of why this step is required:
+
+### 1. Strings vs. Bytes
+In JavaScript, strings are encoded using **UTF-16** (where each character is typically 2 bytes). However, standard cryptographic algorithms like SHA-256 are defined to operate on a stream of **octets (8-bit bytes)**, almost universally following the **UTF-8** encoding standard for text.
+
+If you were to pass a raw UTF-16 string directly to a hashing algorithm, the resulting hash would be different from the standard SHA-256 hash of that same text produced by other languages (like Python, Go, or C++) which default to UTF-8.
+
+### 2. The Role of `TextEncoder`
+`TextEncoder` is a built-in Web API that specifically converts a string into a `Uint8Array` containing the **UTF-8** encoded representation of that string.
+
+*   **Input:** A JavaScript string (e.g., `"🚀"`)
+*   **`TextEncoder().encode()`:** Converts that string into its UTF-8 byte sequence (e.g., `[240, 159, 154, 128]`).
+*   **SHA-256:** Processes those specific bytes to produce the hash.
+
+### 3. Consistency and Interoperability
+By using `TextEncoder`, you ensure that:
+*   **Multi-byte characters** (like emojis or non-Latin scripts) are handled correctly according to the UTF-8 standard.
+*   **The hash is deterministic and interoperable.** If you hash the string `"hello"` in JavaScript using `TextEncoder` and then hash it in a Python script using `.encode('utf-8')`, you will get the exact same SHA-256 hash. Without this step, the hashes would likely mismatch due to different internal string representations.
+
+### Summary Example
+```javascript
+const s = "hello";
+
+// 1. Convert string to UTF-8 bytes
+const msgUint8 = new TextEncoder().encode(s); 
+
+// 2. Hash the bytes
+const hashBuffer = await crypto.subtle.digest('SHA-256', msgUint8);
+
+// 3. Convert buffer to hex string
+const hashArray = Array.from(new Uint8Array(hashBuffer));
+const hashHex = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+```

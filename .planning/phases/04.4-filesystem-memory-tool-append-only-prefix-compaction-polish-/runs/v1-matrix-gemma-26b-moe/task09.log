@@ -1,0 +1,11 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=gemma-4-26b-a4b-it@v2, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=61ecd6f9f256236a782a5d0cf2819d127b9a4a15286bb2bde8e380228e5b801b
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=61ecd6f9f256236a782a5d0cf2819d127b9a4a15286bb2bde8e380228e5b801b, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T05-52-18-090Z.jsonl
+ls: cannot access '/memories': No such file or directory
+The `gpu_memory_utilization` value for the v3.1 profile (specifically for the `qwen3.6-35b-a3b` profile) is **0.55**.
+
+This value was chosen because the previous version (v1) used a higher value of `0.86`, which led to **live-observed RAM exhaustion** on the DGX Spark 128 GiB UMA pool (where `free -h` showed only ~1 GiB free and swap was in use). The reduction to `0.55` was implemented to preserve more than 40 GiB of system headroom, prioritizing "operator comfort" and system stability over maximizing the KV cache ceiling.

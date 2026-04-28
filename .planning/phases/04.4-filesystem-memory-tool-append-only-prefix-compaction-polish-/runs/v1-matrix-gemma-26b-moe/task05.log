@@ -1,0 +1,16 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=gemma-4-26b-a4b-it@v2, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=e739426de4f44b88d3746d7c6600b1f2c523eb29eca7d0bdafb4f9c377ce0988
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=e739426de4f44b88d3746d7c6600b1f2c523eb29eca7d0bdafb4f9c377ce0988, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T05-51-01-156Z.jsonl
+Based on the tool definitions provided in your system prompt, the `web_fetch` tool is subject to an allowlist restriction (UX-03) that limits it to hosts explicitly listed in the profile's `web_fetch.allowlist`.
+
+The **URL bypass mechanism** works as follows:
+
+1.  **The Restriction:** By default, `web_fetch` will return an error if you attempt to fetch a URL from a host that is not in the `web_fetch.allowlist`.
+2.  **The Bypass:** When you use the `web_search` tool, it returns a list of results containing `title`, `url`, `snippet`, and `engine`. 
+3.  **The Logic:** The system is designed to automatically allow `web_fetch` to access any URL that was **returned as a result from a `web_search` call**. 
+
+Essentially, `web_search` acts as a "gateway." Instead of needing to manually add every website to an allowlist, you use `web_search` to find the information you need; once the search engine provides the URL, the system trusts that URL and allows `web_fetch` to retrieve the full structured content from it.

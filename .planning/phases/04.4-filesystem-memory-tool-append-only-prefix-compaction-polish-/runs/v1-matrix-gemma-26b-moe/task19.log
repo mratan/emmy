@@ -1,0 +1,41 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=gemma-4-26b-a4b-it@v2, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=4e2cd39739bae61aae62e1698f30cb381a085cc57c2a7515e4d6c30a2857381d
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=4e2cd39739bae61aae62e1698f30cb381a085cc57c2a7515e4d6c30a2857381d, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T06-00-19-067Z.jsonl
+In profile bundles, `harness.yaml` and `serving.yaml` serve two distinct roles: one defines the **model's runtime environment** (how it is served), while the other defines the **agent's operational logic** (how the model is used).
+
+### 1. `serving.yaml` (The Model Engine Configuration)
+This file configures the **inference engine** (e.g., vLLM). It is focused on the hardware, the model weights, and the low-level API parameters.
+
+*   **Purpose:** To ensure the model is loaded correctly and performs efficiently on specific hardware.
+*   **Key Contents:**
+    *   **Model Identity:** `model` path, `model_hf_id`, and `served_model_name`.
+    *   **Container Specs:** `container_image` and `container_image_digest` (ensuring exact versioning of the inference server).
+    *   **Hardware/Memory Tuning:** `gpu_memory_utilization`, `max_model_len`, and `kv_cache_dtype`.
+    *   **Inference Engine Flags:** `quantization` (e.g., FP8), `enable_prefix_caching`, `tool_call_parser`, and `sampling_defaults` (temperature, top_p, etc.).
+    *   **Network:** `host` and `port` for the API server.
+
+### 2. `harness.yaml` (The Agentic Framework Configuration)
+This file configures the **agentic loop** and the **interaction layer**. It defines how the model interacts with tools, prompts, and the user.
+
+*   **Purpose:** To define the "personality," capabilities, and constraints of the agent using the model.
+*   **Key Contents:**
+    *   **Prompting Strategy:** Paths to `system` prompts, `edit_format` instructions, and `tool_descriptions`.
+    *   **Context Management:** `max_input_tokens` (calculated based on the model's limit) and `compaction` settings (how the agent summarizes old turns to save space).
+    *   **Tool Definitions:** `tool_descriptions` (JSON schemas) and `grammar` (Lark files used to force the model into correct syntax).
+    *   **Tool-Specific Sampling:** Overriding sampling parameters for specific tools (e.g., setting `temperature: 0.0` for `edit` or `bash` to ensure determinism).
+    *   **Agent Loop Logic:** `max_iterations`, `retry_on_unparseable_tool_call`, and `self_correction` settings.
+    *   **Safety/Constraints:** `allowlist` for `web_fetch` (restricting which domains the agent can visit).
+
+### Summary Comparison
+
+| Feature | `serving.yaml` | `harness.yaml` |
+| :--- | :--- | :--- |
+| **Primary Focus** | **Inference Engine** (vLLM/Hardware) | **Agent Logic** (Prompts/Tools) |
+| **Target User** | DevOps / Infrastructure | AI Engineer / Agent Developer |
+| **Example Parameter** | `gpu_memory_utilization: 0.86` | `max_iterations: 25` |
+| **Example Parameter** | `quantization: fp8` | `tool_descriptions: prompts/tool_descriptions.md` |
+| **Concerned with...** | Throughput, Latency, VRAM, Weights | Accuracy, Tool-calling, Context Window, Safety |

@@ -1,0 +1,21 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=gemma-4-26b-a4b-it@v2, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=b69f5e18d10bbf8d3d31502799aebc805e79eddec95be96ff24a484657789328
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=b69f5e18d10bbf8d3d31502799aebc805e79eddec95be96ff24a484657789328, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T05-50-12-770Z.jsonl
+grep: ./.venv/lib/python3.12/site-packages/numpy/lib/__pycache__/_datasource.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/huggingface_hub/__pycache__/errors.cpython-312.pyc: binary file matches
+grep: ./.venv/lib/python3.12/site-packages/hf_xet/hf_xet.abi3.so: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task13.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task15.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption/task12.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task07.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task13.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task15.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task02.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task12.jsonl: binary file matches
+grep: ./.planning/phases/04.4-filesystem-memory-tool-append-only-prefix-compaction-polish-/runs/v1-adoption-v2/task04.jsonl: binary file matches
+grep: ./node_modules/.bun/@mariozechner+pi-coding-agent@0.68.0+85f9f1c5bdaeb2ea/node_modules/@mariozechner/pi-coding-agent/examples/extensions/doom-overlay/doom/build/doom.wasm: binary file matches
+

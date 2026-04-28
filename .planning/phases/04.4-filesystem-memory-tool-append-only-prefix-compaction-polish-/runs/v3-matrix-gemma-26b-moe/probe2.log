@@ -1,0 +1,14 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=gemma-4-26b-a4b-it@v2, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=471557bd39ba5498344520f76bedd258754780f4e432e76bd6d43847d9d93d2b
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=471557bd39ba5498344520f76bedd258754780f4e432e76bd6d43847d9d93d2b, layers=system.md,tool_defs,user)
+pi-emmy transcript=/tmp/v3-rot-test/runs/phase2-sc3-capture/session-2026-04-28T06-01-41-630Z.jsonl
+The signing algorithm used in `src/auth/auth.ts` is **RS256**.
+
+This is specified in the `sign` function:
+```typescript
+f88b2eda    const key = await importPKCS8(PRIVATE_KEY_PEM, "RS256");  // RS256
+de5ba823    return new SignJWT(payload as any).setProtectedHeader({ alg: "RS256" }).sign(key);
+```

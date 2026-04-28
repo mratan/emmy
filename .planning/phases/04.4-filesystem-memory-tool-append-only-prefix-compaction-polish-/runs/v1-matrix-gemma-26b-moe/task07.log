@@ -1,0 +1,32 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=gemma-4-26b-a4b-it@v2, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=a2396002dd43431cb1550480b343683e7ecbe301b589e7df41bb1f5bd4c45ed8
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=a2396002dd43431cb1550480b343683e7ecbe301b589e7df41bb1f5bd4c45ed8, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T05-51-21-726Z.jsonl
+The difference between `buildRealPiRuntime` and `buildRealPiRuntimeTui` in `session.ts` lies in the **final factory shape** and the **underlying pi-coding-agent session construction method**, although they share identical inputs and much of their internal logic.
+
+### Key Differences
+
+| Feature | `buildRealPiRuntime` | `buildRealPiRuntimeTui` |
+| :--- | :--- | :--- |
+| **Primary Use Case** | Non-interactive modes (`--print`, `--json`). | Interactive TUI mode (`--tui`). |
+| **Pi Session Construction** | Uses `createAgentSessionFromServices`. | Uses `createAgentSessionRuntime` (the full SDK runtime). |
+| **Agent Directory** | Uses default `cwd`-relative paths. | Uses an emmy-scoped directory: `~/.emmy/agent` (via `ensureEmmyAgentDir`). |
+| **Return Value** | Returns a `PiRuntime` adapter that supports `runPrint`. | Returns a `PiRuntime` adapter that supports `runTui` (which binds `InteractiveMode`). |
+
+### Detailed Breakdown
+
+1.  **Session Construction (The "Graduation")**:
+    *   `buildRealPiRuntime` uses the "SDK-only" path (`createAgentSessionFromServices`). This is optimized for one-shot execution where you just want to drive a prompt and get a result.
+    *   `buildRealPiRuntimeTui` "graduates" to the full pi runtime using `createAgentSessionRuntime`. This provides the full interactive capabilities required for a persistent TUI session.
+
+2.  **Filesystem Isolation (Air-gap Discipline)**:
+    *   `buildRealPiRuntimeTui` explicitly calls `ensureEmmyAgentDir()`, which forces the agent's settings and session state into `~/.emmy/agent` instead of the default `~/.pi/agent`. This prevents the Emmy-driven TUI from polluting the global `pi` namespace.
+
+3.  **Capabilities**:
+    *   The adapter returned by `buildRealPiRuntimeTui` implements `runTui`, which instantiates `new InteractiveMode(agentSessionRuntime).run()`.
+    *   The adapter returned by `buildRealPiRuntime` implements `runPrint`, which is a specialized loop for sending a single prompt and resolving when the `agent_end` event is emitted.
+
+**Note on Similarity:** As noted in the code comments (lines 482-483 and 1115-1117), the two functions are intentionally kept nearly identical in their setup (Auth, ModelRegistry, Emmy ExtensionFactory, and customTools wiring) to ensure that the core logic remains consistent regardless of whether the user is in a TUI or a headless mode.

@@ -1,0 +1,31 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=gemma-4-26b-a4b-it@v2, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=1b08ff4985b8fb589ba5ee2a9795b35735f11d01fe9fff89f9eae7acbae5bc8f
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=1b08ff4985b8fb589ba5ee2a9795b35735f11d01fe9fff89f9eae7acbae5bc8f, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T06-00-51-526Z.jsonl
+The registered set of native tools in `@emmy/tools` is defined by the `NATIVE_TOOL_NAMES` constant in `packages/emmy-tools/src/native-tools.ts`.
+
+### Registered Native Tools
+The tools are:
+1.  `read`
+2.  `write`
+3.  `edit`
+4.  `bash`
+5.  `grep`
+6.  `find`
+7.  `ls`
+8.  `web_fetch`
+9.  `web_search` (Note: This is conditionally registered based on profile settings and kill-switches).
+
+### Runtime Discovery and Registration
+The tools are discovered and registered at runtime through a two-step process designed to maintain a single source of truth for both the internal `pi` tool registration and the external `ToolDefinitionLike` objects used by agent sessions:
+
+1.  **`registerNativeTools(pi, opts)`**: This is the primary registration function. It takes a `pi` object (which provides a `registerTool` method) and an options object. It iterates through the tool definitions and calls `pi.registerTool` for each one, passing in the tool's name, description, parameters, and `invoke` logic.
+2.  **`buildNativeToolDefs(opts)`**: This is the high-level function used to generate tool definitions for agent sessions (e.g., when calling `createAgentSessionFromServices`). 
+    *   It creates a "collector shim" (a temporary `pi` object) that captures the `PiToolSpec` emitted by `registerNativeTools`.
+    *   It calls `registerNativeTools` using this shim.
+    *   It then maps the collected `PiToolSpec` objects into `ToolDefinitionLike` objects using `toolSpecToDefinition`.
+
+This architecture ensures that any changes to a tool's schema, description, or implementation only need to be made in one place (`registerNativeTools`), and those changes are automatically reflected both in the `pi` runtime and in the definitions provided to the LLM.

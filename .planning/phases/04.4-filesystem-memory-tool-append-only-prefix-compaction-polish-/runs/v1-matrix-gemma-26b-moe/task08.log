@@ -1,0 +1,27 @@
+[emmy] Langfuse keys not set (LANGFUSE_PUBLIC_KEY / LANGFUSE_SECRET_KEY) - running JSONL-only
+pi-emmy starting (profile=gemma-4-26b-a4b-it@v2, base_url=http://127.0.0.1:8002, telemetry=JSONL-only)
+prompt.assembled sha256=7165a41451eafbed75335e9dd044136b91ef6b3f8007281740775689e2927976
+[32m[emmy] OFFLINE OK[0m
+pi-emmy SP_OK canary: OK
+pi-emmy session ready (prompt.sha256=7165a41451eafbed75335e9dd044136b91ef6b3f8007281740775689e2927976, layers=system.md,tool_defs,user)
+pi-emmy transcript=/data/projects/emmy/runs/phase2-sc3-capture/session-2026-04-28T05-52-02-692Z.jsonl
+The air-gap validator is located at `emmy_serve/airgap/validator.py`.
+
+It performs two types of checks: **pre-boot** (static policy validation of `serving.yaml`) and **post-boot** (active probes against a running container).
+
+### What it blocks:
+The validator enforces "D-12 layered assertions" to ensure the environment remains air-gapped. Specifically, it blocks configurations or runtime states that violate the following:
+
+**1. Pre-boot (Environment Policy):**
+It checks the `env` section of the `serving.yaml` profile to ensure the following environment variables are explicitly set to `1`:
+*   `VLLM_NO_USAGE_STATS=1`
+*   `DO_NOT_TRACK=1`
+*   `HF_HUB_OFFLINE=1`
+*   `TRANSFORMERS_OFFLINE=1`
+
+**2. Post-boot (Runtime Probes):**
+It runs four distinct "D-12 layers" of probes (defined in `emmy_serve/airgap/probe.py`) against the running container:
+*   **Layer A (Network Devices):** Validates network device/interface configurations.
+*   **Layer B (DNS Audit):** Audits DNS settings to prevent unauthorized resolution.
+*   **Layer C (Telemetry Env):** Checks for telemetry-related environment leakage.
+*   **Layer D (HF Offline Env):** Ensures Hugging Face (HF) remains in offline mode at runtime.
