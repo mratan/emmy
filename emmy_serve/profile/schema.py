@@ -329,6 +329,42 @@ class WebSearchConfig(BaseModel):
     timeout_ms: int = Field(default=10000, ge=1000, le=60000)
 
 
+class AskClaudeConfig(BaseModel):
+    """ask_claude tool config (Phase 04.6 D-13).
+
+    Per-profile opt-in for the model-side ``ask_claude`` tool that bridges to
+    the Spark's locally-installed Claude Code CLI via the sidecar's
+    ``POST /ask-claude`` endpoint. Strictly additive (D-04): all 7 currently-
+    shipping bundles validate without this block (Optional[AskClaudeConfig] =
+    None on ToolsConfig). Default ``enabled=False`` even when the block is
+    present — D-13 requires an explicit operator gesture per profile.
+
+    Runtime enforcement in ``packages/emmy-tools/src/ask-claude.ts``; sidecar
+    pre-flight gate in ``emmy_serve/swap/ask_claude.py`` (Phase 04.6 plans
+    04.6-01..04.6-06). Slash-command path (``/ask-claude``) bypasses these
+    per-turn limits per D-05 (operator-only, no model-side gating). The
+    sidecar still enforces the global hourly cap (D-07) regardless of
+    invocation path.
+
+    Knobs:
+      - enabled: master switch. False or None → tool not registered for the
+        model. Slash command remains operator-accessible regardless.
+      - rate_limit_per_turn: D-07 per-turn harness-side gate; hard-cap on
+        ``ask_claude`` calls per single agent turn. Cap (le=100) prevents
+        accidental runaway-loop foot-guns (T-02).
+      - rate_limit_per_hour: documented operator intent; the *enforcement*
+        of the hourly limit lives sidecar-side (D-07 single-source-of-truth).
+        Profile carries it for observability + audit; harness reads but does
+        not enforce. Cap (le=1000) is a generous schema upper bound — sidecar
+        ships its own ceiling (defaults to 30 per CONTEXT.md).
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    enabled: bool = False
+    rate_limit_per_turn: int = Field(default=5, gt=0, le=100)
+    rate_limit_per_hour: int = Field(default=30, gt=0, le=1000)
+
+
 class ToolsConfig(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
     format: Literal["openai", "hermes"]
@@ -344,6 +380,11 @@ class ToolsConfig(BaseModel):
     # Phase 3.1 D-34 — per-profile web_search config. v1/v2/v3 validate without
     # it; v3.1 ships the block. Runtime enforcement in @emmy/tools/web-search.
     web_search: Optional[WebSearchConfig] = None
+    # Phase 04.6 D-04 / D-13 — strictly-additive per-profile ask_claude config.
+    # All 7 currently-shipping bundles validate without it (None); future
+    # bundles flip enabled=True via Plan 04.6-05. Runtime enforcement in
+    # @emmy/tools/ask-claude; sidecar enforcement in emmy_serve/swap/ask_claude.
+    ask_claude: Optional[AskClaudeConfig] = None
 
 
 class AgentLoopConfig(BaseModel):
@@ -533,6 +574,7 @@ __all__ = [
     "GrammarConfig",
     "WebFetchConfig",
     "WebSearchConfig",
+    "AskClaudeConfig",
     "ToolsConfig",
     "AgentLoopConfig",
     "HarnessConfig",

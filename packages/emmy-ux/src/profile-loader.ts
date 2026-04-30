@@ -170,6 +170,73 @@ export async function loadProfile(profileDir: string): Promise<ProfileSnapshot> 
 		  }
 		: undefined;
 
+	// Plan 04.6-03 (D-04 / D-13): parse tools.ask_claude block (Phase-04.6 field;
+	// all 7 currently-shipping bundles validate without it → absent → tool not
+	// registered for the model). Strictly additive per CLAUDE.md immutability
+	// rule + 04.6 D-04. Validation mirrors the typed-error pattern from the
+	// memory block (dotted-path ProfileLoadError) rather than the silent-default
+	// pattern from web_search — rate-limit fields are correctness-relevant
+	// (T-02 abuse prevention) so silent fallback would mask bugs.
+	const askClaudeRaw = toolsRaw.ask_claude as Record<string, unknown> | undefined;
+	let askClaudeBlock:
+		| {
+				enabled: boolean;
+				rate_limit_per_turn: number;
+				rate_limit_per_hour: number;
+		  }
+		| undefined = undefined;
+	if (askClaudeRaw !== undefined) {
+		const enabled = askClaudeRaw.enabled;
+		if (typeof enabled !== "boolean") {
+			throw new ProfileLoadError(
+				`${harnessYamlPath}:tools.ask_claude.enabled`,
+				"must be boolean",
+			);
+		}
+		// Defaults mirror AskClaudeConfig (D-13): enabled=False even when block
+		// present, rate_limit_per_turn=5, rate_limit_per_hour=30. Validation
+		// applied only when fields ARE present — absent defaults silently.
+		let rateLimitPerTurn = 5;
+		if (askClaudeRaw.rate_limit_per_turn !== undefined) {
+			const v = askClaudeRaw.rate_limit_per_turn;
+			if (
+				typeof v !== "number" ||
+				!Number.isFinite(v) ||
+				!Number.isInteger(v) ||
+				v <= 0 ||
+				v > 100
+			) {
+				throw new ProfileLoadError(
+					`${harnessYamlPath}:tools.ask_claude.rate_limit_per_turn`,
+					"must be integer in (0, 100]",
+				);
+			}
+			rateLimitPerTurn = v;
+		}
+		let rateLimitPerHour = 30;
+		if (askClaudeRaw.rate_limit_per_hour !== undefined) {
+			const v = askClaudeRaw.rate_limit_per_hour;
+			if (
+				typeof v !== "number" ||
+				!Number.isFinite(v) ||
+				!Number.isInteger(v) ||
+				v <= 0 ||
+				v > 1000
+			) {
+				throw new ProfileLoadError(
+					`${harnessYamlPath}:tools.ask_claude.rate_limit_per_hour`,
+					"must be integer in (0, 1000]",
+				);
+			}
+			rateLimitPerHour = v;
+		}
+		askClaudeBlock = {
+			enabled,
+			rate_limit_per_turn: rateLimitPerTurn,
+			rate_limit_per_hour: rateLimitPerHour,
+		};
+	}
+
 	const retryOnUnparseableToolCall =
 		typeof agentLoopRaw.retry_on_unparseable_tool_call === "number"
 			? (agentLoopRaw.retry_on_unparseable_tool_call as number)
@@ -294,6 +361,9 @@ export async function loadProfile(profileDir: string): Promise<ProfileSnapshot> 
 					? { web_fetch: { allowlist: webFetchAllowlist } }
 					: {}),
 				...(webSearchBlock !== undefined ? { web_search: webSearchBlock } : {}),
+				// Plan 04.6-03 — ask_claude block. Cast at use sites (mirrors
+				// web_search precedent — ProfileSnapshot type doesn't declare it).
+				...(askClaudeBlock !== undefined ? { ask_claude: askClaudeBlock } : {}),
 			},
 			agent_loop: {
 				retry_on_unparseable_tool_call: retryOnUnparseableToolCall,
