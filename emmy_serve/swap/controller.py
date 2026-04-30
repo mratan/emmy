@@ -917,21 +917,33 @@ async def post_ask_claude(req: AskClaudeRequest) -> AskClaudeResponse:
     # D-06 scrubber. Reject-don't-redact: structured 400 with the matched
     # pattern class. T-01 mitigation — the model sees the failure and can
     # adjust its prompt; we never silently mutate it.
+    #
+    # D-08 INVARIANT: `matched_excerpt` carries up to 40 chars of the literal
+    # matched substring (the secret itself). The default privacy posture
+    # (`EMMY_LOG_FULL` unset) MUST suppress it from BOTH the JSONL audit AND
+    # the HTTP error body — exactly mirroring the existing prompt_full /
+    # response_full gating in `emit_event_ask_claude`. Operator gets the
+    # `pattern_class` (which rule fired); the literal value lands in the
+    # audit + error body only when EMMY_LOG_FULL=on (explicit debug gesture).
     scrub_result = scrub(req.prompt)
     if not scrub_result.clean:
+        log_full = os.environ.get("EMMY_LOG_FULL") == "on"
+        audit_extras: dict = {"pattern_class": scrub_result.matched_class}
+        detail_body: dict = {
+            "reason": "scrubber_blocked",
+            "pattern_class": scrub_result.matched_class,
+        }
+        if log_full and scrub_result.matched_excerpt is not None:
+            audit_extras["matched_excerpt"] = scrub_result.matched_excerpt
+            detail_body["matched_excerpt"] = scrub_result.matched_excerpt
         emit_event_ask_claude(
             "scrubber_blocked",
             req.prompt,
-            pattern_class=scrub_result.matched_class,
-            matched_excerpt=scrub_result.matched_excerpt,
+            **audit_extras,
         )
         raise HTTPException(
             status_code=400,
-            detail={
-                "reason": "scrubber_blocked",
-                "pattern_class": scrub_result.matched_class,
-                "matched_excerpt": scrub_result.matched_excerpt,
-            },
+            detail=detail_body,
         )
 
     # D-07 rate-limit acquire. Under the lock so concurrent requests can't

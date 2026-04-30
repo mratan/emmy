@@ -480,3 +480,80 @@ def test_endpoint_emits_audit_event_error(
     err = error_events[0]
     # Exit code surfaces in the audit event.
     assert err.get("exit_code") == 1, err
+
+
+# ----------------------------------------------------------------------------
+# CR-01 (Phase 04.6 review) — scrubber-blocked path MUST NOT leak the literal
+# matched secret into the JSONL audit or the HTTP error body when the default
+# privacy posture is in force (EMMY_LOG_FULL unset). Mirrors the existing
+# prompt_full / response_full gating in emit_event_ask_claude (D-08).
+# ----------------------------------------------------------------------------
+
+
+def test_scrubber_blocked_event_does_not_leak_secret(
+    client: TestClient,
+    mock_claude: _ClaudeSpy,
+    jsonl_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """D-08 / CR-01 — default privacy posture: NO `matched_excerpt` in audit
+    or HTTP body when EMMY_LOG_FULL is not 'on'. The literal AKIA must NEVER
+    appear anywhere in the audit JSONL.
+    """
+    monkeypatch.setenv("EMMY_ASK_CLAUDE", "on")
+    monkeypatch.delenv("EMMY_LOG_FULL", raising=False)
+    aws_key = "AKIAIOSFODNN7EXAMPLE"
+
+    r = client.post("/ask-claude", json={"prompt": f"use {aws_key} for the bucket"})
+    assert r.status_code == 400, r.text
+    body = r.json()
+    detail = body.get("detail", body)
+    assert detail.get("reason") == "scrubber_blocked"
+    assert detail.get("pattern_class") == "aws_access_key_id"
+    # Default posture: HTTP error body must NOT carry matched_excerpt.
+    assert "matched_excerpt" not in detail, detail
+    # And the literal AKIA token must not appear ANYWHERE in the body string.
+    assert aws_key not in r.text, "AWS key literal leaked into HTTP body"
+
+    events = _read_events(jsonl_dir)
+    assert events, "expected at least one audit event"
+    for ev in events:
+        # The literal secret must NEVER appear in any event field, regardless
+        # of which key carries it.
+        assert "matched_excerpt" not in ev, f"matched_excerpt leaked: {ev}"
+        for v in ev.values():
+            if isinstance(v, str):
+                assert aws_key not in v, f"AWS key literal leaked into audit: {ev}"
+
+
+def test_scrubber_blocked_event_carries_excerpt_when_log_full_on(
+    client: TestClient,
+    mock_claude: _ClaudeSpy,
+    jsonl_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """D-08 / CR-01 — explicit debug gesture: when EMMY_LOG_FULL=on the
+    operator has consented to plaintext logging, so matched_excerpt is
+    permitted in audit + HTTP body (mirrors prompt_full/response_full).
+    """
+    monkeypatch.setenv("EMMY_ASK_CLAUDE", "on")
+    monkeypatch.setenv("EMMY_LOG_FULL", "on")
+    aws_key = "AKIAIOSFODNN7EXAMPLE"
+
+    r = client.post("/ask-claude", json={"prompt": f"use {aws_key} for the bucket"})
+    assert r.status_code == 400, r.text
+    body = r.json()
+    detail = body.get("detail", body)
+    # With EMMY_LOG_FULL=on, the operator-facing diagnostic excerpt is allowed.
+    assert detail.get("matched_excerpt") is not None, detail
+    assert aws_key in detail["matched_excerpt"], detail
+
+    events = _read_events(jsonl_dir)
+    blocked = [
+        ev for ev in events if ev.get("event", "").endswith(".scrubber_blocked")
+    ]
+    assert blocked, f"expected scrubber_blocked event, got {events}"
+    # Either matched_excerpt is present (debug-on path) OR the prompt_full
+    # field carries the secret — both are acceptable when EMMY_LOG_FULL=on.
+    ev = blocked[0]
+    assert ev.get("matched_excerpt") is not None, ev
