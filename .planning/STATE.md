@@ -3,13 +3,13 @@ gsd_state_version: 1.0
 milestone: v0.68.0
 milestone_name: milestone
 status: unknown
-last_updated: "2026-04-28T06:30:00.000Z"
+last_updated: "2026-04-30T17:00:03.551Z"
 progress:
   total_phases: 13
-  completed_phases: 6
+  completed_phases: 8
   total_plans: 66
-  completed_plans: 40
-  percent: 61
+  completed_plans: 56
+  percent: 85
 ---
 
 # State: Emmy
@@ -23,7 +23,7 @@ progress:
 
 **Project:** Emmy — fully-local coding agent on NVIDIA DGX Spark
 **Core Value:** A local coding agent good enough to be the author's daily driver, structured rigorously enough to be a public research artifact others can reproduce — with no cloud dependency anywhere in the loop.
-**Current Focus:** Phase 04.4 — V1/V3 4-profile matrix COMPLETE 2026-04-28 (V-RESULTS-v8); **daily-driver switched to Gemma 4 26B-A4B v2.1 (256K native context, gmu=0.55); Qwen 35B-A3B MoE dropped from active stack same day**; V2/V8 compaction + V8 memory protocols remain operator-time work; sidecar OOM postmortem mitigated via `OOMScoreAdjust=-200` on emmy-sidecar.service
+**Current Focus:** Phase 04.6 — ask-claude-bridge
 
 **Authoritative documents:**
 
@@ -40,8 +40,8 @@ progress:
 
 ## Current Position
 
-Phase: 04.4 (filesystem-memory-tool-append-only-prefix-compaction-polish-) — CLOSEOUT PENDING (9/9 plans landed; operator-gated V1/V2/V3/V8 memory + V2/V8 compaction protocols)
-Plan: 9 of 9 (paperwork complete)
+Phase: 04.6 (ask-claude-bridge) — EXECUTING
+Plan: 1 of 7
 **Phase 1:** Serving Foundation + Profile Schema — closed 2026-04-21 with 3 documented deferrals; see `.planning/phases/01-serving-foundation-profile-schema/01-CLOSEOUT.md`
 **Phase 2:** Pi-Harness MVP — Daily-Driver Baseline — closed 2026-04-21 with SC-1 green + SC-2/3/4/5 pass; 5 Phase-3 wire-through deferrals; see `.planning/phases/02-pi-harness-mvp-daily-driver-baseline/02-CLOSEOUT.md`
 **Phase 3:** Observability + Agent-Loop Hardening + Lived-Experience — closed 2026-04-22 with SC-1 phase3 green + SC-2/3/4/5 pass; v3 profile hash `sha256:2beb99c7...d4d3718`; 8 Phase-3 REQ-IDs + 5 Phase-2 Done† promoted to Done (13 total flipped; cumulative 36); 5 operator-gated evidence items deferred (not blockers); see `.planning/phases/03-observability-agent-loop-hardening-lived-experience/03-CLOSEOUT.md`
@@ -149,22 +149,26 @@ Current: Phase 4.2 CLOSURE PENDING 2026-04-26 — paperwork landed (runbook SC w
 **Decision:** The system-prompt prefix sent to vLLM never mutates within a session. Compaction replaces conversation-body turns; never edits system prompt, tool descriptions, project preamble (CLAUDE.md / AGENTS.md), or any pre-turn content.
 
 **Rationale:**
+
 - vLLM automatic prefix caching is the largest free-money win in long-context. Any prefix mutation invalidates blocks → full recompute → KV pressure → preemption.
 - Cognition's 2026 "clean context for verifiers" lesson — stable prefix is closer to clean than rewriting.
 - Reproducibility: prefix mutations interleaved with compactions create non-deterministic histories.
 
 **Allowed:**
+
 - `before_provider_request` payload mutations (thinking-disable, reactive grammar) — per-request payload, not conversation prefix.
 - Compaction body replacement — pi's existing behavior.
 - Custom messages appended AFTER system prompt — appending, not mutating.
 
 **Forbidden:**
+
 - Re-rendering system prompt mid-session
 - Re-ordering tool descriptions mid-session
 - Mutating CLAUDE.md / AGENTS.md and re-loading
 - Adding "session summary so far" to system prompt at compaction time
 
 **Enforcement:**
+
 1. One-time audit (Phase 04.4 plan 06): `bun run packages/emmy-ux/scripts/audit_prefix_mutations.ts` — exits 0 if zero FORBIDDEN findings.
 2. Per-request OTel attribute `emmy.prefix.hash = sha256(system_prompt_prefix_bytes)` — V3 test asserts hash equality at turn 0 and turn N within one session.
 3. V4 architecture-aware (per Pitfall #22): attention-only profiles gate at ≥80% prefix-cache hit rate post-compaction; Mamba-hybrid profiles use "measure-and-acknowledge" (boot-log warning detection).
