@@ -92,6 +92,7 @@ EMMY_WEB_SEARCH=off pi-emmy       # disable web_search tool (8-tool floor; badge
 /start <name>[@variant]           # cold-start vLLM via the always-on sidecar (Phase 04.2). Idempotent same-variant short-circuit returns ~1s; cross-variant reuses the /profile swap path.
 /stop                             # graceful drain via sidecar (Phase 04.2): D-01 30s grace for in-flight requests, then SIGTERM, then SIGKILL deadline. Footer shows draining {in_flight: N}.
 /status                           # poll-only sidecar /status (Phase 04.2): state, vllm_up, profile_id, profile_variant, KV%, GPU temp.
+/ask-claude <question>            # operator escalation to Claude Code via Spark-side OAuth (Phase 04.6). OFF by default; requires EMMY_ASK_CLAUDE=on on the sidecar + Anthropic Pro/Max OAuth on Spark. Bypasses model-side rate-limits; sidecar global cap 30/hour applies. See docs/runbook.md § ask-claude tool.
 /compact [optional instructions]  # manually compact session context (pi built-in; auto-fires at 75% of max_input_tokens)
 /clear                            # reset session history (keep boot context)
 /quit                             # exit pi-emmy
@@ -157,11 +158,11 @@ To swap to a dense profile inside a running pi-emmy TUI: `/profile qwen3.6-27b` 
 | Stack | Port | Required for | Disable |
 |-------|------|--------------|---------|
 | `emmy-serve` | 127.0.0.1:8002 | inference (every pi-emmy request) | none — required |
-| `emmy-sidecar` | 127.0.0.1:8003 | `/start`, `/stop`, `/status`, `/profile` slash commands; remote-client control plane (Phase 04.2) | `systemctl --user stop emmy-sidecar` (local-mode `/profile` falls back to spawn path) |
+| `emmy-sidecar` | 127.0.0.1:8003 | `/start`, `/stop`, `/status`, `/profile` slash commands; remote-client control plane (Phase 04.2); `/ask-claude` slash command + `ask_claude` tool when `EMMY_ASK_CLAUDE=on` (Phase 04.6) | `systemctl --user stop emmy-sidecar` (local-mode `/profile` falls back to spawn path); ask-claude is independently disable-able via `EMMY_ASK_CLAUDE=off` env on the sidecar |
 | Langfuse | 127.0.0.1:3000 | tracing (optional) | leave `LANGFUSE_*` env empty or `EMMY_TELEMETRY=off` |
 | SearxNG | 127.0.0.1:8888 | `web_search` tool (optional) | `bash scripts/stop_searxng.sh` or `EMMY_WEB_SEARCH=off` |
 
-With all four up, the harness talks to four loopback endpoints. SearxNG is the only container with outbound traffic (to search engines). That's the one deliberate egress surface; see `CLAUDE.md § Design Principles` for the rationale. The sidecar (FastAPI on 8003) is also loopback in local mode — it only becomes tailnet-exposed when you opt in via `tailscale serve` (see Remote-client mode below).
+With all four up, the harness talks to four loopback endpoints. **Two deliberate egress surfaces** exist (default-OFF at the harness level): SearxNG container reaches search engines outbound (loopback from harness POV; toggle: `EMMY_WEB_SEARCH=off`); the sidecar's `/ask-claude` endpoint spawns the Spark-side `claude --print` CLI which reaches `api.anthropic.com` over operator OAuth — **default OFF unless `EMMY_ASK_CLAUDE=on` is set on the sidecar AND a profile opts in via `tools.ask_claude.enabled: true`**. See `CLAUDE.md` air-gap thesis paragraph + `docs/runbook.md § ask-claude tool` for the rationale and the three-layer default-trust-OFF posture. The sidecar (FastAPI on 8003) is loopback in local mode — it only becomes tailnet-exposed when you opt in via `tailscale serve` (see Remote-client mode below).
 
 ---
 

@@ -129,6 +129,255 @@ EMMY_WEB_SEARCH=off pi-emmy
 
 ---
 
+## ask-claude tool — sidecar-mediated Claude Code escalation
+
+> Phase 04.6 — sanctioned bridge for Emmy's local model to ask Claude hard
+> reasoning questions, via the Spark's locally-installed Claude Code CLI and
+> OAuth (no Anthropic API key needed). The sidecar (`emmy_serve.swap.controller`,
+> already running on `127.0.0.1:8003` per Phase 04.2) gains one new endpoint
+> `POST /ask-claude` which spawns `claude --print -` with the prompt on stdin
+> and returns the response.
+
+**This is the second authorized egress in Emmy's threat model**, alongside
+SearxNG. They differ in shape:
+
+| | SearxNG (`web_search`) | Claude Code (`ask_claude`) |
+|---|---|---|
+| Network | self-hosted, loopback-bound (`127.0.0.1:8888`) | Spark-side `claude` CLI talks to api.anthropic.com over the operator's OAuth |
+| Air-gap CI | invisible to STRICT validator | invisible to STRICT validator (subprocess spawn, not an outbound socket from emmy-serve) |
+| Auth | none | OAuth via Pro/Max subscription stored in `~/.claude/` (Spark-side only; Mac OAuth is not used) |
+| Default | OFF (`EMMY_WEB_SEARCH=off`-style; profile must opt in) | OFF (sidecar `EMMY_ASK_CLAUDE=on` env required + profile must opt in) |
+
+The "no cloud INFERENCE in the critical loop" thesis is preserved because the
+LLM itself is still 100% local — `ask_claude` is a deliberately escalation-shaped
+tool that the operator (or, with explicit per-profile opt-in, the model) invokes
+for hard reasoning beyond local capability. Every call is gated, rate-limited,
+scrubbed, and audited.
+
+### Default trust posture — OFF at three layers (any one missing → tool silent)
+
+1. **Sidecar env gate (D-03):** `EMMY_ASK_CLAUDE` env unset on the
+   sidecar process → `POST /ask-claude` returns `503 env_disabled` regardless
+   of any other config. This is the master kill-switch.
+2. **Profile schema (D-04 / D-13):** every shipping profile bundle today omits
+   the `tools.ask_claude` block entirely. `Optional[AskClaudeConfig] = None`
+   on `ToolsConfig` means absence validates as `None`; the harness reads
+   `enabled !== true` and the model-side tool is never registered.
+3. **Profile `enabled` flag (D-13):** even if a future bundle adds the
+   `tools.ask_claude` block, the default value is `enabled: false`. Operator
+   must explicitly flip the bit on the bundles where they want model-side
+   escalation.
+
+The slash command `/ask-claude <question>` (operator gesture) bypasses
+layers 2-3 — only layer 1 gates it, by design (D-05). The operator typing
+the command IS the trust signal.
+
+### Why this is policy-compliant
+
+Anthropic's 2026-02-20 Consumer Terms update explicitly bans third-party tools
+using subscription OAuth tokens directly, but explicitly supports "running the
+official CLI remotely via SSH" — which is functionally equivalent to spawning
+`claude --print` from another local process on the machine that owns the OAuth
+token. The OAuth credential never leaves the Spark; only the official CLI uses
+it; argv + stdin invocation (never shell) keeps the command surface uniform
+with how an SSH `ForceCommand=` deployment would invoke it.
+
+See `04.6-CONTEXT.md` § Background + § Locked Decisions D-01 (Spark-side OAuth
+single chokepoint) and D-09 (argv + stdin, never shell) for the full rationale.
+
+### Pre-flight (operator gates — do all three before flipping `EMMY_ASK_CLAUDE=on`)
+
+The full operator pre-flight protocol with sign-off lines lives at
+`.planning/phases/04.6-ask-claude-bridge/04.6-07-OPERATOR-PROTOCOLS.md` —
+this section is the runbook quick-reference; the OPERATOR-PROTOCOLS doc is the
+attestation record (replace `[ ]` with `[x] <date>` per item).
+
+1. **Verify Anthropic Pro/Max privacy setting (D-10).** Visit claude.ai →
+   Settings → Privacy → "Help improve Claude / Allow Anthropic to use your
+   conversations to train future models". Toggle must be **OFF**. Pro/Max
+   should be off by default; verify and self-attest in OPERATOR-PROTOCOLS.
+
+2. **Verify `claude` CLI is on the sidecar's PATH (D-11).**
+   ```bash
+   systemctl --user show emmy-sidecar.service -p Environment
+   # Confirm PATH includes ~/.local/bin (or wherever `claude` lives)
+   command -v claude
+   # Should resolve to /usr/local/bin/claude or ~/.local/bin/claude
+   claude --version
+   # Confirms the CLI runs
+   ```
+   At least one prior interactive `claude` session on Spark — token must be
+   stored in `~/.claude/` so the spawned subprocess doesn't re-prompt for OAuth.
+
+3. **Configure the env on the sidecar systemd unit.** Edit
+   `~/.config/systemd/user/emmy-sidecar.service`:
+   ```ini
+   [Service]
+   ...
+   Environment=EMMY_ASK_CLAUDE=on
+   ```
+   Then reload + restart:
+   ```bash
+   systemctl --user daemon-reload && systemctl --user restart emmy-sidecar
+   ```
+
+Smoke test:
+```bash
+curl -s -X POST http://127.0.0.1:8003/ask-claude \
+  -H 'content-type: application/json' \
+  -d '{"prompt":"what is 2+2"}'
+# Expected: {"response": "...", "duration_ms": ..., "rate_limit_remaining_hour": ...}
+```
+
+### Operator slash command (manual escalation — D-05 bypasses model-side gating)
+
+```
+/ask-claude What's the best Rust pattern for graceful task cancellation?
+```
+
+Routes through the sidecar; output prints in the TUI. Available in **both**
+`pi-emmy` (Spark-side loopback to `127.0.0.1:8003/ask-claude`) and `emmy`
+(Mac-side tailnet to `https://<spark>:8003/ask-claude`) — D-14 LOCKED identical
+UX. The slash command bypasses the model-side per-turn rate-limit (D-05);
+the sidecar global rate-limit still applies (concurrent / min-gap / hourly).
+
+The 7 reason codes the slash command surfaces:
+
+| Reason | When | What to do |
+|---|---|---|
+| `env_disabled` | sidecar `EMMY_ASK_CLAUDE` unset | flip env in unit file, reload, restart sidecar |
+| `claude_cli_not_found` | `claude` not on sidecar PATH | install Claude Code on Spark (or fix unit-file `Environment=PATH=...`) |
+| `scrubber_blocked` (carries `pattern_class`) | prompt contained a secret-shaped pattern | rephrase prompt without the literal secret; refine `emmy_serve/tools/scrubber_config.yaml` if false positive |
+| `rate_limited_concurrent` | another `/ask-claude` request in flight | wait a few seconds; D-07 enforces 1 in-flight cap |
+| `rate_limited_min_gap` | last call < 3s ago | wait the gap; D-07 enforces 1-call-per-3s minimum |
+| `rate_limited_hourly` | ≥ 30 calls in the last rolling hour | wait until window slides (returns 200 again as the oldest call ages out) |
+| `subprocess_failed` | non-zero exit from `claude --print` (e.g. "authentication required") | SSH to Spark, run `claude` interactively to refresh OAuth, then retry |
+| `timeout` | subprocess didn't return within `_ASK_CLAUDE_DEFAULT_TIMEOUT_MS` | usually a slow Anthropic upstream; retry |
+
+### Tool form (model escalation — opt-in per profile, gated by every layer)
+
+Off by default per profile (D-13). To enable for the daily-driver Gemma 26B v2.1:
+
+```yaml
+# profiles/gemma-4-26b-a4b-it/v2.1/harness.yaml
+tools:
+  ask_claude:
+    enabled: true
+    rate_limit_per_turn: 5      # default; le=100 schema cap
+    rate_limit_per_hour: 30     # observability copy of sidecar enforcement
+```
+
+Then recompute the bundle hash in place (additive change per CLAUDE.md
+immutability rule — no new sibling version):
+
+```bash
+uv run emmy profile hash --write profiles/gemma-4-26b-a4b-it/v2.1/
+uv run emmy profile validate profiles/gemma-4-26b-a4b-it/v2.1/
+```
+
+The model invokes the tool with structured args:
+
+```json
+{
+  "name": "ask_claude",
+  "arguments": {
+    "question": "Why does this Rust code deadlock?",
+    "tried": "Added Mutex<Arc<>>, swapped tokio::sync::Mutex for std::sync::Mutex, traced with tokio-console — the lock acquires interleave but I can't see why",
+    "relevant_context": "[code snippet]"
+  }
+}
+```
+
+**Boilerplate-tried gate (T-06):** the harness rejects empty / "stuck" / "n/a" /
+"I tried thinking..." values for `tried` BEFORE dispatch. Validation rejects
+do NOT consume the per-turn rate-limit budget — the counter increments only on
+successful sidecar response.
+
+### Privacy + threat model (full register at `04.6-CONTEXT.md`)
+
+| Concern | Mitigation |
+|---|---|
+| **T-01** Prompts/code go to Anthropic | Pre-send scrubber (`emmy_serve/tools/scrubber.py` — 11 default classes: AWS/sk-prefixed/Slack/GitHub/Google/JWT/PEM/`.env*`/`*.key|pem`/secrets/*/`.ssh/*`). **Reject-don't-redact (D-06)**: model gets a structured 400 with `pattern_class` so it can adjust and retry. Tool description forbids "secrets, credentials, PII, customer data". |
+| **T-02** Rate-limit abuse / runaway loops | Sidecar global cap: 30/hour, 1 in-flight, 3s min-gap (under `asyncio.Lock`). Harness per-turn cap: 5/turn (gate-before-bump pattern; over-budget calls don't burn more headroom). Both pools shared between `pi-emmy` and `emmy`. |
+| **T-03** Subprocess injection | Argv list + stdin only (`asyncio.create_subprocess_exec(["claude","--print","-"], stdin=PIPE)`), never shell. Prompt is data, never command-line. Tested by integration test with shell-metacharacter prompts. |
+| **T-04** Audit gap | Every `/ask-claude` invocation emits at least one JSONL event (`request`, then `response` or `error` or `rate_limited` or `scrubber_blocked`). Atomic JSONL append (`emmy_serve/diagnostics/atomic.py`) ensures fsync before request return. |
+| **T-05** OAuth credential exposure | Documented (D-12). Sidecar already has access to operator's home dir; spawning `claude` is one more thing it can do. Mitigation: ship `EMMY_ASK_CLAUDE=on` only on the operator's own Spark (not shared/CI machines). Anthropic's abuse detection covers the rest. |
+| **T-06** Model over-uses ask_claude | Tool description forbids routine use; structured `tried` arg with boilerplate-rejection regex. Phase 5 calibrates whether the model honors the contract. |
+| **T-07** Privacy regression | Documented operator pre-flight gate (D-10) — claude.ai privacy toggle OFF, attested in `04.6-07-OPERATOR-PROTOCOLS.md` before flipping `EMMY_ASK_CLAUDE=on` for the first time. |
+
+### Audit trail
+
+Every `/ask-claude` call (slash or tool form) emits one or more JSONL events
+to `${XDG_STATE_HOME:-~/.local/state}/emmy/sidecar/ask_claude_events.jsonl`
+(overridable via `EMMY_ASK_CLAUDE_JSONL=<path>`):
+
+| Event | When | Carries |
+|---|---|---|
+| `emmy.ask_claude.request` | pre-spawn (after all gates passed) | `prompt_sha256`, `prompt_len`, `ts` |
+| `emmy.ask_claude.response` | post-spawn success | `prompt_sha256`, `prompt_len`, `response_sha256`, `response_len`, `duration_ms`, `ts` |
+| `emmy.ask_claude.error` | non-zero exit / handler exception | `prompt_sha256`, `reason` (subprocess_failed / handler_exception), `duration_ms`, `ts` |
+| `emmy.ask_claude.scrubber_blocked` | D-06 reject before spawn | `prompt_sha256`, `pattern_class` (e.g. `sk_prefixed_key`), `matched_excerpt` (40-char cap), `ts` |
+| `emmy.ask_claude.rate_limited` | D-07 deny before spawn | `prompt_sha256`, `reason` (`concurrent` / `min_gap` / `hourly`), `ts` |
+
+**Default: NO raw content in the JSONL.** Prompts and responses are stored
+only as sha256 fingerprints + lengths (D-08 LOCKED). To enable full content
+(debug only, operator gesture):
+
+```ini
+# In emmy-sidecar.service [Service] block:
+Environment=EMMY_LOG_FULL=on
+```
+
+This adds `prompt_full` + `response_full` fields to every event. Reset to OFF
+after the debug session.
+
+Inspect the JSONL stream:
+
+```bash
+ls ~/.local/state/emmy/sidecar/ask_claude_events.jsonl
+tail -f ~/.local/state/emmy/sidecar/ask_claude_events.jsonl
+# OR via systemd journal:
+journalctl --user -u emmy-sidecar | grep emmy.ask_claude
+```
+
+### Kill switch
+
+Instant disable — set `EMMY_ASK_CLAUDE=off` (or remove the env line) in the
+sidecar systemd unit, then `systemctl --user daemon-reload && systemctl --user
+restart emmy-sidecar`. Within seconds, `/ask-claude` returns `503 env_disabled`
+and the model-side tool form errors at the same gate. No restart of vLLM or
+pi-emmy needed.
+
+### Troubleshooting
+
+- **`/ask-claude` returns 503 `env_disabled`** — `EMMY_ASK_CLAUDE` unset on
+  the sidecar. Edit unit file, `daemon-reload`, restart.
+- **`/ask-claude` returns 503 `claude_cli_not_found`** — `claude` CLI not on
+  the sidecar's PATH. Install Claude Code on Spark, OR fix the unit file's
+  `Environment=PATH=...` to include the install dir, OR ship a wrapper at a
+  PATH location.
+- **`/ask-claude` returns 502 `subprocess_failed` with stderr "authentication
+  required"** — Spark-side Claude Code session expired (OAuth refresh failed)
+  or never authenticated. SSH to Spark, run `claude` interactively once to
+  complete OAuth, then retry.
+- **Scrubber blocking legitimate content** — Edit
+  `emmy_serve/tools/scrubber_config.yaml` to refine the pattern (or add an
+  exclusion). Restart the sidecar to reload (patterns are compiled at module
+  import per D-06's "config drift would be a bug source" comment).
+- **Audit JSONL location** — defaults to `~/.local/state/emmy/sidecar/ask_claude_events.jsonl`;
+  override with `EMMY_ASK_CLAUDE_JSONL=<path>` on the sidecar unit if you want
+  it in a different state directory.
+- **Model never calls `ask_claude` despite `enabled: true`** — the per-turn
+  budget refreshes on `pi.on('turn_end', ...)`; if the harness isn't wiring
+  the reset, the counter creeps. Check `packages/emmy-tools/src/ask-claude.ts`
+  exports `resetAskClaudeTurnCount` and that session.ts wires it.
+- **Model over-uses `ask_claude`** — Phase 5 tuning task; iterate on the
+  `TOOL_DESCRIPTION` constant in `packages/emmy-tools/src/ask-claude.ts`.
+  Per CLAUDE.md "more prompting trap": always re-run the full eval suite
+  after a description change, not just a subset.
+
+---
+
 ## Langfuse: API-key rotation
 
 Tokens in `observability/langfuse/.env` are session-scoped per Langfuse project. To rotate:
