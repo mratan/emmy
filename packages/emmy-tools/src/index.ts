@@ -106,4 +106,17 @@ export type { SubAgentSpec, CreateSubAgentToolOpts } from "./subagent/types";
 // Phase 04.5 Plan 04 — concurrency governor.
 export { createConcurrencyGovernor } from "./subagent";
 export type { ConcurrencyGovernor, ConcurrencyGovernorConfig } from "./subagent";
+// Phase 04.6 Plan 04.6-05 — ask_claude tool form (D-05 / D-13 / D-15).
+export {
+	createAskClaudeTool,
+	resetAskClaudeTurnCount,
+	__resetAskClaudeTurnCountForTests,
+	callAskClaudeViaSidecar,
+	type AskClaudeArgs,
+	type AskClaudeCallResult,
+	type AskClaudeConfig,
+	type AskClaudeError,
+	type AskClaudeToolDeps,
+	type CallAskClaudeViaSidecarOpts,
+} from "./ask-claude";
 export const PACKAGE_VERSION = "0.1.0";
