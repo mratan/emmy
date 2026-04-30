@@ -778,3 +778,167 @@ export function registerResetCommand(
 		},
 	});
 }
+
+// ---------------------------------------------------------------------------
+// Plan 04.6-04 Task 2 — /ask-claude <question> operator slash command.
+//
+// D-05 LOCKED: slash command bypasses model-side per-turn rate-limit. When
+// the operator explicitly types `/ask-claude <q>`, that's a trust signal —
+// the only gating that applies is the sidecar's GLOBAL rate-limit (concurrent
+// + min-gap + 30/hr), enforced server-side by Plan 04.6-01's controller.
+//
+// D-14 LOCKED: identical UX between pi-emmy (Spark loopback) and emmy
+// (Mac tailnet). The dispatcher routes through `callAskClaude` injected at
+// factory wire-up; baseUrl is resolved at the wire-up site via
+// EMMY_SERVE_URL precedence (env > literal default 127.0.0.1:8003 — same
+// pattern /start /stop /status use). NO hardcoded endpoint URLs in this
+// module; the test seam is the `callAskClaude` callback, not env mocking.
+//
+// Read-only ctx — no isIdle gate (the sidecar accepts /ask-claude in any
+// state because vLLM doesn't need to be running for Claude escalation; the
+// two are independent). No confirm dialog: the operator already typed the
+// command + question, that's the explicit gesture.
+// ---------------------------------------------------------------------------
+
+/**
+ * Mirror of AskClaudeResponse from ask-claude-client.ts. Re-declared here
+ * to keep slash-commands.ts free of cross-module imports for the response
+ * type — handler only needs the shape, not the network call. The runtime
+ * value is supplied by the caller via opts.callAskClaude.
+ */
+export interface AskClaudeResponse {
+	response: string;
+	duration_ms: number;
+	rate_limit_remaining_hour: number;
+}
+
+/**
+ * Callback shape for the sidecar HTTP call. Production wiring (in
+ * pi-emmy-extension.ts) injects `callAskClaude({baseUrl, prompt})` from
+ * ./ask-claude-client; tests inject a fake that returns canned responses
+ * or throws structured AskClaudeError instances.
+ */
+export type CallAskClaudeFn = (prompt: string) => Promise<AskClaudeResponse>;
+
+export interface RegisterAskClaudeCommandOpts {
+	/** Sidecar HTTP call. See ./ask-claude-client.ts for the production impl. */
+	callAskClaude: CallAskClaudeFn;
+}
+
+/**
+ * Register /ask-claude <question> via pi.registerCommand. Handler:
+ *   1. Trim args; reject empty/whitespace-only with notify(error).
+ *   2. Call opts.callAskClaude(prompt); on success render via notify(info)
+ *      with response + duration + remaining-quota in one line.
+ *   3. On error, switch on err.reason and render a reason-specific
+ *      operator-actionable message:
+ *        - env_disabled         → hint to set EMMY_ASK_CLAUDE=on
+ *        - claude_cli_not_found → hint to install Claude Code on Spark
+ *        - scrubber_blocked     → name the matched pattern_class
+ *        - rate_limited_*       → name which limit fired (concurrent / min-gap / hourly)
+ *        - subprocess_failed    → name the subprocess context + detail
+ *        - timeout              → name "timeout" + detail
+ *        - unknown / other      → fall through to err.message
+ *
+ * Read-only ctx: no isIdle gate (independent of vLLM lifecycle), no confirm
+ * (operator-typed command + question is the gesture).
+ */
+export function registerAskClaudeCommand(
+	pi: ExtensionAPI,
+	opts: RegisterAskClaudeCommandOpts,
+): void {
+	pi.registerCommand("ask-claude", {
+		description:
+			"Ask Claude (via Spark-side OAuth) a focused question — operator-invoked. Bypasses model-side rate-limits.",
+		handler: async (rawArg: string, ctx: unknown) => {
+			const cmdCtx = ctx as StatusCmdCtx;
+			const prompt = rawArg.trim();
+			if (prompt.length === 0) {
+				cmdCtx.ui.notify(
+					"/ask-claude requires a question. Try: /ask-claude how do I…",
+					"error",
+				);
+				return;
+			}
+			try {
+				const r = await opts.callAskClaude(prompt);
+				// Single-line summary: response + elapsed + remaining-quota.
+				// "calls left this hour" is the sidecar's hourly rolling
+				// counter (Plan 04.6-01 D-07): operator sees the budget at
+				// a glance after every successful call. Newlines before
+				// the response let multi-line answers render legibly.
+				cmdCtx.ui.notify(
+					`Claude (${r.duration_ms}ms, ${r.rate_limit_remaining_hour} calls left this hour):\n\n${r.response}`,
+					"info",
+				);
+			} catch (err) {
+				const e = err as Error & {
+					reason?: string;
+					pattern_class?: string;
+					detail?: string;
+				};
+				const reason: string = e?.reason ?? "unknown";
+				const pattern: string | undefined = e?.pattern_class;
+				const detail: string | undefined = e?.detail;
+				switch (reason) {
+					case "env_disabled":
+						cmdCtx.ui.notify(
+							"/ask-claude is disabled on this Spark. " +
+								"Set EMMY_ASK_CLAUDE=on in the sidecar env to enable " +
+								"(see Plan 04.6-07 OPERATOR-PROTOCOLS for the privacy pre-flight checklist).",
+							"error",
+						);
+						break;
+					case "claude_cli_not_found":
+						cmdCtx.ui.notify(
+							"/ask-claude: claude CLI not found on Spark PATH. " +
+								"Install Claude Code on the Spark first (https://code.claude.com/docs/en/install).",
+							"error",
+						);
+						break;
+					case "scrubber_blocked":
+						cmdCtx.ui.notify(
+							`/ask-claude: prompt blocked by scrubber (${pattern ?? "secret pattern"}). ` +
+								"Remove the matched content and retry.",
+							"error",
+						);
+						break;
+					case "rate_limited_concurrent":
+						cmdCtx.ui.notify(
+							"/ask-claude: rate-limited (concurrent — another /ask-claude is in flight). Wait and retry.",
+							"error",
+						);
+						break;
+					case "rate_limited_min_gap":
+						cmdCtx.ui.notify(
+							"/ask-claude: rate-limited (min-gap — too soon after the last call). Wait a few seconds and retry.",
+							"error",
+						);
+						break;
+					case "rate_limited_hourly":
+						cmdCtx.ui.notify(
+							"/ask-claude: rate-limited (hourly — 30/hr ceiling reached). Wait until the rolling window clears.",
+							"error",
+						);
+						break;
+					case "subprocess_failed":
+						cmdCtx.ui.notify(
+							`/ask-claude: claude subprocess invocation failed${detail ? ` (${detail})` : ""}.`,
+							"error",
+						);
+						break;
+					case "timeout":
+						cmdCtx.ui.notify(
+							`/ask-claude: timeout waiting for claude${detail ? ` (${detail})` : ""}. Retry, or shorten the prompt.`,
+							"error",
+						);
+						break;
+					default: {
+						const msg = e?.message ?? "unknown";
+						cmdCtx.ui.notify(`/ask-claude: error — ${msg}`, "error");
+					}
+				}
+			}
+		},
+	});
+}
