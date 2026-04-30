@@ -13,6 +13,7 @@ Invariants preserved from analog:
 """
 from __future__ import annotations
 
+import fcntl
 import json
 import os
 import tempfile
@@ -60,16 +61,34 @@ def write_json_atomic(path: str | Path, obj: Any) -> None:
 
 
 def append_jsonl_atomic(path: str | Path, obj: dict) -> None:
-    """Append one JSON line, fsync'd.
+    """Append one JSON line, fsync'd, under an advisory exclusive flock.
 
-    For event streams (KV-finder iterations, thermal samples, canary log). Each
-    call appends one line and fsyncs; a crash mid-run still preserves every
-    previously-completed iteration.
+    For event streams (KV-finder iterations, thermal samples, ask_claude
+    audit log). Each call appends one line and fsyncs; a crash mid-run
+    still preserves every previously-completed iteration.
+
+    WR-04 (Phase 04.6 review) — Linux's atomic-append guarantee for
+    O_APPEND writes only holds for payloads ≤ PIPE_BUF (typically 4096
+    bytes). When EMMY_LOG_FULL=on, ask_claude events can carry the full
+    prompt + response (up to ~200 KiB), and a sidecar restart-during-
+    in-flight scenario can have two writers active simultaneously. The
+    advisory exclusive flock serializes writers within a host so lines
+    cannot interleave; every emmy writer goes through this helper, so
+    the convention is enforceable. Flock is per-fd, so a single process
+    making nested append_jsonl_atomic calls re-acquires correctly (POSIX
+    flock semantics on the same open file description).
     """
     dest = Path(path)
     dest.parent.mkdir(parents=True, exist_ok=True)
     line = json.dumps(obj, sort_keys=True, separators=(",", ":")) + "\n"
     with open(dest, "a", encoding="utf-8") as f:
-        f.write(line)
-        f.flush()
-        os.fsync(f.fileno())
+        fcntl.flock(f.fileno(), fcntl.LOCK_EX)
+        try:
+            f.write(line)
+            f.flush()
+            os.fsync(f.fileno())
+        finally:
+            # Lock is released automatically on close, but unlocking
+            # explicitly keeps the contention window tight if the caller
+            # holds the file handle for any reason in the future.
+            fcntl.flock(f.fileno(), fcntl.LOCK_UN)
