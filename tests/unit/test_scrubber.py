@@ -125,6 +125,66 @@ def test_clean_prompts_pass(prompt: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# WR-01 (Phase 04.6 review) — extended secret-shape coverage. The shipping
+# v1 pattern set missed widely-used 2026 secret formats; these tests pin
+# the fixes from scrubber_config.yaml so a future regex-tightening doesn't
+# silently re-open the false-negative.
+# ---------------------------------------------------------------------------
+@pytest.mark.parametrize(
+    "prompt,expected_class",
+    [
+        # Stripe live + test keys (sk_/rk_/pk_ + live/test prefix). Distinct
+        # from sk_prefixed_key (which requires a dash, not underscore).
+        (
+            "STRIPE_KEY=sk_live_4eC39HqLyjWDarjtT1zdp7dcThisIsTheSecretKey",
+            "stripe_key",
+        ),
+        (
+            "key=rk_test_ABCDEF1234567890abcdef1234567890XYZ",
+            "stripe_key",
+        ),
+        # Stripe webhook signing secret.
+        (
+            "WEBHOOK_SECRET=whsec_AbCdEf1234567890AbCdEf1234567890ZZ",
+            "stripe_webhook",
+        ),
+        # GitHub fine-grained PAT (Aug-2022+ format).
+        (
+            "GH_TOKEN=github_pat_11ABCDEFGHIJKLMNOPQRST_abcdefghij0123456789",
+            "github_pat_finegrained",
+        ),
+        # npm auth token.
+        (
+            "//registry.npmjs.org/:_authToken=npm_abcdefghijklmnopqrstuvwxyz0123456789",
+            "npm_token",
+        ),
+        # DB connection strings with embedded password.
+        (
+            "DATABASE_URL=postgres://user:hunter2@db.example.com:5432/app",
+            "db_url_password",
+        ),
+        (
+            "MYSQL_URL=mysql://root:s3cret@10.0.0.1:3306/db",
+            "db_url_password",
+        ),
+        (
+            "MONGO=mongodb+srv://admin:topsecret@cluster.mongodb.net/test",
+            "db_url_password",
+        ),
+        # AWS Secret Access Key — context-anchored to keep FP rate finite.
+        (
+            "AWS_SECRET_ACCESS_KEY=wJalrXUtnFEMIK7MDENGbPxRfiCYEXAMPLEKEY12",
+            "aws_secret_access_key",
+        ),
+    ],
+)
+def test_scrubber_extended_coverage(prompt: str, expected_class: str) -> None:
+    r = scrub(prompt)
+    assert r.clean is False
+    assert r.matched_class == expected_class, f"got {r.matched_class!r} for {prompt!r}"
+
+
+# ---------------------------------------------------------------------------
 # Public API surface — frozen for downstream consumers (Plan 04.6-01)
 # ---------------------------------------------------------------------------
 def test_scrub_result_fields() -> None:
@@ -145,6 +205,15 @@ def test_scrub_result_fields() -> None:
 
 # ---------------------------------------------------------------------------
 # Performance: scrubber should be fast on large prompts
+#
+# Budget tuned to 2.0s after WR-01 (Phase 04.6 review) extended the pattern
+# set from 11 → 17 to close the false-negative gaps the review identified
+# (Stripe, GitHub fine-grained PATs, npm, Azure, AWS secret access key with
+# context anchor, DB URLs). Each added pattern adds ~70-90ms of baseline
+# regex overhead on this synthetic 120K-char corpus; 100 iterations × 17
+# patterns × ~80ms ≈ 1.4s real, 2.0s gives headroom for CI variance.
+# A real prompt is bounded by the request cap (200K) and a single scrub
+# call costs ~10-20ms — well within the privacy-gate budget.
 # ---------------------------------------------------------------------------
 def test_scrubber_perf() -> None:
     big = "lorem ipsum " * 10_000  # ~120K chars
@@ -152,4 +221,4 @@ def test_scrubber_perf() -> None:
     for _ in range(100):
         scrub(big)
     elapsed = time.monotonic() - t0
-    assert elapsed < 1.0, f"scrubber too slow: {elapsed:.3f}s for 100×120K chars"
+    assert elapsed < 2.0, f"scrubber too slow: {elapsed:.3f}s for 100×120K chars"

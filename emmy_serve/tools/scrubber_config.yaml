@@ -6,14 +6,44 @@
 # Operator override: future versions may honor EMMY_SCRUBBER_CONFIG to point
 # at an alternate path. v1 ships this committed default only.
 patterns:
+  # Order matters: more-specific patterns first so the matched_class is
+  # informative (e.g. github_pat_finegrained before github_token; stripe
+  # before sk_prefixed_key). Generic high-entropy fallbacks last.
   aws_access_key_id: '\bAKIA[0-9A-Z]{16}\b'
+  # Stripe live/test keys (sk_live_, sk_test_, rk_live_, rk_test_, pk_live_,
+  # pk_test_) — tighter than sk_prefixed_key (which matches sk-... with a
+  # dash). Listed before sk_prefixed_key so matched_class names "stripe_key".
+  stripe_key: '\b(sk|rk|pk)_(live|test)_[a-zA-Z0-9]{24,}\b'
+  stripe_webhook: '\bwhsec_[a-zA-Z0-9]{32,}\b'
   sk_prefixed_key: '\b(sk-(?:ant-)?[a-zA-Z0-9_\-]{20,})\b'
   slack_token: '\bxox[abprs]-[a-zA-Z0-9-]{10,}\b'
+  # GitHub fine-grained PATs (Aug-2022+) use "github_pat_" prefix; classic
+  # PATs still use "ghp_" / "gho_" / "ghu_" / "ghs_" / "ghr_". Both are
+  # listed; fine-grained is more specific so it wins matched_class naming.
+  github_pat_finegrained: '\bgithub_pat_[A-Za-z0-9_]{22,}\b'
   github_token: '\bgh[pousr]_[a-zA-Z0-9]{36,}\b'
+  npm_token: '\bnpm_[a-zA-Z0-9]{36}\b'
   jwt_or_bearer: '\beyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]{5,}\b'
   google_api_key: '\bAIza[0-9A-Za-z_\-]{35}\b'
+  # Database connection strings with embedded passwords — extremely common
+  # in copy-pasted "help me debug" prompts. Matches scheme://user:pass@host
+  # for postgres, mysql, mongodb (incl. +srv), redis.
+  db_url_password: '\b(postgres(?:ql)?|mysql|mongodb(?:\+srv)?|redis)://[^\s:@/]+:[^\s@/]+@'
   private_key_header: '-----BEGIN [A-Z ]*PRIVATE KEY-----'
   secret_path_env: '\.env(\.[a-z]+)?\b'
   secret_path_ssh: '~?/?\.ssh/(id_(rsa|ed25519|ecdsa|dsa)|authorized_keys|known_hosts)'
   secret_path_dir: '\b(secrets|credentials)/[a-zA-Z0-9._/-]+'
   secret_path_keyfile: '[a-zA-Z0-9_-]+\.(pem|key|p12|pfx|jks)\b'
+  # Azure storage account keys — 88-char base64 ending in `==`. The `==`
+  # suffix anchor keeps the FP rate manageable AND the perf cost low (the
+  # regex engine fast-skips when no `==` is present in the buffer).
+  azure_storage_key: '\b[A-Za-z0-9+/]{86}==\b'
+  # AWS Secret Access Key — 40-char base64-mixed (no fixed prefix). Anchor
+  # on a contextual hint ("aws_secret", "secret_access_key", or " : ", " = "
+  # near an "AWS"-shaped variable) so we don't full-scan every 120K-char
+  # prompt for any 40-char alphanumeric run (Pitfall: WR-01 v1 of this
+  # pattern blew the 1s/100×120K perf budget). False negatives on
+  # context-free pasted secret keys are an accepted residual — the
+  # access_key_id (AKIA…) typically appears alongside, and that pattern
+  # already fires unconditionally.
+  aws_secret_access_key: '(?i)(?:aws[_\- ]?secret[_\- ]?access[_\- ]?key|secret[_\- ]?access[_\- ]?key)[\s:=]+[A-Za-z0-9+/]{40}\b'
