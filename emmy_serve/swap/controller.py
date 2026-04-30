@@ -899,9 +899,18 @@ async def post_ask_claude(req: AskClaudeRequest) -> AskClaudeResponse:
         timeout              → 504
         non-zero exit        → 502 (subprocess_failed; stderr first 500 chars)
     """
-    # D-03 env-gate. No subprocess spawn, no audit trail (env-off is the
-    # air-gap default; logging would itself be an unwanted side-effect).
+    # D-03 env-gate. No subprocess spawn. WR-03: emit a minimal audit event
+    # on denial so an attacker (or buggy systemd unit) toggling
+    # EMMY_ASK_CLAUDE on/off to land prompts during a window leaves a
+    # forensic trace. The event carries only sha256(prompt) + length
+    # (D-08 default privacy posture); raw content is still gated on
+    # EMMY_LOG_FULL=on inside emit_event_ask_claude. The original v1
+    # comment ("no audit trail; logging would itself be an unwanted
+    # side-effect") was over-cautious — sha256+length is privacy-preserving
+    # by construction, and the absence of any record was itself a T-04
+    # audit-trail tampering surface.
     if os.environ.get("EMMY_ASK_CLAUDE") != "on":
+        emit_event_ask_claude("env_gate_denied", req.prompt)
         raise HTTPException(
             status_code=503,
             detail={"reason": "env_disabled"},

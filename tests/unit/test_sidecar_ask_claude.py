@@ -216,16 +216,39 @@ def test_endpoint_returns_503_when_env_unset(
     jsonl_dir: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """D-03 — EMMY_ASK_CLAUDE unset → 503 'env_disabled', no subprocess spawn."""
-    monkeypatch.delenv("EMMY_ASK_CLAUDE", raising=False)
+    """D-03 — EMMY_ASK_CLAUDE unset → 503 'env_disabled', no subprocess spawn.
 
-    r = client.post("/ask-claude", json={"prompt": "hi"})
+    WR-03 — the handler MUST also emit an `env_gate_denied` audit event so
+    forensic analysis can detect operator/attacker env-flap activity. The
+    event carries sha256+length only (D-08 default privacy posture).
+    """
+    monkeypatch.delenv("EMMY_ASK_CLAUDE", raising=False)
+    monkeypatch.delenv("EMMY_LOG_FULL", raising=False)
+
+    prompt = "hi"
+    r = client.post("/ask-claude", json={"prompt": prompt})
     assert r.status_code == 503, r.text
     body = r.json()
     # Pydantic/HTTPException wraps detail under 'detail'.
     detail = body.get("detail", body)
     assert detail.get("reason") == "env_disabled", body
     assert mock_claude.call_count == 0, "subprocess MUST NOT spawn when env is off"
+
+    # WR-03 — the audit event was emitted with sha256+length; no plaintext.
+    events = _read_events(jsonl_dir)
+    denied = [
+        ev for ev in events if ev.get("event", "").endswith(".env_gate_denied")
+    ]
+    assert denied, f"expected env_gate_denied audit event, got {events}"
+    ev = denied[0]
+    expected_sha = hashlib.sha256(prompt.encode("utf-8")).hexdigest()
+    assert ev.get("prompt_sha256") == expected_sha, ev
+    assert ev.get("prompt_len") == len(prompt), ev
+    # Default posture: NO raw prompt anywhere.
+    assert "prompt_full" not in ev, ev
+    for v in ev.values():
+        if isinstance(v, str):
+            assert v != prompt, f"raw prompt leaked: {ev}"
 
 
 # ----------------------------------------------------------------------------
