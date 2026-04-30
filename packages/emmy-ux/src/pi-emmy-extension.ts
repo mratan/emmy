@@ -106,7 +106,9 @@ import { runSwapAndStreamProgress } from "./profile-swap-runner";
 // built-in /compact that collides; see pi-emmy-extension body comment.
 // Plan 04-03: registerProfileCommand added alongside registerClearCommand.
 // Plan 04.2-04: register{Start,Stop,Status}Command for sidecar control.
+// Plan 04.6-04: registerAskClaudeCommand for /ask-claude operator escalation.
 import {
+	registerAskClaudeCommand,
 	registerClearCommand,
 	registerProfileCommand,
 	registerResetCommand,
@@ -221,6 +223,15 @@ export interface EmmyExtensionOptions {
 	getSidecarStatusImpl?: (
 		baseUrl?: string,
 	) => Promise<import("./sidecar-status-client").SidecarStatus>;
+	/**
+	 * Plan 04.6-04 test hook — DI seam for /ask-claude. Production callers
+	 * omit this; default wires to callAskClaude from ./ask-claude-client which
+	 * does a POST→JSON round-trip against ${EMMY_SERVE_URL}/ask-claude
+	 * (D-14: identical UX between pi-emmy Spark loopback and emmy Mac tailnet).
+	 */
+	callAskClaudeImpl?: (
+		prompt: string,
+	) => Promise<import("./ask-claude-client").AskClaudeResponse>;
 }
 
 /**
@@ -929,6 +940,27 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 					current_state: string;
 					killed_orchestrator_pids: number[];
 				};
+			},
+		});
+
+		// Plan 04.6-04 — /ask-claude <question> operator slash command.
+		// D-05: bypasses model-side per-turn rate-limit (sidecar global
+		// rate-limit still applies, enforced in Plan 04.6-01's controller).
+		// D-14: identical UX between pi-emmy (Spark loopback) and emmy
+		// (Mac tailnet) — same EMMY_SERVE_URL precedence used by
+		// /start /stop /status; the per-machine override flows through
+		// `sidecarBaseUrl` resolved above. Default callAskClaudeImpl is
+		// the production HTTP client; tests override via opts.
+		registerAskClaudeCommand(pi, {
+			callAskClaude: async (prompt: string) => {
+				if (opts.callAskClaudeImpl) {
+					return opts.callAskClaudeImpl(prompt);
+				}
+				const { callAskClaude } = await import("./ask-claude-client");
+				return callAskClaude({
+					baseUrl: sidecarBaseUrl,
+					prompt,
+				});
 			},
 		});
 
