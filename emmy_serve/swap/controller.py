@@ -1008,6 +1008,19 @@ async def post_ask_claude(req: AskClaudeRequest) -> AskClaudeResponse:
                 proc.kill()
             except Exception:
                 pass
+            # WR-02 — reap the zombie. asyncio's subprocess transport keeps
+            # the child PID + 3 pipe FDs alive until wait() is awaited;
+            # under sustained timeout pressure the sidecar would hit
+            # RLIMIT_NOFILE. Bounded wait so a pathological child that
+            # ignores SIGKILL doesn't hang the handler.
+            try:
+                await asyncio.wait_for(proc.wait(), timeout=2.0)
+            except (asyncio.TimeoutError, Exception):
+                # Pathological — child ignored SIGKILL or transport already
+                # cleaned. The leaked zombie is rare and bounded by the 2s
+                # wait above; surfacing this would mask the upstream
+                # timeout the operator is actually seeing.
+                pass
             raise HTTPException(
                 status_code=504,
                 detail={"reason": "timeout"},

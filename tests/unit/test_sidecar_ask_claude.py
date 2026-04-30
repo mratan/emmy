@@ -63,6 +63,7 @@ class _FakeProc:
         self._stderr = stderr_bytes
         self.returncode = returncode
         self._delay_s = delay_s
+        self.awaited_wait: bool = False
 
     async def communicate(self, input: bytes | None = None) -> tuple[bytes, bytes]:
         # Capture the input that the handler piped to "stdin" of `claude --print -`.
@@ -78,6 +79,14 @@ class _FakeProc:
         # finally branch, not that an OS kill fired.
         self._spy.kill_called = True
 
+    async def wait(self) -> int:
+        # WR-02 — handler awaits proc.wait() after kill() to reap the zombie.
+        # Record the call so the regression test can assert the handler hit
+        # this branch (no FDs leaked); return canned returncode immediately.
+        self.awaited_wait = True
+        self._spy.last_proc = self
+        return self.returncode
+
 
 class _ClaudeSpy:
     """Replace asyncio.create_subprocess_exec inside the controller module.
@@ -90,6 +99,7 @@ class _ClaudeSpy:
         self.calls: list[list[str]] = []
         self.last_stdin: str | None = None
         self.kill_called: bool = False
+        self.last_proc: "_FakeProc | None" = None
         self._stdout: bytes = b""
         self._stderr: bytes = b""
         self._returncode: int = 0
@@ -119,13 +129,17 @@ class _ClaudeSpy:
 
     async def __call__(self, *argv: str, **kwargs):
         self.calls.append(list(argv))
-        return _FakeProc(
+        proc = _FakeProc(
             self,
             self._stdout,
             self._stderr,
             self._returncode,
             self._delay_s,
         )
+        # Track the most recent proc so timeout-path tests can assert
+        # awaited_wait was set (WR-02 regression guard).
+        self.last_proc = proc
+        return proc
 
 
 # ----------------------------------------------------------------------------
@@ -557,3 +571,50 @@ def test_scrubber_blocked_event_carries_excerpt_when_log_full_on(
     # field carries the secret — both are acceptable when EMMY_LOG_FULL=on.
     ev = blocked[0]
     assert ev.get("matched_excerpt") is not None, ev
+
+
+# ----------------------------------------------------------------------------
+# WR-02 (Phase 04.6 review) — subprocess timeout MUST reap the zombie. The v1
+# handler called proc.kill() but never awaited proc.wait(); asyncio's
+# subprocess transport keeps the PID + 3 pipe FDs alive until wait() runs,
+# so under sustained timeout pressure the sidecar leaks FDs until it hits
+# RLIMIT_NOFILE.
+# ----------------------------------------------------------------------------
+
+
+def test_endpoint_timeout_reaps_zombie(
+    client: TestClient,
+    mock_claude: _ClaudeSpy,
+    jsonl_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """WR-02 — on TimeoutError the handler MUST: (1) call proc.kill(),
+    (2) await proc.wait() to reap. Without (2), FDs leak.
+
+    We drive a timeout by setting the spy's delay > the request's
+    timeout_ms, then assert kill_called AND awaited_wait both fired.
+    """
+    monkeypatch.setenv("EMMY_ASK_CLAUDE", "on")
+    # AskClaudeRequest enforces timeout_ms >= 1000, so we drive the timeout
+    # by directly monkeypatching the default constant down to ~5ms and then
+    # running the spy at ~50ms delay. Skips the 1-second wall-clock cost.
+    monkeypatch.setattr(_ctl, "_ASK_CLAUDE_DEFAULT_TIMEOUT_MS", 5)
+    mock_claude.set_delay_s(0.05)
+
+    r = client.post(
+        "/ask-claude",
+        json={"prompt": "hello"},
+    )
+    assert r.status_code == 504, r.text
+    body = r.json()
+    detail = body.get("detail", body)
+    assert detail.get("reason") == "timeout"
+
+    # The handler hit BOTH cleanup steps.
+    assert mock_claude.kill_called, "handler must call proc.kill() on timeout"
+    proc = mock_claude.last_proc
+    assert proc is not None, "spy did not record the FakeProc"
+    assert proc.awaited_wait, (
+        "handler must await proc.wait() after kill() — "
+        "without it asyncio's transport leaks the child PID + pipe FDs"
+    )
