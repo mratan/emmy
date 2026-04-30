@@ -33,16 +33,22 @@ or via the systemd unit (Plan 02): emmy-sidecar.service.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
+import shutil
 import signal
 import time
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import AsyncIterator, Literal
 
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sse_starlette.sse import EventSourceResponse
+
+from emmy_serve.diagnostics.atomic import append_jsonl_atomic
+from emmy_serve.tools import scrub
 
 from .orchestrator_runner import run_orchestrator_subprocess
 from .sidecar_metrics import fetch_vllm_metrics_cached, sample_gpu_temp_cached
@@ -70,6 +76,48 @@ _VLLM_BASE_URL = os.environ.get("EMMY_VLLM_URL", "http://127.0.0.1:8002")
 # Drain config (D-01 LOCKED): 30s grace + SIGTERM + 5s wait + SIGKILL.
 _DRAIN_GRACE_S = 30
 _SIGKILL_WAIT_S = 5
+
+# ----------------------------------------------------------------------------
+# Phase 04.6 — /ask-claude module state (D-03/D-06/D-07/D-08/D-09/D-11)
+# ----------------------------------------------------------------------------
+
+# D-07 LOCKED rate-limit constants. Sidecar is single-process so module-level
+# state is sufficient (no cross-process pool). The lock guards the read+write
+# of `in_flight` + the prune+append of the rolling-hour timestamp window.
+_ASK_CLAUDE_HOURLY_CAP = 30
+_ASK_CLAUDE_MIN_GAP_S = 3.0
+_ASK_CLAUDE_HOUR_S = 3600.0
+_ASK_CLAUDE_DEFAULT_TIMEOUT_MS = 60_000
+
+# Per-process rate-limit state. Reset by tests via _reset_runtime_for_tests().
+#   in_flight       — bool, True between rate-limit acquire and finally release
+#   calls_this_hour — list[float] of monotonic timestamps; pruned > 1h on each
+#                     acquire
+#   last_call_ts    — float, monotonic timestamp of the most recent acquire
+_ASK_CLAUDE_STATE: dict = {
+    "in_flight": False,
+    "calls_this_hour": [],
+    "last_call_ts": 0.0,
+}
+# asyncio.Lock — cheap to instantiate, asyncio handlers run on a single
+# event-loop thread so contention is minimal but still correct under
+# concurrent /ask-claude requests.
+_ASK_CLAUDE_LOCK = asyncio.Lock()
+
+# D-08 LOCKED audit JSONL path. Defaults to ${HOME}/.local/state/emmy/sidecar/
+# ask_claude_events.jsonl; overridable via EMMY_ASK_CLAUDE_JSONL.
+def _audit_jsonl_path() -> Path:
+    """Return the JSONL path for /ask-claude audit events.
+
+    Test hook: monkeypatched in tests/unit/test_sidecar_ask_claude.py to redirect
+    events into a per-test tmp_path. Production path follows the existing
+    sidecar-state convention used by Phase 04.2 (XDG state under user home).
+    """
+    override = os.environ.get("EMMY_ASK_CLAUDE_JSONL")
+    if override:
+        return Path(override)
+    state_dir = Path(os.environ.get("XDG_STATE_HOME") or Path.home() / ".local" / "state")
+    return state_dir / "emmy" / "sidecar" / "ask_claude_events.jsonl"
 
 
 # ----------------------------------------------------------------------------
@@ -113,6 +161,32 @@ class StatusResponse(BaseModel):
     gpu_temp_c: float | None
     in_flight: int | None
     last_error: dict | None
+
+
+# ----------------------------------------------------------------------------
+# Phase 04.6 — /ask-claude request/response schemas
+# ----------------------------------------------------------------------------
+
+
+class AskClaudeRequest(BaseModel):
+    """POST /ask-claude body.
+
+    Pydantic-validates the prompt's length up-front so the handler can rely on
+    a bounded payload before invoking the scrubber + subprocess. The 200K-char
+    cap is a defensive ceiling — Anthropic's Pro/Max context is well above
+    this, and the scrubber + audit log are both linear in prompt size.
+    """
+
+    prompt: str = Field(min_length=1, max_length=200_000)
+    timeout_ms: int | None = Field(default=None, ge=1000, le=300_000)
+
+
+class AskClaudeResponse(BaseModel):
+    """POST /ask-claude success body."""
+
+    response: str
+    duration_ms: int
+    rate_limit_remaining_hour: int
 
 
 # ----------------------------------------------------------------------------
@@ -173,6 +247,12 @@ def _reset_runtime_for_tests() -> None:
     _current_variant = None
     _vllm_pid = None
     _last_error = None
+    # Phase 04.6 /ask-claude state — same per-test isolation discipline as the
+    # FSM bookkeeping above. Mutate fields in place so any code path that
+    # captured a reference to _ASK_CLAUDE_STATE keeps observing the live dict.
+    _ASK_CLAUDE_STATE["in_flight"] = False
+    _ASK_CLAUDE_STATE["calls_this_hour"] = []
+    _ASK_CLAUDE_STATE["last_call_ts"] = 0.0
 
 
 # ----------------------------------------------------------------------------
@@ -192,7 +272,7 @@ async def root() -> dict:
     return {
         "name": "emmy-sidecar",
         "version": _VERSION,
-        "endpoints": ["/healthz", "/status", "/start", "/stop", "/profile/swap"],
+        "endpoints": ["/healthz", "/status", "/start", "/stop", "/profile/swap", "/ask-claude"],
     }
 
 
@@ -735,6 +815,250 @@ def _parse_profile_path(path: str) -> tuple[str | None, str | None]:
 
 
 # ----------------------------------------------------------------------------
+# Phase 04.6 — /ask-claude audit emitter (D-08 LOCKED)
+# ----------------------------------------------------------------------------
+
+
+def emit_event_ask_claude(
+    kind: str,
+    prompt: str,
+    response: str = "",
+    *,
+    duration_ms: int | None = None,
+    **extras,
+) -> None:
+    """Emit one JSONL audit event for an /ask-claude lifecycle phase.
+
+    D-08 LOCKED: events carry sha256 fingerprints + lengths + timing, NOT the
+    raw prompt or response. Full content is logged ONLY when EMMY_LOG_FULL=on
+    (operator gesture for debug; default is privacy-first).
+
+    `kind` is the event suffix appended to ``emmy.ask_claude.``. Common values:
+        - request          — pre-spawn fingerprint
+        - response         — post-spawn success
+        - error            — non-zero exit / timeout / handler exception
+        - scrubber_blocked — D-06 reject before spawn
+        - rate_limited     — D-07 deny before spawn (extras carry the reason)
+
+    `duration_ms` uses a None sentinel default so a measured 0 (FakeProc in
+    tests, or a sub-millisecond real spawn) still records the field. The
+    caller decides whether timing is meaningful for the event class.
+    """
+    event: dict = {
+        "ts": _now_iso(),
+        "event": f"emmy.ask_claude.{kind}",
+        "prompt_sha256": hashlib.sha256(prompt.encode("utf-8")).hexdigest(),
+        "prompt_len": len(prompt),
+    }
+    if response:
+        event["response_sha256"] = hashlib.sha256(response.encode("utf-8")).hexdigest()
+        event["response_len"] = len(response)
+    if duration_ms is not None:
+        event["duration_ms"] = int(duration_ms)
+    # Operator-explicit full-content logging (debug only).
+    if os.environ.get("EMMY_LOG_FULL") == "on":
+        event["prompt_full"] = prompt
+        if response:
+            event["response_full"] = response
+    # Allow per-call enrichment (exit_code, reason, etc.) without colliding
+    # with the canonical fields above.
+    for k, v in extras.items():
+        if k not in event:
+            event[k] = v
+    try:
+        append_jsonl_atomic(_audit_jsonl_path(), event)
+    except Exception:
+        # Never let an audit-write failure mask the upstream operation. The
+        # caller has already decided the request outcome; logging is
+        # best-effort here. (Phase 04.4-06 atomic helper itself fsyncs and
+        # is robust; this guard handles unwritable target dir.)
+        pass
+
+
+# ----------------------------------------------------------------------------
+# POST /ask-claude — Phase 04.6 LOCKED contracts
+# ----------------------------------------------------------------------------
+
+
+@app.post("/ask-claude")
+async def post_ask_claude(req: AskClaudeRequest) -> AskClaudeResponse:
+    """Spawn `claude --print -` with the prompt on stdin; return the response.
+
+    Layered gates per Phase 04.6 LOCKED contracts (in order):
+        D-03  EMMY_ASK_CLAUDE != "on"         → 503 env_disabled
+        D-11  shutil.which("claude") is None  → 503 claude_cli_not_found
+        D-06  scrub(prompt).clean is False    → 400 scrubber_blocked + audit
+        D-07  rate-limit (under lock):
+                in_flight                     → 429 rate_limited_concurrent
+                last_call < 3s ago            → 429 rate_limited_min_gap
+                ≥30 calls in last hour        → 429 rate_limited_hourly
+        D-09  argv = ["claude","--print","-"]; prompt fed via stdin only
+        D-08  audit JSONL emit on every gate + spawn outcome
+
+    Errors map to:
+        timeout              → 504
+        non-zero exit        → 502 (subprocess_failed; stderr first 500 chars)
+    """
+    # D-03 env-gate. No subprocess spawn, no audit trail (env-off is the
+    # air-gap default; logging would itself be an unwanted side-effect).
+    if os.environ.get("EMMY_ASK_CLAUDE") != "on":
+        raise HTTPException(
+            status_code=503,
+            detail={"reason": "env_disabled"},
+        )
+
+    # D-11 claude-on-PATH gate. Same logic — fail closed before any audit.
+    if shutil.which("claude") is None:
+        raise HTTPException(
+            status_code=503,
+            detail={"reason": "claude_cli_not_found"},
+        )
+
+    # D-06 scrubber. Reject-don't-redact: structured 400 with the matched
+    # pattern class. T-01 mitigation — the model sees the failure and can
+    # adjust its prompt; we never silently mutate it.
+    scrub_result = scrub(req.prompt)
+    if not scrub_result.clean:
+        emit_event_ask_claude(
+            "scrubber_blocked",
+            req.prompt,
+            pattern_class=scrub_result.matched_class,
+            matched_excerpt=scrub_result.matched_excerpt,
+        )
+        raise HTTPException(
+            status_code=400,
+            detail={
+                "reason": "scrubber_blocked",
+                "pattern_class": scrub_result.matched_class,
+                "matched_excerpt": scrub_result.matched_excerpt,
+            },
+        )
+
+    # D-07 rate-limit acquire. Under the lock so concurrent requests can't
+    # both observe in_flight=False and both transition it to True.
+    async with _ASK_CLAUDE_LOCK:
+        if _ASK_CLAUDE_STATE["in_flight"]:
+            emit_event_ask_claude("rate_limited", req.prompt, reason="concurrent")
+            raise HTTPException(
+                status_code=429,
+                detail={"reason": "rate_limited_concurrent"},
+            )
+        now = time.monotonic()
+        if now - _ASK_CLAUDE_STATE["last_call_ts"] < _ASK_CLAUDE_MIN_GAP_S:
+            emit_event_ask_claude("rate_limited", req.prompt, reason="min_gap")
+            raise HTTPException(
+                status_code=429,
+                detail={"reason": "rate_limited_min_gap"},
+            )
+        # Prune the rolling-hour window before checking the cap. Keeps the
+        # list bounded; the linear walk is fine for cap=30.
+        cutoff = now - _ASK_CLAUDE_HOUR_S
+        _ASK_CLAUDE_STATE["calls_this_hour"] = [
+            t for t in _ASK_CLAUDE_STATE["calls_this_hour"] if t > cutoff
+        ]
+        if len(_ASK_CLAUDE_STATE["calls_this_hour"]) >= _ASK_CLAUDE_HOURLY_CAP:
+            emit_event_ask_claude("rate_limited", req.prompt, reason="hourly")
+            raise HTTPException(
+                status_code=429,
+                detail={"reason": "rate_limited_hourly"},
+            )
+        _ASK_CLAUDE_STATE["in_flight"] = True
+        _ASK_CLAUDE_STATE["last_call_ts"] = now
+        _ASK_CLAUDE_STATE["calls_this_hour"].append(now)
+
+    # D-09 subprocess invocation: argv + stdin, never shell. The prompt is
+    # data only (T-03 / T-04.6-S3 mitigation). Emit the request event BEFORE
+    # spawn so a hard crash mid-spawn still leaves a fingerprint.
+    timeout_ms = req.timeout_ms or _ASK_CLAUDE_DEFAULT_TIMEOUT_MS
+    emit_event_ask_claude("request", req.prompt)
+    t0 = time.monotonic()
+    proc = None
+    try:
+        proc = await asyncio.create_subprocess_exec(
+            "claude", "--print", "-",
+            stdin=asyncio.subprocess.PIPE,
+            stdout=asyncio.subprocess.PIPE,
+            stderr=asyncio.subprocess.PIPE,
+        )
+        try:
+            stdout, stderr = await asyncio.wait_for(
+                proc.communicate(input=req.prompt.encode("utf-8")),
+                timeout=timeout_ms / 1000.0,
+            )
+        except asyncio.TimeoutError:
+            duration_ms = int((time.monotonic() - t0) * 1000)
+            emit_event_ask_claude(
+                "error", req.prompt,
+                duration_ms=duration_ms,
+                reason="timeout",
+            )
+            try:
+                proc.kill()
+            except Exception:
+                pass
+            raise HTTPException(
+                status_code=504,
+                detail={"reason": "timeout"},
+            )
+
+        duration_ms = int((time.monotonic() - t0) * 1000)
+        if proc.returncode != 0:
+            stderr_text = stderr.decode("utf-8", errors="replace") if stderr else ""
+            emit_event_ask_claude(
+                "error", req.prompt,
+                response=stderr_text,
+                duration_ms=duration_ms,
+                exit_code=proc.returncode,
+                reason="subprocess_failed",
+            )
+            raise HTTPException(
+                status_code=502,
+                detail={
+                    "reason": "subprocess_failed",
+                    "detail": stderr_text[:500],
+                    "exit_code": proc.returncode,
+                },
+            )
+
+        response_text = stdout.decode("utf-8", errors="replace") if stdout else ""
+        remaining = max(
+            0,
+            _ASK_CLAUDE_HOURLY_CAP - len(_ASK_CLAUDE_STATE["calls_this_hour"]),
+        )
+        emit_event_ask_claude(
+            "response", req.prompt,
+            response=response_text,
+            duration_ms=duration_ms,
+            rate_limit_remaining_hour=remaining,
+        )
+        return AskClaudeResponse(
+            response=response_text,
+            duration_ms=duration_ms,
+            rate_limit_remaining_hour=remaining,
+        )
+    except HTTPException:
+        # Re-raise so FastAPI maps to the configured status code.
+        raise
+    except Exception as e:
+        # Catch-all so the in_flight=True flag never strands.
+        duration_ms = int((time.monotonic() - t0) * 1000)
+        emit_event_ask_claude(
+            "error", req.prompt,
+            duration_ms=duration_ms,
+            reason="handler_exception",
+            detail=str(e),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail={"reason": "handler_exception", "detail": str(e)},
+        )
+    finally:
+        # D-07 release. ALWAYS flip in_flight back, regardless of outcome.
+        async with _ASK_CLAUDE_LOCK:
+            _ASK_CLAUDE_STATE["in_flight"] = False
+
+
+# ----------------------------------------------------------------------------
 # uvicorn entry point
 # ----------------------------------------------------------------------------
 
@@ -778,4 +1102,7 @@ __all__ = [
     "StopRequest",
     "SwapRequest",
     "StatusResponse",
+    "AskClaudeRequest",
+    "AskClaudeResponse",
+    "emit_event_ask_claude",
 ]
