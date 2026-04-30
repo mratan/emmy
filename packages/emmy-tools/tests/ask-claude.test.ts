@@ -360,6 +360,43 @@ describe("ask_claude.invoke — sidecar error mapping", () => {
 			/(econnrefused|unknown|ask_claude failed)/,
 		);
 	});
+
+	// WR-05 (Phase 04.6 review) — regression guard: even if the sidecar
+	// contract drifts and starts re-attaching matched_excerpt to the error
+	// body (per CR-01 the default-posture sidecar omits it), the model-visible
+	// tool result must NOT echo a literal AKIA-shaped key. The class name is
+	// fine; the value is not. This pins the contract: the tool surfaces
+	// reason + pattern_class only, never the matched excerpt.
+	test("scrubber_blocked tool error must not echo secret-shaped substrings (WR-05)", async () => {
+		const tool = createAskClaudeTool({
+			callAskClaude: async () => {
+				const err = new Error("scrubber blocked") as Error & {
+					reason?: string;
+					pattern_class?: string;
+					matched_excerpt?: string;
+					detail?: string;
+				};
+				err.reason = "scrubber_blocked";
+				err.pattern_class = "aws_access_key_id";
+				// Sidecar contract (post-CR-01, default posture): NO matched_excerpt.
+				// Even if a future drift sets one, the tool MUST NOT echo it.
+				err.matched_excerpt = "AKIAIOSFODNN7EXAMPLE";
+				throw err;
+			},
+			config: ENABLED_CFG,
+		});
+		const r = (await tool!.invoke({
+			question: "use AKIAIOSFODNN7EXAMPLE for the bucket",
+			tried: "real specific attempt that failed for reason X",
+			relevant_context: "",
+		})) as { isError?: boolean; content: Array<{ type: string; text: string }> };
+		expect(r.isError).toBe(true);
+		// The model-visible tool result must NOT contain the literal secret.
+		expect(r.content[0]!.text).not.toMatch(/AKIA[0-9A-Z]{16}/);
+		// Class name surfacing is the operator-actionable signal we keep.
+		expect(r.content[0]!.text).toContain("aws_access_key_id");
+		expect(r.content[0]!.text.toLowerCase()).toContain("scrubber_blocked");
+	});
 });
 
 // --------------------------------------------------------------------------
