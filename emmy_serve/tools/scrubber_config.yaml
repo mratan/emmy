@@ -1,0 +1,19 @@
+# Default blocklist for ask_claude pre-send scrubber (Plan 04.6-02 / D-06).
+#
+# Patterns are evaluated in order; first match wins. False positives are
+# tolerable; false negatives are NOT (T-01 data exfiltration).
+#
+# Operator override: future versions may honor EMMY_SCRUBBER_CONFIG to point
+# at an alternate path. v1 ships this committed default only.
+patterns:
+  aws_access_key_id: '\bAKIA[0-9A-Z]{16}\b'
+  sk_prefixed_key: '\b(sk-(?:ant-)?[a-zA-Z0-9_\-]{20,})\b'
+  slack_token: '\bxox[abprs]-[a-zA-Z0-9-]{10,}\b'
+  github_token: '\bgh[pousr]_[a-zA-Z0-9]{36,}\b'
+  jwt_or_bearer: '\beyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]*\.[a-zA-Z0-9_-]{5,}\b'
+  google_api_key: '\bAIza[0-9A-Za-z_\-]{35}\b'
+  private_key_header: '-----BEGIN [A-Z ]*PRIVATE KEY-----'
+  secret_path_env: '\.env(\.[a-z]+)?\b'
+  secret_path_ssh: '~?/?\.ssh/(id_(rsa|ed25519|ecdsa|dsa)|authorized_keys|known_hosts)'
+  secret_path_dir: '\b(secrets|credentials)/[a-zA-Z0-9._/-]+'
+  secret_path_keyfile: '[a-zA-Z0-9_-]+\.(pem|key|p12|pfx|jks)\b'
