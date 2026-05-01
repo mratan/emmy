@@ -1,0 +1,110 @@
+# profiles/mistral-medium-3.5/v1/serving.yaml
+# Phase 04.7 — Mistral Medium 3.5 128B alternate (eval-only, NOT daily-driver).
+#
+# FIRST GGUF profile in the tree. Four architectural specifics make it shaped
+# differently from every prior bundle (see PROFILE_NOTES.md for full provenance):
+#
+#   - D-02 vLLM `--quantization gguf` experimental backend (T-01 acknowledged).
+#     Single-merged Q4_K_M GGUF (~73 GB) from bartowski; tokenizer override
+#     forced via the new EngineConfig.tokenizer field (Plan 04.7-01 schema work)
+#     because vLLM GGUF docs flag bundled-tokenizer extraction as "time-consuming
+#     and unstable".
+#
+#   - D-04 gpu_memory_utilization=0.78 — STRUCTURAL, not RAM-headroom retune.
+#     Weights+KV math: 73 GB weights + 22 GB FP8 KV at 128K + ~5 GB scratch ≈
+#     99.8 GB pool == 0.78 × 128 GB. Higher than the dense-profile 0.55
+#     convention because at 0.55 the pool is below weight size and the model
+#     wouldn't load. System headroom (~28 GB) is the operator-shareability
+#     budget; D-06 + Pitfall #3 monitoring covers it.
+#
+#   - D-05 NO formal KV-bisection. The bundled find_kv_budget.py audit was
+#     skipped; gmu=0.78 is structurally required, not measured ceiling. Step-
+#     down protocol (0.78 → 0.73 → 0.68) lives in PROFILE_NOTES.md if boot
+#     smoke OOMs.
+#
+#   - D-06 NO 2× 2h thermal replay. 8 h cumulative thermal-replay data across
+#     4 prior profiles shows zero throttle on this Spark; Pitfall #4 retained
+#     for daily-driver candidates only. This profile is eval-only (D-13).
+#
+# Eval-only opt-in via `/profile mistral-medium-3.5`; NOT a routes.yaml
+# participant; NOT an `ask_claude.enabled` flip target (CONTEXT D-12). The
+# container_image_digest field below carries the schema sentinel until Plan
+# 04.7-02 captures the real digest at first `docker pull`. See PROFILE_NOTES.md
+# for the gmu-convergence placeholder
+# table, the §3.2 tool-call parser fallback playbook, and provenance for every
+# non-trivial knob.
+
+engine:
+  # --- immutable identity ---
+  model: /models/Mistral-Medium-3.5-128B-Q4_K_M.gguf   # container-internal path; matches /data/models bind mount + basename produced by Plan 04.7-02 gguf-split --merge
+  model_hf_id: mistralai/Mistral-Medium-3.5-128B       # BASE model HF id (NOT bartowski's GGUF repo); vLLM extracts tokenizer+chat template from base per RESEARCH §1.1
+  tokenizer: mistralai/Mistral-Medium-3.5-128B         # 04.7-01 schema extension; explicit override per vLLM GGUF docs ("time-consuming and unstable" to extract from bundled GGUF). Same id as model_hf_id by design.
+  served_model_name: mistral-medium-3.5                # name vLLM exposes on /v1/models; matches `/profile mistral-medium-3.5` route per CONTEXT D-13
+  container_image: vllm/vllm-openai:cu130-nightly-aarch64   # CONTEXT D-10 + RESEARCH §1.4 — Docker-Hub-confirmed nightly aarch64+CUDA13 spelling. Plan 04.7-02 first task may rewrite this line if the actual working tag differs at first pull.
+  container_image_digest: sha256:REPLACE_AT_FIRST_PULL # SCHEMA SENTINEL — Plan 04.7-02 captures real digest at `docker pull` and overwrites this line. `emmy profile validate` will reject this until then; that is the intentional G-5 handoff.
+  container_entrypoint_override: ""                    # Upstream vllm-openai images bake ENTRYPOINT=[vllm serve] — empty override clears it so our CMD `vllm serve <flags>` runs as the full exec chain (carried over from Gemma 31B v1.2 analog).
+
+  # --- context + memory ---
+  max_model_len: 131072                                 # CONTEXT D-03 (128K) — half of native 256K. 256K deferred to v2 per OOS list (would need ~117/128 GB UMA leaving ~11 GB system headroom — too tight for normal Spark coexistence).
+  gpu_memory_utilization: 0.78                          # CONTEXT D-04 — STRUCTURAL, not RAM-headroom retune. 73 GB weights + 22 GB FP8 KV @ 128K + ~5 GB scratch fits within 0.78 × 128 GB = 99.8 GB pool. Departs from dense-profile 0.55 convention because at 0.55 the pool (70 GB) is below weight size and the model wouldn't load.
+  kv_cache_dtype: fp8                                   # CONTEXT D-08 — required, not optional. At BF16 KV cache, 128K context = 44 GB; total 73+44 = 117 GB → too tight at gmu=0.78 (pool capped at 99.8 GB). FP8 KV halves it to 22 GB making 128K achievable.
+  enable_prefix_caching: true                           # SERVE-07; supported on GGUF backend per RESEARCH §1.1
+  enable_chunked_prefill: true                          # SERVE-07
+  max_num_batched_tokens: 8192                          # carried over from Gemma 31B v1.2 analog
+  max_num_seqs: 1                                       # CONTEXT D-07 — single-stream; pool too tight for batching (concurrent streams would multiply KV by sequence count and OOM). Eval-only / occasional-escalation profile anyway.
+
+  # --- loader ---
+  load_format: auto                                     # GGUF backend ignores fastsafetensors; "auto" is the valid Literal value (schema.py:80). The Gemma 31B v1.2 analog uses `safetensors` — this flip is REQUIRED for GGUF.
+
+  # --- quantization ---
+  quantization: gguf                                    # CONTEXT D-02 + Plan 04.7-01 Literal extension. vLLM experimental GGUF backend — long-context flagged WIP by Mistral; T-01 acknowledged and mitigated by deferring runtime validation to Plan 04.7-02 boot smoke.
+
+  # --- tool-call parser ---
+  tool_call_parser: mistral                             # CONTEXT D-09 — Mistral 3.x convention; the model is RL-trained for [TOOL_CALLS] envelope per upstream HF card.
+  reasoning_parser: mistral                             # CONTEXT D-09 + RESEARCH §3.3; emitted via Plan 04.7-01 renderer extension (--reasoning-parser flag)
+  enable_auto_tool_choice: true                         # CONTEXT D-09 — required alongside tool_call_parser
+
+  # --- attention + backends ---
+  # attention_backend: (unset — vLLM auto-selects, mirrors Gemma 31B v1.2 analog)
+  # GGUF backend support for FlashInfer is not documented; safer to let vLLM pick.
+
+  # --- network / runtime ---
+  host: 0.0.0.0                                         # container-internal bind
+  port: 8000                                            # container-internal
+
+  # --- what is NOT here (deferred per CONTEXT OOS list) ---
+  # - 256K full context (max_model_len: 262144) — operator-exclusive Spark mode only; v2 candidate
+  # - speculative: null — Phase 6 (no Mistral spec-decode draft model surveyed)
+  # - enable_lora: false — no LoRA in v1
+
+sampling_defaults:
+  # RESEARCH §2.5 ASSUMPTION — Mistral HF card does not pin coding-task sampling;
+  # values below are community-typical for Mistral coding workloads. Phase 5
+  # calibration may revise. PROFILE_NOTES.md "Provenance of defaults — sampling"
+  # flags this row explicitly. Anti-Pitfall #1 discipline: NO Mistral-specific
+  # tuning runs in v1.
+  temperature: 0.15
+  top_p: 0.95
+  top_k: 40
+  repetition_penalty: 1.0
+  max_tokens: 8192
+  stop: []                                              # mistral parser handles stop tokens
+
+speculative: null                                       # Phase 6 per CONTEXT deferred list
+
+guided_decoding:
+  default_backend: xgrammar                             # vLLM 0.19 default (RESEARCH §3.1 — reactive backstop only)
+
+quirks:
+  strip_thinking_tags: false                            # CONTRAST with Gemma analog (true). No Mistral-specific channel-bleed analog known. PROFILE_NOTES.md "Tool-call parser fallback (T-04)" documents the flip path: if `[TOOL_CALLS]` literal leaks into content at boot smoke, swap this to `true` AND author a Mistral analog of stripGemma4ChannelBleed() per RESEARCH §3.2.
+  promote_reasoning_to_content: false                   # carry-over from analog
+  buffer_tool_streams: false                            # carry-over from analog
+
+env:
+  VLLM_NO_USAGE_STATS: "1"                              # SERVE-09 / D-12 layer c (enforced by schema._airgap_policy)
+  DO_NOT_TRACK: "1"
+  VLLM_LOAD_FORMAT: auto                                # matches engine.load_format; flipped from analog's `safetensors`
+  VLLM_FLASHINFER_MOE_BACKEND: latency                  # carry-over from analog (no-op for non-MoE GGUF; harmless to leave set)
+  VLLM_DISABLE_COMPILE_CACHE: "1"
+  HF_HUB_OFFLINE: "1"                                   # REPRO-04 (enforced by schema._airgap_policy)
+  TRANSFORMERS_OFFLINE: "1"

@@ -1,0 +1,37 @@
+profile:
+  id: mistral-medium-3.5
+  version: v1
+  family: mistral
+  base_model: mistralai/Mistral-Medium-3.5-128B
+  description: "Mistral Medium 3.5 128B \u2014 Phase 04.7 alternate. Dense 128B via\
+    \ bartowski Q4_K_M GGUF (single-file merged, ~73 GB). Eval-only opt-in (`/profile\
+    \ mistral-medium-3.5`). NOT a daily-driver, NOT a routes.yaml participant, NOT\
+    \ an ask_claude target. Boot-only validation per CONTEXT D-05/D-06 (no KV-bisection,\
+    \ no thermal replay)."
+  created: '2026-05-01'
+  hash: sha256:3fea7f765a589c024d444a2ea7e2d838cbbd8a2e2ad46965441c8d4229d3e889
+  hash_algorithm: sha256
+  hash_manifest_version: 1
+  tags:
+  - coding
+  - dgx-spark
+  - gguf
+  - mistral
+  - phase-04.7
+  - dense
+  - alternate
+  - eval-only
+  - q4-k-m
+  community_sources:
+  - title: bartowski/mistralai_Mistral-Medium-3.5-128B-GGUF (HF, source for D-01)
+    url: https://huggingface.co/bartowski/mistralai_Mistral-Medium-3.5-128B-GGUF
+    retrieved: '2026-05-01'
+  - title: mistralai/Mistral-Medium-3.5-128B (HF base model card)
+    url: https://huggingface.co/mistralai/Mistral-Medium-3.5-128B
+    retrieved: '2026-05-01'
+  - title: "vLLM Quantization \u2014 GGUF backend"
+    url: https://docs.vllm.ai/en/stable/features/quantization/gguf/
+    retrieved: '2026-05-01'
+  - title: "vLLM Tool Calling \u2014 Mistral parser"
+    url: https://docs.vllm.ai/en/latest/features/tool_calling/
+    retrieved: '2026-05-01'

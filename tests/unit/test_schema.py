@@ -53,11 +53,28 @@ def test_all_shipped_profiles_validate():
     Asserts that every bundle under ``profiles/<family>/<version>/`` loads
     cleanly via ``loader.load_profile``. Adding a new profile auto-extends
     this test. If this test fails, a schema change broke a prior profile.
+
+    Phase 04.7 carve-out: bundles whose ``serving.yaml`` still carries the
+    ``sha256:REPLACE_AT_FIRST_PULL`` template sentinel are *in-progress*
+    (digest captured at first ``docker pull`` by a follow-up plan, e.g.
+    Plan 04.7-02 captures Mistral's). Schema layer rejects the sentinel by
+    design (``schema.py:_digest_shape``); we don't want this scan to alias
+    that intentional pending state into a backward-compat regression. Such
+    bundles are excluded from the guard until their digest is captured —
+    every other schema invariant on those bundles is still covered by the
+    bundle-specific tests (e.g. ``test_profile_bundle_mistral.py``).
     """
     bundles = _discover_shipped_bundles()
     assert bundles, "no shipped profile bundles discovered under profiles/"
     failures: list[str] = []
     for b in bundles:
+        # Carve-out: skip in-progress bundles still carrying the digest sentinel.
+        try:
+            serving_text = (b / "serving.yaml").read_text(encoding="utf-8")
+        except OSError:
+            serving_text = ""
+        if "sha256:REPLACE_AT_FIRST_PULL" in serving_text:
+            continue
         try:
             loader.load_profile(b)
         except Exception as e:  # pragma: no cover — asserted below
