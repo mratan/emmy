@@ -232,6 +232,18 @@ export interface EmmyExtensionOptions {
 	callAskClaudeImpl?: (
 		prompt: string,
 	) => Promise<import("./ask-claude-client").AskClaudeResponse>;
+	/**
+	 * Plan 04-03 D-23 (followup) — re-target the pi-mono ModelRegistry +
+	 * closure-captured emmy model object to the new profile's served_model_name
+	 * after a successful /profile cross-bundle swap. Without this, the harness
+	 * sends the OLD model id in chat completion requests (vLLM 404) and the
+	 * pi-mono TUI footer reads `sm.model.id` from the stale registration.
+	 *
+	 * Production wiring: session.ts builds the closure (it owns modelRegistry +
+	 * emmyModel) and passes the callback in. Test paths may omit this; harness-
+	 * swap emits a single stderr warning when missing.
+	 */
+	replaceModel?: (newServedModelName: string, newMaxModelLen: number) => void;
 }
 
 /**
@@ -852,10 +864,12 @@ export function createEmmyExtension(opts: EmmyExtensionOptions): ExtensionFactor
 				runSwap: async ({ from, to, port, onProgress }) =>
 					runSwapImpl({ from, to, port, onProgress }),
 				reloadHarnessProfile: async (newDir) => {
-					await reloadHarnessProfile(newDir, {
+					const handles: Parameters<typeof reloadHarnessProfile>[1] = {
 						replaceProfileRef: setCurrentProfile,
 						profileStampProcessor,
-					});
+					};
+					if (opts.replaceModel) handles.replaceModel = opts.replaceModel;
+					await reloadHarnessProfile(newDir, handles);
 				},
 			});
 		}

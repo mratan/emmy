@@ -65,6 +65,28 @@ export interface HarnessSwapHandles {
 	 * for production code paths; test doubles may omit it.
 	 */
 	getToolRegistrations?: () => readonly EmmyToolRegistration[];
+	/**
+	 * Apply the new profile's served_model_name + max_model_len to the live
+	 * pi-mono ModelRegistry and the closure-captured emmy model object.
+	 * Without this, cross-bundle /profile swaps (e.g. gemma-4-26b-a4b-it →
+	 * qwen3.6-27b) leave the harness sending the OLD model id in chat
+	 * completion request bodies — vLLM 404s and the TUI footer shows the
+	 * stale model name.
+	 *
+	 * Implementation contract (session.ts):
+	 *   - Mutate the emmy model object in place (.id, .name, .contextWindow,
+	 *     .maxTokens) so pi-mono's `sm.model.id` reads always see the live
+	 *     value without rebuilding the agent session.
+	 *   - unregisterProvider('emmy-vllm') + registerProvider('emmy-vllm',
+	 *     {...}) so registry .find() lookups resolve under the new id too.
+	 *   - No-op when newServedModelName equals the current id (variant-only
+	 *     swaps within the same bundle).
+	 *
+	 * Optional because tests + legacy callers may not wire it; a missing
+	 * handle is logged once via stderr (single line) so the gap is visible
+	 * if a swap happens without it.
+	 */
+	replaceModel?: (newServedModelName: string, newMaxModelLen: number) => void;
 }
 
 export interface ReloadHarnessProfileResult {
@@ -92,6 +114,24 @@ export async function reloadHarnessProfile(
 	// (2) Swap the closure-captured reference so before_provider_request +
 	//     compaction trigger + slash-command handlers see the new profile.
 	handles.replaceProfileRef(snap);
+
+	// (2b) Re-target the pi-mono ModelRegistry + closure-captured emmy model
+	//     object to the new profile's served_model_name + max_model_len. The
+	//     replaceModel handle is optional for backward-compat with existing
+	//     test doubles, but production paths (session.ts) MUST supply it —
+	//     otherwise cross-bundle swaps would silently break chat completions
+	//     against the new vLLM. Emit a single stderr line if missing so the
+	//     gap is visible during local debugging without spamming.
+	if (handles.replaceModel) {
+		handles.replaceModel(
+			snap.serving.engine.served_model_name,
+			snap.serving.engine.max_model_len,
+		);
+	} else if (typeof process !== "undefined" && process.stderr) {
+		process.stderr.write(
+			"[harness-swap] WARNING: replaceModel handle missing — TUI footer + chat-completion routing will keep the OLD served_model_name. Production wiring should pass replaceModel from session.ts.\n",
+		);
+	}
 
 	// (3) Hot-swap the OTel stamp processor's internal profile ref. Next span
 	//     started after this call stamps the new emmy.profile.* attrs. This

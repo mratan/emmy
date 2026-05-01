@@ -542,6 +542,51 @@ async function buildRealPiRuntimeTui(
 	// loaded bundle (profiles/<name>/<version>/ → ../../) rather than the
 	// cwd-relative default so `pi-emmy` works from any directory.
 	const profilesRoot = dirname(dirname(profile.ref.path));
+
+	// D-23 (followup) — replaceModel mutates the live emmy model object in
+	// place + re-registers the emmy-vllm provider in the ModelRegistry. Pi-mono
+	// reads `sm.model.id` per request (footer + chat-completion `model:` field)
+	// from the SAME object reference handed to createAgentSessionFromServices
+	// below — so in-place mutation propagates without rebuilding the agent
+	// session. Re-registration handles the registry.find() path used in
+	// --print's modelResolver. No-op when the served_model_name is unchanged
+	// (variant-only swaps within the same bundle).
+	const replaceModel = (newServedModelName: string, newMaxModelLen: number): void => {
+		if (newServedModelName === emmyModel.id) return;
+		// Mutate the live emmy model object so pi-mono's per-request reads see
+		// the new id without rebuilding agent runtime.
+		const liveModel = emmyModel as unknown as {
+			id: string;
+			name: string;
+			contextWindow: number;
+			maxTokens: number;
+		};
+		liveModel.id = newServedModelName;
+		liveModel.name = `Emmy ${newServedModelName}`;
+		liveModel.contextWindow = newMaxModelLen;
+		liveModel.maxTokens = Math.min(16384, Math.floor(newMaxModelLen / 2));
+		// Re-register the provider so registry.find('emmy-vllm', newId) resolves.
+		// pi-mono's ModelRegistry.unregisterProvider is documented in dist/core/
+		// model-registry.d.ts; pair with registerProvider to atomically swap.
+		modelRegistry.unregisterProvider("emmy-vllm");
+		modelRegistry.registerProvider("emmy-vllm", {
+			baseUrl: `${baseUrl}/v1`,
+			apiKey: EMMY_KEY_ENV,
+			api: "openai-completions",
+			models: [
+				{
+					id: newServedModelName,
+					name: `Emmy ${newServedModelName}`,
+					reasoning: false,
+					input: ["text"],
+					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+					contextWindow: newMaxModelLen,
+					maxTokens: Math.min(16384, Math.floor(newMaxModelLen / 2)),
+				},
+			],
+		});
+	};
+
 	const emmyExtensionOpts: Parameters<typeof createEmmyExtension>[0] = {
 		profile,
 		assembledPromptProvider,
@@ -549,6 +594,7 @@ async function buildRealPiRuntimeTui(
 		telemetryEnabled,
 		profileDir: profile.ref.path,
 		profilesRoot,
+		replaceModel,
 	};
 	if (sessionId !== undefined) emmyExtensionOpts.sessionId = sessionId;
 	const emmyExtension = createEmmyExtension(emmyExtensionOpts);
