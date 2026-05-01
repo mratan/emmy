@@ -38,11 +38,14 @@ import json
 import os
 import shutil
 import signal
+import sys
 import time
+from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import AsyncIterator, Literal
 
+import httpx
 from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel, ConfigDict, Field
 from sse_starlette.sse import EventSourceResponse
@@ -190,6 +193,98 @@ class AskClaudeResponse(BaseModel):
 
 
 # ----------------------------------------------------------------------------
+# Boot-probe: adopt an externally-running vLLM into state=READY (Phase 04.2-fu)
+# ----------------------------------------------------------------------------
+#
+# Closes the gap surfaced when the sidecar restarts (systemd auto-restart,
+# manual restart, OOM, or the open quirk where the sidecar Python dies during
+# a profile swap while vLLM stays up). Without this, the sidecar always boots
+# at state=STOPPED — even when a vLLM container is alive on :8002 — so the
+# next /profile or /stop 409s with "swap requires state=ready, currently=
+# stopped" and the operator has no obvious recovery path.
+#
+# Probe rules:
+#   - GET _VLLM_BASE_URL/v1/models with a short timeout (5s)
+#   - On 200 + non-empty model list: bypass the D-07 transition table and
+#     direct-mutate state→READY + adopt _current_profile_id from data[0].id
+#   - profile_variant cannot be recovered from /v1/models — leave None until
+#     the next /profile call. This is acceptable: variant is a tie-breaker
+#     within a bundle, not a lifecycle-critical field.
+#   - On any failure (connection refused, timeout, 4xx, 5xx, malformed body):
+#     leave state=STOPPED. Logged to stderr for visibility.
+#
+# Idempotent: only acts when state == STOPPED at probe time. Tests that don't
+# want the probe to run can construct TestClient WITHOUT the `with` context
+# manager (which is the existing default — Starlette's TestClient only fires
+# lifespan inside a context manager). Tests that DO want to exercise the probe
+# pass with-context + monkeypatch httpx.AsyncClient.
+
+
+async def _boot_probe_external_vllm() -> None:
+    """Probe vLLM at startup and adopt to state=READY if alive.
+
+    Best-effort: any failure leaves state=STOPPED (the post-init default).
+    Intentional non-error: an unreachable vLLM at boot is the normal cold-
+    start case, not an error condition.
+    """
+    global _current_profile_id
+
+    if state.state != SidecarState.STOPPED:
+        # Someone (most likely a test fixture) already moved the FSM. Don't
+        # trample whatever they're doing — boot-probe is a cold-start helper,
+        # not a runtime reconciler.
+        return
+
+    try:
+        async with httpx.AsyncClient(timeout=5.0) as client:
+            resp = await client.get(f"{_VLLM_BASE_URL}/v1/models")
+        if resp.status_code != 200:
+            return
+        body = resp.json()
+        models = body.get("data") if isinstance(body, dict) else None
+        if not isinstance(models, list) or not models:
+            return
+        first = models[0]
+        if not isinstance(first, dict):
+            return
+        model_id = first.get("id")
+        if not isinstance(model_id, str) or not model_id:
+            return
+    except (httpx.HTTPError, ValueError, KeyError, TypeError) as e:
+        # Unreachable / malformed → stay STOPPED. Emit a single line to
+        # stderr so it shows up in `journalctl --user -u emmy-sidecar` for
+        # operators who want to know whether the probe ran.
+        print(
+            f"[boot-probe] vLLM not adopted (state stays stopped): {type(e).__name__}: {e}",
+            file=sys.stderr,
+        )
+        return
+
+    # Adopt: bypass ALLOWED_TRANSITIONS (STOPPED → READY isn't legal under
+    # D-07; the legal flow is STOPPED → STARTING → READY which assumes the
+    # sidecar OWNS the spawn). Same direct-mutation discipline as the /reset
+    # recovery endpoint below — both are operator/system-explicit paths that
+    # diverge from the D-07 happy path.
+    async with state._lock:  # type: ignore[attr-defined]
+        if state._state == SidecarState.STOPPED:  # type: ignore[attr-defined]
+            state._state = SidecarState.READY  # type: ignore[attr-defined]
+            _current_profile_id = model_id
+
+    print(
+        f"[boot-probe] adopted external vLLM: profile_id={model_id} → state=ready",
+        file=sys.stderr,
+    )
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """FastAPI lifespan — runs the boot probe once at startup."""
+    await _boot_probe_external_vllm()
+    yield
+    # No shutdown work for now.
+
+
+# ----------------------------------------------------------------------------
 # FastAPI app
 # ----------------------------------------------------------------------------
 
@@ -198,6 +293,7 @@ app = FastAPI(
     version=_VERSION,
     docs_url=None,
     redoc_url=None,
+    lifespan=lifespan,
 )
 
 
@@ -237,6 +333,33 @@ def _validate_profile_id_and_variant(profile_id: str, variant: str | None) -> st
     if "/" in variant or ".." in variant:
         raise HTTPException(status_code=400, detail="invalid variant (no '/' or '..')")
     return variant
+
+
+def _state_409_hint(current: SidecarState, op: str) -> str:
+    """Return an actionable recovery hint for a state-guard 409.
+
+    The bare "currently=stopped" message wasn't enough on its own — a fresh
+    operator (or one whose sidecar just restarted) hits it and has no obvious
+    next step. The hint is keyed on `current` because the recovery path
+    differs by state.
+    """
+    if current == SidecarState.STOPPED:
+        # Stopped means: no vLLM under sidecar management. Could be cold boot
+        # OR could be a sidecar restart that didn't adopt an externally-running
+        # vLLM (boot-probe failed). Operator gets one /start command either way.
+        return (
+            " — sidecar is not managing a vLLM instance. "
+            "Run /start <profile> first. If vLLM is already running externally "
+            "(see /status vllm_up), 'docker stop emmy-serve' on Spark first."
+        )
+    if current == SidecarState.ERROR:
+        return (
+            " — sidecar is in an error state. "
+            "Check /status last_error, then /start <profile> to retry."
+        )
+    if current in (SidecarState.STARTING, SidecarState.SWAPPING, SidecarState.DRAINING):
+        return f" — wait for the in-flight {current.value} operation to finish."
+    return ""
 
 
 def _reset_runtime_for_tests() -> None:
@@ -362,7 +485,10 @@ async def post_start(req: StartRequest, request: Request) -> EventSourceResponse
     if state.state not in {SidecarState.STOPPED, SidecarState.READY, SidecarState.ERROR}:
         raise HTTPException(
             status_code=409,
-            detail=f"start requires state in (stopped,ready,error), currently={state.state.value}",
+            detail=(
+                f"start requires state in (stopped,ready,error), currently={state.state.value}"
+                f"{_state_409_hint(state.state, 'start')}"
+            ),
         )
 
     # D-02 idempotent same-variant short-circuit (READY + same profile + same
@@ -529,7 +655,10 @@ async def post_stop(req: StopRequest, request: Request) -> EventSourceResponse:
     if state.state != SidecarState.READY:
         raise HTTPException(
             status_code=409,
-            detail=f"stop requires state=ready, currently={state.state.value}",
+            detail=(
+                f"stop requires state=ready, currently={state.state.value}"
+                f"{_state_409_hint(state.state, 'stop')}"
+            ),
         )
 
     # Capture the PID at request entry (guards against late mutation).
@@ -732,7 +861,10 @@ async def profile_swap(req: SwapRequest, request: Request) -> EventSourceRespons
     if state.state != SidecarState.READY:
         raise HTTPException(
             status_code=409,
-            detail=f"swap requires state=ready, currently={state.state.value}",
+            detail=(
+                f"swap requires state=ready, currently={state.state.value}"
+                f"{_state_409_hint(state.state, 'swap')}"
+            ),
         )
 
     async def event_generator() -> AsyncIterator[dict]:
