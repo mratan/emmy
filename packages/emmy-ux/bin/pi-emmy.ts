@@ -33,6 +33,7 @@ import { ToolsError } from "@emmy/tools";
 
 import { SpOkCanaryError, UxError } from "../src/errors";
 import { loadProfile } from "../src/profile-loader";
+import { scanProfileIndex } from "../src/profile-index";
 import { createEmmySession } from "../src/session";
 
 // Silence pi-coding-agent's npm-registry "Update Available" banner. Bumping
@@ -96,10 +97,15 @@ interface ParsedArgs {
 	memorySnapshot?: string;
 	/** Plan 04.4-05: usage-error sentinel for `--memory-snapshot` without arg. */
 	memorySnapshotError?: boolean;
+	/** True when --profile was explicit on the CLI; false when defaultProfilePath()
+	 *  was used. Drives the remote-client auto-detect: if the user explicitly
+	 *  asked for a profile, don't override based on what the server reports. */
+	profileExplicit?: boolean;
 }
 
 function parseArgs(argv: string[]): ParsedArgs {
 	let profilePath = defaultProfilePath();
+	let profileExplicit = false;
 	let baseUrl = "http://127.0.0.1:8002";
 	let mode: Mode = "tui";
 	let prompt: string | undefined;
@@ -113,6 +119,7 @@ function parseArgs(argv: string[]): ParsedArgs {
 		const a = argv[i]!;
 		if (a === "--profile") {
 			profilePath = resolve(argv[++i]!);
+			profileExplicit = true;
 		} else if (a === "--base-url") {
 			baseUrl = argv[++i]!;
 		} else if (a === "--print") {
@@ -146,7 +153,71 @@ function parseArgs(argv: string[]): ParsedArgs {
 	if (noMemory) args.noMemory = true;
 	if (memorySnapshot !== undefined) args.memorySnapshot = memorySnapshot;
 	if (memorySnapshotError) args.memorySnapshotError = true;
+	if (profileExplicit) args.profileExplicit = true;
 	return args;
+}
+
+/**
+ * Phase 04-03 D-23 (followup) — fetch the sidecar's currently-loaded profile
+ * id so the client can match it without manual `--profile`.
+ *
+ * Closes the gap that bites after a /profile swap when the operator exits the
+ * TUI without swapping back: pi-emmy's hardcoded defaultProfilePath() points
+ * at the daily-driver bundle, but vLLM is now serving the swapped one. The
+ * client sends `model: <default-name>` and gets a 404 from vLLM. This
+ * function lets the client adapt at startup.
+ *
+ * Returns null on any failure (sidecar unreachable, /status 4xx/5xx,
+ * malformed body, state != ready, profile_id missing). The caller falls back
+ * to the explicit/default profile path; the next chat completion will surface
+ * the mismatch as a 404 (existing behavior).
+ *
+ * Exported for unit tests.
+ */
+export async function fetchSidecarProfileId(serveUrl: string): Promise<string | null> {
+	const ctl = new AbortController();
+	const timeout = setTimeout(() => {
+		try {
+			ctl.abort(new Error("timeout"));
+		} catch {
+			ctl.abort();
+		}
+	}, 5000);
+	try {
+		const url = `${serveUrl.replace(/\/$/, "")}/status`;
+		const r = await fetch(url, { signal: ctl.signal });
+		if (!r.ok) return null;
+		const body = (await r.json()) as { state?: string; profile_id?: string };
+		if (body.state !== "ready") return null;
+		if (typeof body.profile_id !== "string" || body.profile_id.length === 0) return null;
+		return body.profile_id;
+	} catch {
+		return null;
+	} finally {
+		clearTimeout(timeout);
+	}
+}
+
+/**
+ * Resolve a sidecar-reported profile_id to a local bundle directory using
+ * the same scanProfileIndex.resolve() logic /profile uses (DEFAULT_VARIANT
+ * marker > "v3.1" legacy fallback > any v* > first). Returns null if no
+ * matching bundle is shipped on this client (e.g. the user has an older
+ * checkout that doesn't include the bundle the server is now serving — they
+ * should `git pull`; the next chat completion will 404 informatively).
+ *
+ * Exported for unit tests.
+ */
+export function resolveBundleForProfileId(
+	profilesRoot: string,
+	profileId: string,
+): string | null {
+	try {
+		const idx = scanProfileIndex(profilesRoot);
+		return idx.resolve(profileId);
+	} catch {
+		return null;
+	}
 }
 
 function usage(): string {
@@ -335,6 +406,54 @@ export async function main(argv: string[] = process.argv.slice(2)): Promise<numb
 			);
 		}
 		return 4;
+	}
+
+	// Pre-flight 2.5 (Plan 04-03 D-23 followup) — auto-detect profile mismatch.
+	//
+	// In remote-client mode, the sidecar is the source of truth for which
+	// vLLM is currently serving (operator may have done /profile X then
+	// exited the TUI without swapping back). pi-emmy's hardcoded
+	// defaultProfilePath() then sends `model: <default-name>` and gets a
+	// 404 from the swapped vLLM — a confusing UX failure with no obvious
+	// recovery path from the client side.
+	//
+	// Closes the gap by querying the sidecar's /status, mapping the reported
+	// profile_id to a local bundle via scanProfileIndex, and overriding
+	// args.profilePath when (a) the user did NOT pass --profile explicitly
+	// and (b) the local bundle resolves cleanly. Explicit --profile wins:
+	// users who want the chat-completion 404 to surface (eval reproducibility,
+	// debug) keep it.
+	//
+	// Fail-closed: any detection failure (sidecar /status unreachable, state
+	// != ready, profile_id missing, no matching bundle in profilesRoot) falls
+	// through to the configured profile path. The next chat completion will
+	// surface the mismatch — same behavior as before this fix, no worse.
+	//
+	// Disable with EMMY_SKIP_PROFILE_AUTODETECT=1 (env-gated escape hatch
+	// matching the EMMY_SKIP_PROFILE_VALIDATE precedent below).
+	if (
+		!args.profileExplicit &&
+		prereqProbe.kind === "sidecar" &&
+		process.env.EMMY_SKIP_PROFILE_AUTODETECT !== "1"
+	) {
+		const detectedId = await fetchSidecarProfileId(prereqProbe.target);
+		if (detectedId) {
+			const profilesRoot = join(emmyInstallRoot(), "profiles");
+			const detectedPath = resolveBundleForProfileId(profilesRoot, detectedId);
+			if (detectedPath && detectedPath !== args.profilePath) {
+				console.error(
+					`[emmy] Spark is serving '${detectedId}' — auto-loading matching client profile (${detectedPath}). Use --profile to override.`,
+				);
+				args.profilePath = detectedPath;
+			} else if (!detectedPath) {
+				console.error(
+					`[emmy] WARNING: Spark is serving '${detectedId}' but no matching client bundle found under ${profilesRoot}. Continuing with ${args.profilePath} — the next chat completion will likely 404. Run 'git pull' or pass --profile <bundle> explicitly.`,
+				);
+			}
+		}
+		// detectedId === null → fall through silently (sidecar's profile_id
+		// isn't yet populated; either vLLM isn't running or boot-probe didn't
+		// adopt — user will /start from inside TUI).
 	}
 
 	// Pre-flight 3 (W5 FIX — T-02-04-08 implementation): emmy profile validate.
