@@ -97,6 +97,7 @@ class _ClaudeSpy:
 
     def __init__(self) -> None:
         self.calls: list[list[str]] = []
+        self.last_kwargs: dict = {}
         self.last_stdin: str | None = None
         self.kill_called: bool = False
         self.last_proc: "_FakeProc | None" = None
@@ -129,6 +130,9 @@ class _ClaudeSpy:
 
     async def __call__(self, *argv: str, **kwargs):
         self.calls.append(list(argv))
+        # 04.6-04 followup C.1 — capture cwd= kwarg so the sandbox-vs-inherit
+        # contract can be asserted without re-spawning real subprocesses.
+        self.last_kwargs = dict(kwargs)
         proc = _FakeProc(
             self,
             self._stdout,
@@ -340,9 +344,14 @@ def test_endpoint_invokes_claude_argv_stdin(
     assert "duration_ms" in body
     assert "rate_limit_remaining_hour" in body
 
-    # D-09 invariant: argv is exactly the locked sequence; prompt is data only.
+    # D-09 invariant: argv is the locked sequence; prompt is data only.
+    # 04.6-04 followup B extended the locked sequence with --allowedTools
+    # WebSearch so Claude can answer time-sensitive questions instead of
+    # caveating against its training cutoff. Stdin still carries the prompt.
     assert mock_claude.call_count == 1
-    assert mock_claude.last_argv == ["claude", "--print", "-"], mock_claude.last_argv
+    assert mock_claude.last_argv == [
+        "claude", "--print", "--allowedTools", "WebSearch", "-",
+    ], mock_claude.last_argv
     assert mock_claude.last_stdin == "what is 2+2"
 
 
@@ -640,4 +649,154 @@ def test_endpoint_timeout_reaps_zombie(
     assert proc.awaited_wait, (
         "handler must await proc.wait() after kill() — "
         "without it asyncio's transport leaks the child PID + pipe FDs"
+    )
+
+
+# ----------------------------------------------------------------------------
+# Plan 04.6-04 followup C.1 — context sandbox + B WebSearch tool
+# ----------------------------------------------------------------------------
+
+
+def test_sandbox_cwd_is_tmpdir_by_default(
+    client: TestClient,
+    mock_claude: _ClaudeSpy,
+    jsonl_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Default mode (no env set): subprocess spawns from a fresh tmpdir so
+    Claude Code's auto-discovery (CLAUDE.md, ~/.claude/projects/<cwd>/memory/)
+    finds nothing. The audit JSONL accurately reflects the bytes sent to
+    Anthropic — no implicit context expansion.
+    """
+    monkeypatch.setenv("EMMY_ASK_CLAUDE", "on")
+    monkeypatch.delenv("EMMY_ASK_CLAUDE_INHERIT_CONTEXT", raising=False)
+    mock_claude.set_response("ok")
+
+    r = client.post("/ask-claude", json={"prompt": "hello"})
+    assert r.status_code == 200, r.text
+
+    # cwd= was passed to the subprocess and points at a tmpdir under /tmp
+    # (or whatever tempfile.mkdtemp resolves to).
+    cwd = mock_claude.last_kwargs.get("cwd")
+    assert cwd is not None, "expected sandbox tmpdir, got cwd=None"
+    assert "emmy-ask-claude-" in str(cwd), f"unexpected sandbox path: {cwd}"
+
+
+def test_inherit_cwd_when_env_set(
+    client: TestClient,
+    mock_claude: _ClaudeSpy,
+    jsonl_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """EMMY_ASK_CLAUDE_INHERIT_CONTEXT=1 → subprocess spawns from the sidecar's
+    WorkingDirectory. Claude Code's auto-discovery picks up CLAUDE.md +
+    auto-memory. Operator opt-in for Emmy-specific escalations.
+    """
+    monkeypatch.setenv("EMMY_ASK_CLAUDE", "on")
+    monkeypatch.setenv("EMMY_ASK_CLAUDE_INHERIT_CONTEXT", "1")
+    mock_claude.set_response("ok")
+
+    r = client.post("/ask-claude", json={"prompt": "hello"})
+    assert r.status_code == 200, r.text
+
+    # cwd= explicitly None → asyncio.create_subprocess_exec inherits cwd.
+    assert "cwd" in mock_claude.last_kwargs
+    assert mock_claude.last_kwargs["cwd"] is None
+
+
+@pytest.mark.parametrize(
+    "env_value", ["1", "true", "TRUE", "on", "ON", "yes", "Yes"],
+)
+def test_inherit_env_accepts_truthy_variants(
+    client: TestClient,
+    mock_claude: _ClaudeSpy,
+    jsonl_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    env_value: str,
+) -> None:
+    """Match the discipline of EMMY_REMOTE_CLIENT and other env gates: accept
+    the common truthy spellings, not just literal "1".
+    """
+    monkeypatch.setenv("EMMY_ASK_CLAUDE", "on")
+    monkeypatch.setenv("EMMY_ASK_CLAUDE_INHERIT_CONTEXT", env_value)
+    mock_claude.set_response("ok")
+
+    r = client.post("/ask-claude", json={"prompt": "hello"})
+    assert r.status_code == 200
+    assert mock_claude.last_kwargs["cwd"] is None
+
+
+def test_audit_request_event_carries_cwd_kind_sandbox(
+    client: TestClient,
+    mock_claude: _ClaudeSpy,
+    jsonl_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Default mode: every event in the call chain (request, response) carries
+    cwd_kind=sandbox so the operator's audit trail accurately reflects what
+    was sent to Anthropic. Closes the D-08 gap where implicit context
+    expansion was invisible to the audit log.
+    """
+    monkeypatch.setenv("EMMY_ASK_CLAUDE", "on")
+    monkeypatch.delenv("EMMY_ASK_CLAUDE_INHERIT_CONTEXT", raising=False)
+    mock_claude.set_response("ok")
+
+    r = client.post("/ask-claude", json={"prompt": "hello"})
+    assert r.status_code == 200
+
+    jsonl_path = jsonl_dir / "ask_claude_events.jsonl"
+    events = [json.loads(line) for line in jsonl_path.read_text().strip().splitlines()]
+    request_evt = next(e for e in events if e["event"] == "emmy.ask_claude.request")
+    response_evt = next(e for e in events if e["event"] == "emmy.ask_claude.response")
+    assert request_evt["cwd_kind"] == "sandbox"
+    assert response_evt["cwd_kind"] == "sandbox"
+
+
+def test_audit_request_event_carries_cwd_kind_inherit_when_opted_in(
+    client: TestClient,
+    mock_claude: _ClaudeSpy,
+    jsonl_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Inherit mode: events carry cwd_kind=inherit so the operator can audit
+    which calls were exposed to auto-discovery context.
+    """
+    monkeypatch.setenv("EMMY_ASK_CLAUDE", "on")
+    monkeypatch.setenv("EMMY_ASK_CLAUDE_INHERIT_CONTEXT", "1")
+    mock_claude.set_response("ok")
+
+    r = client.post("/ask-claude", json={"prompt": "hello"})
+    assert r.status_code == 200
+
+    jsonl_path = jsonl_dir / "ask_claude_events.jsonl"
+    events = [json.loads(line) for line in jsonl_path.read_text().strip().splitlines()]
+    request_evt = next(e for e in events if e["event"] == "emmy.ask_claude.request")
+    response_evt = next(e for e in events if e["event"] == "emmy.ask_claude.response")
+    assert request_evt["cwd_kind"] == "inherit"
+    assert response_evt["cwd_kind"] == "inherit"
+
+
+def test_sandbox_tmpdir_is_cleaned_up_after_call(
+    client: TestClient,
+    mock_claude: _ClaudeSpy,
+    jsonl_dir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The per-call sandbox tmpdir must not accumulate on disk — finally block
+    rmtrees it after each /ask-claude call (success or error path).
+    """
+    import os as _os
+
+    monkeypatch.setenv("EMMY_ASK_CLAUDE", "on")
+    monkeypatch.delenv("EMMY_ASK_CLAUDE_INHERIT_CONTEXT", raising=False)
+    mock_claude.set_response("ok")
+
+    r = client.post("/ask-claude", json={"prompt": "hello"})
+    assert r.status_code == 200
+
+    sandbox_path = mock_claude.last_kwargs["cwd"]
+    assert sandbox_path is not None
+    # The tmpdir was created during the call and removed in the finally block.
+    assert not _os.path.exists(sandbox_path), (
+        f"sandbox tmpdir leaked: {sandbox_path}"
     )

@@ -39,6 +39,7 @@ import os
 import shutil
 import signal
 import sys
+import tempfile
 import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
@@ -91,6 +92,22 @@ _ASK_CLAUDE_HOURLY_CAP = 30
 _ASK_CLAUDE_MIN_GAP_S = 3.0
 _ASK_CLAUDE_HOUR_S = 3600.0
 _ASK_CLAUDE_DEFAULT_TIMEOUT_MS = 60_000
+
+# Plan 04.6-04 followup B — operator-facing tool whitelist for the `claude`
+# subprocess. WebSearch grants Anthropic-side web search so /ask-claude can
+# answer time-sensitive questions instead of caveating against its training
+# cutoff. Other built-in tools (Bash, Edit, Read, etc.) stay disallowed —
+# Claude operates ON Anthropic's environment for these calls; granting file/
+# shell tools to the cloud-side process is out of scope for v1.
+_ASK_CLAUDE_ALLOWED_TOOLS = "WebSearch"
+
+# Plan 04.6-04 followup C.1 — context-sandbox prefix. tempfile.mkdtemp(prefix=)
+# isolates each /ask-claude subprocess from the sidecar's WorkingDirectory
+# so Claude Code's auto-discovery (CLAUDE.md, ~/.claude/projects/<cwd>/memory/)
+# finds nothing and the audit JSONL accurately reflects the bytes sent to
+# Anthropic. Operators who WANT auto-discovery (Emmy-specific escalations
+# where project context helps) opt back in via EMMY_ASK_CLAUDE_INHERIT_CONTEXT=1.
+_ASK_CLAUDE_TMPDIR_PREFIX = "emmy-ask-claude-"
 
 # Per-process rate-limit state. Reset by tests via _reset_runtime_for_tests().
 #   in_flight       — bool, True between rate-limit acquire and finally release
@@ -1122,16 +1139,39 @@ async def post_ask_claude(req: AskClaudeRequest) -> AskClaudeResponse:
     # D-09 subprocess invocation: argv + stdin, never shell. The prompt is
     # data only (T-03 / T-04.6-S3 mitigation). Emit the request event BEFORE
     # spawn so a hard crash mid-spawn still leaves a fingerprint.
+    #
+    # Plan 04.6-04 followup B — argv extended with `--allowedTools WebSearch`
+    # so Claude can search the web when a question is time-sensitive (default
+    # `--print` mode runs with NO tool permissions, even though tool defs
+    # exist; Claude offered to use WebSearch but couldn't. Live SC-1 finding).
+    #
+    # Plan 04.6-04 followup C.1 — context sandbox. By default we spawn the
+    # subprocess from a fresh tmpdir so Claude Code's auto-discovery doesn't
+    # silently bundle the sidecar's WorkingDirectory CLAUDE.md (~19KB) +
+    # ~/.claude/projects/<encoded-cwd>/memory/ into every escalation. The
+    # operator's signed D-08 audit trail then accurately reflects the bytes
+    # sent to Anthropic. Opt back in via EMMY_ASK_CLAUDE_INHERIT_CONTEXT=1
+    # for Emmy-specific escalations where the auto-discovered context helps.
     timeout_ms = req.timeout_ms or _ASK_CLAUDE_DEFAULT_TIMEOUT_MS
-    emit_event_ask_claude("request", req.prompt)
+    inherit_context = os.environ.get("EMMY_ASK_CLAUDE_INHERIT_CONTEXT", "").lower() in (
+        "1", "true", "on", "yes",
+    )
+    if inherit_context:
+        subprocess_cwd: str | None = None  # inherits sidecar's WorkingDirectory
+        cwd_kind = "inherit"
+    else:
+        subprocess_cwd = tempfile.mkdtemp(prefix=_ASK_CLAUDE_TMPDIR_PREFIX)
+        cwd_kind = "sandbox"
+    emit_event_ask_claude("request", req.prompt, cwd_kind=cwd_kind)
     t0 = time.monotonic()
     proc = None
     try:
         proc = await asyncio.create_subprocess_exec(
-            "claude", "--print", "-",
+            "claude", "--print", "--allowedTools", _ASK_CLAUDE_ALLOWED_TOOLS, "-",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
+            cwd=subprocess_cwd,
         )
         try:
             stdout, stderr = await asyncio.wait_for(
@@ -1144,6 +1184,7 @@ async def post_ask_claude(req: AskClaudeRequest) -> AskClaudeResponse:
                 "error", req.prompt,
                 duration_ms=duration_ms,
                 reason="timeout",
+                cwd_kind=cwd_kind,
             )
             try:
                 proc.kill()
@@ -1176,6 +1217,7 @@ async def post_ask_claude(req: AskClaudeRequest) -> AskClaudeResponse:
                 duration_ms=duration_ms,
                 exit_code=proc.returncode,
                 reason="subprocess_failed",
+                cwd_kind=cwd_kind,
             )
             raise HTTPException(
                 status_code=502,
@@ -1196,6 +1238,7 @@ async def post_ask_claude(req: AskClaudeRequest) -> AskClaudeResponse:
             response=response_text,
             duration_ms=duration_ms,
             rate_limit_remaining_hour=remaining,
+            cwd_kind=cwd_kind,
         )
         return AskClaudeResponse(
             response=response_text,
@@ -1213,6 +1256,7 @@ async def post_ask_claude(req: AskClaudeRequest) -> AskClaudeResponse:
             duration_ms=duration_ms,
             reason="handler_exception",
             detail=str(e),
+            cwd_kind=cwd_kind,
         )
         raise HTTPException(
             status_code=500,
@@ -1222,6 +1266,13 @@ async def post_ask_claude(req: AskClaudeRequest) -> AskClaudeResponse:
         # D-07 release. ALWAYS flip in_flight back, regardless of outcome.
         async with _ASK_CLAUDE_LOCK:
             _ASK_CLAUDE_STATE["in_flight"] = False
+        # Plan 04.6-04 followup C.1 — clean up the per-call sandbox tmpdir.
+        # ignore_errors keeps a cleanup glitch (filesystem race, leftover
+        # claude artifact in the dir) from masking the upstream operation —
+        # /tmp gets reaped by the OS eventually, and the audit JSONL captures
+        # cwd_kind so a leak is auditable.
+        if cwd_kind == "sandbox" and subprocess_cwd is not None:
+            shutil.rmtree(subprocess_cwd, ignore_errors=True)
 
 
 # ----------------------------------------------------------------------------

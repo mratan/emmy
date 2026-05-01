@@ -122,6 +122,13 @@ describe("registerAskClaudeCommand", () => {
 		expect(notifyCalls.length).toBe(1);
 		expect(notifyCalls[0]![0]).toBe("info");
 		expect(notifyCalls[0]![1]).toContain("the answer is 4");
+		// 04.6-04 followup A — notify echoes the operator's TRIMMED prompt at
+		// the top so the conversation log is self-documenting after pi-mono
+		// clears the input box on slash-command submit.
+		expect(notifyCalls[0]![1]).toContain("> /ask-claude what is 2+2");
+		// Echo MUST appear before the response (operator visual scan order).
+		const msg = notifyCalls[0]![1];
+		expect(msg.indexOf("> /ask-claude")).toBeLessThan(msg.indexOf("the answer is 4"));
 	});
 
 	test("empty prompt → notify error, callAskClaude NOT called", async () => {

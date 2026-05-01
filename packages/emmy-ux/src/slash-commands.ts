@@ -888,13 +888,19 @@ export function registerAskClaudeCommand(
 			}
 			try {
 				const r = await opts.callAskClaude(prompt);
+				// Plan 04.6-04 followup A — echo the operator's prompt at the
+				// top of the notify so the conversation log is self-documenting.
+				// pi-mono clears the input box on slash command submit so the
+				// question would otherwise vanish; without echo the response
+				// reads as decontextualized.
+				//
 				// Single-line summary: response + elapsed + remaining-quota.
 				// "calls left this hour" is the sidecar's hourly rolling
 				// counter (Plan 04.6-01 D-07): operator sees the budget at
 				// a glance after every successful call. Newlines before
 				// the response let multi-line answers render legibly.
 				cmdCtx.ui.notify(
-					`Claude (${r.duration_ms}ms, ${r.rate_limit_remaining_hour} calls left this hour):\n\n${r.response}`,
+					`> /ask-claude ${prompt}\n\nClaude (${r.duration_ms}ms, ${r.rate_limit_remaining_hour} calls left this hour):\n\n${r.response}`,
 					"info",
 				);
 			} catch (err) {
