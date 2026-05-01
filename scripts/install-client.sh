@@ -279,7 +279,20 @@ fi
 export PATH="$HOME/.local/bin:$PATH"
 
 # ----------------------------------------------------------------------------
-# 7. End-to-end smoke test
+# 7. Pre-create the global memory scope dir (Phase 04.4)
+# ----------------------------------------------------------------------------
+# The memory tool's read_at_session_start instinct fires `view /memories/global`
+# at every session start. The view command tolerates a missing scope root
+# (returns empty listing), but pre-creating ~/.emmy/memory eliminates the
+# tolerance round-trip on first launch and gives the operator an obvious
+# place to drop personal notes. Per-project ~/some-project/.emmy/notes/ is
+# left for the operator to opt into per project.
+step "Preparing memory scope dir"
+mkdir -p "$HOME/.emmy/memory"
+ok "Global memory scope: $HOME/.emmy/memory"
+
+# ----------------------------------------------------------------------------
+# 8. End-to-end smoke test
 # ----------------------------------------------------------------------------
 if [[ "$EMMY_SKIP_SMOKE" == "1" ]]; then
   warn "Skipping end-to-end smoke test (EMMY_SKIP_SMOKE=1)"

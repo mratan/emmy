@@ -59,6 +59,61 @@ describe("view command", () => {
 		expect((r as { code: string }).code).toBe("memory.not_found");
 	});
 
+	// 04.4-followup — scope-root tolerance.
+	// Fresh checkout: <repo>/.emmy/notes/ doesn't exist. Fresh user: ~/.emmy/memory/
+	// doesn't exist. The read_at_session_start instinct fires `view /memories/project`
+	// at every session start; without this tolerance, the model surfaces an ugly
+	// memory.not_found on every first-launch in a new project.
+	test("missing project scope root returns empty listing (not error)", async () => {
+		const r = await viewCommand({
+			absPath: join(tmp, "does-not-exist-yet"),
+			scope: "project",
+			logicalPath: "/memories/project",
+			config: DEFAULT_MEMORY_CONFIG,
+		});
+		expect(r.isError).toBe(false);
+		const ok = r as { payload: { listing: string[] }; content: { text: string }[] };
+		expect(ok.payload.listing).toEqual([]);
+		expect(ok.content[0].text).toBe("");
+	});
+
+	test("missing global scope root returns empty listing (not error)", async () => {
+		const r = await viewCommand({
+			absPath: join(tmp, "does-not-exist-yet"),
+			scope: "global",
+			logicalPath: "/memories/global",
+			config: DEFAULT_MEMORY_CONFIG,
+		});
+		expect(r.isError).toBe(false);
+		const ok = r as { payload: { listing: string[] } };
+		expect(ok.payload.listing).toEqual([]);
+	});
+
+	test("missing scope root with trailing slash also returns empty listing", async () => {
+		const r = await viewCommand({
+			absPath: join(tmp, "does-not-exist-yet"),
+			scope: "project",
+			logicalPath: "/memories/project/",
+			config: DEFAULT_MEMORY_CONFIG,
+		});
+		expect(r.isError).toBe(false);
+		const ok = r as { payload: { listing: string[] } };
+		expect(ok.payload.listing).toEqual([]);
+	});
+
+	test("missing sub-path under scope still returns memory.not_found (regression guard)", async () => {
+		// This guards against the tolerance over-reaching: a missing FILE under
+		// the scope root must still error normally.
+		const r = await viewCommand({
+			absPath: join(tmp, "sub", "missing.md"),
+			scope: "project",
+			logicalPath: "/memories/project/sub/missing.md",
+			config: DEFAULT_MEMORY_CONFIG,
+		});
+		expect(r.isError).toBe(true);
+		expect((r as { code: string }).code).toBe("memory.not_found");
+	});
+
 	test("directory listing alphabetical with dir slash", async () => {
 		mkdirSync(join(tmp, "sub"), { recursive: true });
 		writeFileSync(join(tmp, "a.md"), "x");

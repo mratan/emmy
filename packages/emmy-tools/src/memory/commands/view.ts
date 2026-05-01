@@ -32,6 +32,22 @@ export async function viewCommand(args: ViewArgs): Promise<MemoryResult> {
 
 	// 2. Path must exist.
 	if (!existsSync(args.absPath)) {
+		// Scope root tolerance (04.4-followup): a fresh checkout has no
+		// .emmy/notes/ yet, and a fresh user has no ~/.emmy/memory/ yet.
+		// `view /memories/project` (or /global) at the scope root should
+		// return an empty listing, not error — otherwise the
+		// read_at_session_start instinct surfaces an ugly memory.not_found
+		// on every first-launch in a new project. Sub-paths still error
+		// (a missing FILE is genuinely not_found).
+		const stripped = args.logicalPath.replace(/\/+$/, "");
+		if (stripped === `/memories/${args.scope}`) {
+			return ok({
+				scope: args.scope,
+				path: args.logicalPath,
+				payload: { listing: [] },
+				contentText: "",
+			});
+		}
 		return err(
 			new MemoryError(
 				"memory.not_found",
