@@ -169,3 +169,116 @@ def test_render_network_mode_none_when_airgap_true(test_profile_path: Path, tmp_
     )
     joined = " ".join(args)
     assert "--network none" in joined
+
+
+# -----------------------------------------------------------------------------
+# Plan 04.7-01 Task 1 — orphaned-flag fix coverage
+# -----------------------------------------------------------------------------
+#
+# Three EngineConfig fields existed but were never emitted by render_vllm_cli_args:
+#   - reasoning_parser (Optional[str], shipped Phase 4)
+#   - max_num_seqs     (Optional[int], shipped Phase 4)
+#   - tokenizer        (Optional[str], shipped 04.7-01 schema extension)
+#
+# Mistral GGUF profiles structurally require `--tokenizer` to be passed (vLLM
+# GGUF docs: extracting the tokenizer from a bundled GGUF is "time-consuming
+# and unstable"). Gemma profiles benefit from making the implicit explicit
+# (vLLM auto-detects reasoning_parser from tokenizer_config.json today). See
+# 04.7-RESEARCH.md §1.2 + 04.7-PATTERNS.md §"render_vllm_cli_args (MODIFIED)".
+
+
+_VALID_SERVING_YAML_WITH_NEW_FLAGS = """\
+engine:
+  model: /models/Mistral-Medium-3.5-128B-Q4_K_M.gguf
+  model_hf_id: mistralai/Mistral-Medium-3.5-128B
+  served_model_name: mistral-medium-3.5
+  container_image: vllm/vllm-openai:cu130-nightly-aarch64
+  container_image_digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  tokenizer: mistralai/Mistral-Medium-3.5-128B
+  max_model_len: 131072
+  gpu_memory_utilization: 0.78
+  kv_cache_dtype: fp8
+  enable_prefix_caching: true
+  enable_chunked_prefill: true
+  max_num_batched_tokens: 8192
+  max_num_seqs: 4
+  load_format: auto
+  quantization: gguf
+  tool_call_parser: mistral
+  reasoning_parser: gemma4
+  enable_auto_tool_choice: true
+  host: 0.0.0.0
+  port: 8000
+sampling_defaults:
+  temperature: 0.15
+  top_p: 0.95
+  top_k: 40
+  repetition_penalty: 1.0
+  max_tokens: 8192
+  stop: []
+speculative: null
+guided_decoding:
+  default_backend: xgrammar
+quirks:
+  strip_thinking_tags: false
+  promote_reasoning_to_content: false
+  buffer_tool_streams: false
+env:
+  VLLM_NO_USAGE_STATS: "1"
+  DO_NOT_TRACK: "1"
+  VLLM_LOAD_FORMAT: auto
+  VLLM_FLASHINFER_MOE_BACKEND: latency
+  VLLM_DISABLE_COMPILE_CACHE: "1"
+  HF_HUB_OFFLINE: "1"
+  TRANSFORMERS_OFFLINE: "1"
+"""
+
+
+@pytest.fixture
+def test_profile_path_with_new_flags(tmp_path: Path) -> Path:
+    """Schema-valid serving.yaml that exercises reasoning_parser, max_num_seqs, tokenizer."""
+    bundle = tmp_path / "v1"
+    bundle.mkdir()
+    (bundle / "serving.yaml").write_text(_VALID_SERVING_YAML_WITH_NEW_FLAGS, encoding="utf-8")
+    return bundle
+
+
+@pytest.fixture
+def rendered_args_with_new_flags(test_profile_path_with_new_flags: Path) -> list[str]:
+    return runner.render_vllm_cli_args(test_profile_path_with_new_flags)
+
+
+def test_render_emits_reasoning_parser_when_set(rendered_args_with_new_flags):
+    """04.7-01 Task 1: ``--reasoning-parser <value>`` appears as a contiguous pair."""
+    args = rendered_args_with_new_flags
+    assert "--reasoning-parser" in args, args
+    idx = args.index("--reasoning-parser")
+    assert args[idx + 1] == "gemma4", (idx, args)
+
+
+def test_render_emits_max_num_seqs_when_set(rendered_args_with_new_flags):
+    """04.7-01 Task 1: ``--max-num-seqs <int>`` appears as a contiguous pair."""
+    args = rendered_args_with_new_flags
+    assert "--max-num-seqs" in args, args
+    idx = args.index("--max-num-seqs")
+    assert args[idx + 1] == "4", (idx, args)
+
+
+def test_render_emits_tokenizer_when_set(rendered_args_with_new_flags):
+    """04.7-01 Task 1: ``--tokenizer <id>`` appears as a contiguous pair."""
+    args = rendered_args_with_new_flags
+    assert "--tokenizer" in args, args
+    idx = args.index("--tokenizer")
+    assert args[idx + 1] == "mistralai/Mistral-Medium-3.5-128B", (idx, args)
+
+
+def test_render_omits_new_flags_when_unset(rendered_args):
+    """04.7-01 Task 1: with the original fixture (no reasoning/seqs/tokenizer set), none emit.
+
+    The original ``_VALID_SERVING_YAML`` does not declare ``reasoning_parser``,
+    ``max_num_seqs``, or ``tokenizer`` — confirms conditional emission preserved
+    so existing FP8 profiles render unchanged.
+    """
+    assert "--reasoning-parser" not in rendered_args, rendered_args
+    assert "--max-num-seqs" not in rendered_args, rendered_args
+    assert "--tokenizer" not in rendered_args, rendered_args

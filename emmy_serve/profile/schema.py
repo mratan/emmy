@@ -49,6 +49,13 @@ class EngineConfig(BaseModel):
     # --- immutable identity ---
     model: str
     model_hf_id: str
+    # Phase 04.7 — explicit tokenizer override. Used by GGUF profiles where the
+    # bundled GGUF tokenizer is "time-consuming and unstable" to extract per
+    # vLLM GGUF docs; the recommended value is the base-model HF id (e.g.
+    # "mistralai/Mistral-Medium-3.5-128B"). Default None = vLLM uses the value
+    # of `model:` (HF model_id or local path). Strictly additive — every pre-
+    # 04.7 profile validates with .tokenizer is None and renders identically.
+    tokenizer: Optional[str] = None
     served_model_name: str
     container_image: str
     container_image_digest: str
@@ -80,7 +87,12 @@ class EngineConfig(BaseModel):
     load_format: Literal["auto", "fastsafetensors", "safetensors"] = "fastsafetensors"
 
     # --- quantization ---
-    quantization: Literal["fp8", "bf16", "auto"] = "fp8"
+    # Phase 04.7 — "gguf" added for Mistral Medium 3.5 128B Q4_K_M (CONTEXT D-02).
+    # vLLM experimental GGUF backend; long-context flagged WIP by Mistral. The
+    # tokenizer field above is the partner setting — GGUF docs strongly recommend
+    # passing --tokenizer <base-model-hf-id> rather than letting vLLM extract from
+    # the bundled GGUF (slow + unstable). See profiles/mistral-medium-3.5/v1/.
+    quantization: Literal["fp8", "bf16", "auto", "gguf"] = "fp8"
 
     # --- tool-call parser ---
     tool_call_parser: Optional[str] = None

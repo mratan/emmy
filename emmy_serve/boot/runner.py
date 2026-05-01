@@ -95,6 +95,19 @@ def render_vllm_cli_args(profile_path: Path) -> list[str]:
         cli.append("--enable-auto-tool-choice")
     if e.attention_backend:
         cli += ["--attention-backend", e.attention_backend]
+    # Phase 04.7 — orphaned-flag fix: schema fields existed but were never emitted.
+    # Forces explicit pass for Mistral (whose tokenizer MUST be set explicitly
+    # because GGUF tokenizer extraction is "time-consuming and unstable" per
+    # vLLM docs) AND surfaces Gemma's reasoning_parser/max_num_seqs through the
+    # CLI (previously vLLM auto-detected reasoning_parser from
+    # tokenizer_config.json — see 04.7-RESEARCH.md §1.2). Conditional emission
+    # preserves byte-identical render for pre-04.7 profiles where these are unset.
+    if e.reasoning_parser:
+        cli += ["--reasoning-parser", e.reasoning_parser]
+    if e.max_num_seqs is not None:
+        cli += ["--max-num-seqs", str(e.max_num_seqs)]
+    if e.tokenizer:
+        cli += ["--tokenizer", e.tokenizer]
     return cli
 
 
