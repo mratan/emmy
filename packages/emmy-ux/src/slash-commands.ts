@@ -452,6 +452,12 @@ interface SidecarCmdCtx {
 interface StatusCmdCtx {
 	ui: {
 		notify: (message: string, type?: "info" | "warning" | "error") => void;
+		// Optional D-22 footer-row channel. Used by /ask-claude (Plan 04.6-04
+		// followup) to render a "Asking Claude (Ns)…" elapsed-time indicator
+		// while the sidecar round-trip is in flight (~10-30s typical).
+		// Optional because /start, /stop, /status don't surface progress
+		// through this channel — they stream SSE phases via their own paths.
+		setStatus?: (key: string, text: string | undefined) => void;
 	};
 }
 
@@ -860,6 +866,26 @@ export function registerAskClaudeCommand(
 				);
 				return;
 			}
+			// Plan 04.6-04 followup — elapsed-time progress indicator.
+			// Without this, the operator sees an empty TUI for ~10-30s while
+			// the sidecar round-trip is in flight (no streaming in v1, sync
+			// POST→JSON only). Operator UX feedback after live SC-1 walkthrough
+			// reported it felt frozen. The status updates every 1s with the
+			// elapsed seconds; cleared in `finally` regardless of outcome.
+			//
+			// setStatus is optional on the StatusCmdCtx; degrades silently to
+			// no-progress when the host runtime doesn't expose the channel
+			// (matches the legacy pre-followup behavior — never worse).
+			const setStatus = cmdCtx.ui.setStatus;
+			const startMs = Date.now();
+			let elapsedTicker: ReturnType<typeof setInterval> | null = null;
+			if (setStatus) {
+				setStatus("emmy.ask_claude", "Asking Claude…");
+				elapsedTicker = setInterval(() => {
+					const sec = Math.floor((Date.now() - startMs) / 1000);
+					setStatus("emmy.ask_claude", `Asking Claude (${sec}s)…`);
+				}, 1000);
+			}
 			try {
 				const r = await opts.callAskClaude(prompt);
 				// Single-line summary: response + elapsed + remaining-quota.
@@ -938,6 +964,12 @@ export function registerAskClaudeCommand(
 						cmdCtx.ui.notify(`/ask-claude: error — ${msg}`, "error");
 					}
 				}
+			} finally {
+				// Clear the elapsed-time progress indicator regardless of
+				// success/failure. setInterval handle is null when setStatus
+				// wasn't available — guard against double-clear.
+				if (elapsedTicker !== null) clearInterval(elapsedTicker);
+				if (setStatus) setStatus("emmy.ask_claude", undefined);
 			}
 		},
 	});

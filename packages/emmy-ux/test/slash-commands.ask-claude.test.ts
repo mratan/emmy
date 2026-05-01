@@ -588,3 +588,111 @@ describe("callAskClaude (sidecar HTTP client)", () => {
 		}
 	});
 });
+
+// ============================================================================
+// 04.6-04 followup — elapsed-time progress indicator
+//
+// User-reported UX gap after the live SC-1 walkthrough: while the sidecar
+// round-trip is in flight (~10-30s in v1), the TUI showed nothing. Fix:
+// setStatus("emmy.ask_claude", "Asking Claude…") before await, ticker
+// updates every 1s with elapsed seconds, cleared in finally.
+// ============================================================================
+
+describe("registerAskClaudeCommand — progress indicator (followup)", () => {
+	function makeAskClaudeCtxWithSetStatus(): {
+		ctx: unknown;
+		notifyCalls: Array<[string, string]>;
+		statusCalls: Array<[string, string | undefined]>;
+	} {
+		const notifyCalls: Array<[string, string]> = [];
+		const statusCalls: Array<[string, string | undefined]> = [];
+		const ctx = {
+			ui: {
+				notify: (msg: string, type?: "info" | "warning" | "error") => {
+					notifyCalls.push([type ?? "info", msg]);
+				},
+				setStatus: (key: string, text: string | undefined) => {
+					statusCalls.push([key, text]);
+				},
+			},
+		};
+		return { ctx, notifyCalls, statusCalls };
+	}
+
+	test("setStatus fires 'Asking Claude…' before the call and clears after success", async () => {
+		const { registerAskClaudeCommand } = await import("../src/slash-commands");
+		const { pi, registered } = makeFakePi();
+		registerAskClaudeCommand(pi, {
+			callAskClaude: async () => ({
+				response: "ok",
+				duration_ms: 50,
+				rate_limit_remaining_hour: 29,
+			}),
+		});
+		const { ctx, statusCalls } = makeAskClaudeCtxWithSetStatus();
+		await registered[0]?.options.handler("hello", ctx);
+
+		// First call: initial "Asking Claude…" status set before the await.
+		expect(statusCalls[0]).toEqual(["emmy.ask_claude", "Asking Claude…"]);
+		// Last call: cleared (undefined) in the finally block.
+		expect(statusCalls[statusCalls.length - 1]).toEqual([
+			"emmy.ask_claude",
+			undefined,
+		]);
+	});
+
+	test("setStatus clears in finally even when callAskClaude throws", async () => {
+		const { registerAskClaudeCommand } = await import("../src/slash-commands");
+		const { pi, registered } = makeFakePi();
+		registerAskClaudeCommand(pi, {
+			callAskClaude: async () => {
+				throw Object.assign(new Error("boom"), { reason: "subprocess_failed" });
+			},
+		});
+		const { ctx, statusCalls } = makeAskClaudeCtxWithSetStatus();
+		await registered[0]?.options.handler("hello", ctx);
+
+		// Initial status was set...
+		expect(statusCalls[0]).toEqual(["emmy.ask_claude", "Asking Claude…"]);
+		// ...AND the finally cleanup ran on the error path.
+		expect(statusCalls[statusCalls.length - 1]).toEqual([
+			"emmy.ask_claude",
+			undefined,
+		]);
+	});
+
+	test("graceful degrade when ctx.ui.setStatus is missing (legacy host)", async () => {
+		const { registerAskClaudeCommand } = await import("../src/slash-commands");
+		const { pi, registered } = makeFakePi();
+		registerAskClaudeCommand(pi, {
+			callAskClaude: async () => ({
+				response: "ok",
+				duration_ms: 50,
+				rate_limit_remaining_hour: 29,
+			}),
+		});
+		const { ctx, notifyCalls } = makeAskClaudeCtx(); // no setStatus on this ctx
+		// Must not throw even though the handler tries to use setStatus.
+		await registered[0]?.options.handler("hello", ctx);
+		expect(notifyCalls.length).toBe(1);
+		expect(notifyCalls[0]?.[0]).toBe("info");
+		expect(notifyCalls[0]?.[1]).toContain("Claude");
+	});
+
+	test("setStatus is NOT called for empty-prompt rejection (early return before progress wiring)", async () => {
+		const { registerAskClaudeCommand } = await import("../src/slash-commands");
+		const { pi, registered } = makeFakePi();
+		registerAskClaudeCommand(pi, {
+			callAskClaude: async () => {
+				throw new Error("should not be called for empty prompt");
+			},
+		});
+		const { ctx, statusCalls, notifyCalls } = makeAskClaudeCtxWithSetStatus();
+		await registered[0]?.options.handler("   ", ctx); // whitespace-only
+
+		// Empty-prompt path returns BEFORE the progress wiring is set up.
+		expect(statusCalls.length).toBe(0);
+		// The error notify still fires.
+		expect(notifyCalls[0]?.[0]).toBe("error");
+	});
+});
