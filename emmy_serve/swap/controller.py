@@ -1166,8 +1166,17 @@ async def post_ask_claude(req: AskClaudeRequest) -> AskClaudeResponse:
     t0 = time.monotonic()
     proc = None
     try:
+        # claude --print with WebSearch needs BOTH --tools (registers the tool)
+        # AND --allowedTools (grants permission). Validated empirically on
+        # claude CLI v2.1.126 (2026-05-01): with only --allowedTools, the
+        # model knows about WebSearch but can't fire it — it offers to search
+        # but the call fails. With both, the search actually runs and the
+        # response includes citations.
         proc = await asyncio.create_subprocess_exec(
-            "claude", "--print", "--allowedTools", _ASK_CLAUDE_ALLOWED_TOOLS, "-",
+            "claude", "--print",
+            "--tools", _ASK_CLAUDE_ALLOWED_TOOLS,
+            "--allowedTools", _ASK_CLAUDE_ALLOWED_TOOLS,
+            "-",
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,

@@ -345,12 +345,18 @@ def test_endpoint_invokes_claude_argv_stdin(
     assert "rate_limit_remaining_hour" in body
 
     # D-09 invariant: argv is the locked sequence; prompt is data only.
-    # 04.6-04 followup B extended the locked sequence with --allowedTools
-    # WebSearch so Claude can answer time-sensitive questions instead of
-    # caveating against its training cutoff. Stdin still carries the prompt.
+    # 04.6-04 followup B extended the locked sequence with WebSearch tool
+    # registration + permission. Empirically (claude CLI v2.1.126), only
+    # `--allowedTools` is insufficient — the model knows about WebSearch
+    # but can't fire it. `--tools` is required to register, then
+    # `--allowedTools` grants permission to actually invoke. Stdin still
+    # carries the prompt.
     assert mock_claude.call_count == 1
     assert mock_claude.last_argv == [
-        "claude", "--print", "--allowedTools", "WebSearch", "-",
+        "claude", "--print",
+        "--tools", "WebSearch",
+        "--allowedTools", "WebSearch",
+        "-",
     ], mock_claude.last_argv
     assert mock_claude.last_stdin == "what is 2+2"
 
