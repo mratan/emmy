@@ -319,6 +319,40 @@ Plans:
 - [ ] 04.5-06-sidecar-jsonl-PLAN.md — Per-child JSONL via `SessionManager.create(cwd, subagentDir)`; sidecar `session-<id>.subagents.jsonl` linked by `parent_span_id` for forensics + reproducibility (Wave 2)
 - [ ] 04.5-07-real-deal-e2e-PLAN.md — V8 real-deal Qwen 3.6 35B-A3B v3.1 E2E + docs/runbook.md sub-agent section + verification (Wave 3)
 
+### Phase 04.7: Mistral Medium 3.5 128B alternate (eval-only, GGUF Q4_K_M) (INSERTED)
+
+**Goal:** Add a 128B-class dense alternate profile to the Spark stack so Phase 5 eval includes a heavyweight quality data point alongside the existing 4B-active and 27-31B-dense participants. Profile is opt-in via `/profile mistral-medium-3.5`, NOT a daily-driver candidate, NOT a routes.yaml participant. Source: bartowski Q4_K_M GGUF (73 GB on disk); engine: vLLM nightly with `--quantization gguf` (experimental backend); 128K context (half of 256K native, leaves Spark headroom); gmu=0.78 (structurally required to fit weights+KV); kv_cache_dtype=fp8; max_num_seqs=1; tool_call_parser=mistral. Throughput estimate ~3 tok/s decode (bandwidth-bound 73 GB on GB10 LPDDR5X) — gate is **bootability + first chat completion + tool call**, NOT throughput, NOT thermal, NOT KV-bisect.
+
+**Requirements:** None (insert-phase scoped; acceptance gates locked in 04.7-CONTEXT.md § Acceptance Gates)
+
+**Depends on:** Phase 4 (D-23 atomic profile-swap path); Phase 04.2 (sidecar `/start`/`/profile`); Phase 04.6 boot-probe followup (sidecar adopts external vLLM into state=ready after restart)
+
+**Source artifacts (locked context):**
+- `.planning/phases/04.7-mistral-medium-3-5-128b-alternate/04.7-CONTEXT.md` — locked decisions D-01..D-13, threats T-01..T-06, in-scope/deferred, acceptance gates
+- HF: `bartowski/mistralai_Mistral-Medium-3.5-128B-GGUF` Q4_K_M variant (multi-part)
+- HF: `RecViking/Mistral-Medium-3.5-128B-NVFP4` config.json (architecture reference; quant rejected per D-01)
+- 2026-05-01 operator+claude session transcript — full architectural deliberation, including operator's three-point pushback (skip KV-bisect, skip thermal, full 128K context)
+
+**Success Criteria** (closeout when ALL pass):
+  1. **Bootable** — `bash scripts/start_emmy.sh --profile profiles/mistral-medium-3.5/v1` returns `emmy-serve ready`, vLLM `/v1/models` reports `mistral-medium-3.5`.
+  2. **First chat completion green** — `pi-emmy --print "Reply with: SP_OK_TEST_PASS"` returns the canary token at 128K context (Pitfall #6 system-prompt delivery validated).
+  3. **Tool-call probe green** — Mistral-format structured tool call parsed correctly into the OpenAI tool-call shape (mid-stream canary fix discipline from Phase 4.1).
+  4. **`/profile` swap green** — atomic 4-phase swap from daily-driver Gemma → Mistral and back works end-to-end via Phase 4 D-23.
+  5. **Profile validate green** — bundle hash captured in PROFILE_NOTES.md.
+  6. **Documentation in tree** — CLAUDE.md, README.md, eval/MATRIX.md, runbook all updated and committed.
+
+**Skipped gates (operator-approved per D-05/D-06):**
+  - Formal KV-bisection — substituted by single boot smoke + 0.05 step-down protocol if OOM
+  - 2× 2h thermal replay — 8h prior data on this Spark shows zero throttle; lighter-load profile than existing denses
+  - Throughput floors — eval-only, throughput informational only
+
+**Plans:** 3 plans (sequential by nature; no waves)
+
+Plans:
+- [ ] 04.7-01-profile-bundle-PLAN.md — `profiles/mistral-medium-3.5/v1/` authorship: serving.yaml, harness.yaml, prompts/, profile.yaml hash, PROFILE_NOTES.md (Wave 1)
+- [ ] 04.7-02-boot-smoke-PLAN.md — Container pull (`vllm/vllm-openai:nightly-arm64-cu130`) + digest pin; model download + concatenate; first /v1/models response; first chat completion at 128K; tool-call probe; /profile swap end-to-end; gmu step-down if OOM (Wave 2)
+- [ ] 04.7-03-docs-PLAN.md — CLAUDE.md Pinned Tech Stack row + Pitfall #4 thermal-status update; README.md profile ladder; eval/MATRIX.md Phase 5 dense-128B participant; docs/runbook.md "Swapping profiles" section (Wave 3)
+
 ### Phase 5: Eval Harness + Reproducible Benchmark Suite
 
 **Goal**: A reproducible benchmark suite that imports the Phase 2 harness as a library and drives `session.run(task)` through the public SDK — never bypassing — produces JSON + markdown reports. Suite includes terminal-bench 2.0 (primary), the prior repo's Phase 1 prompts (continuity baseline), SWE-bench Verified (milestone scoreboard), and LiveCodeBench (rolling contamination-resistant). Every result embeds full provenance; ≥3 samples report mean ± std; executable correctness is paired with LLM-as-judge from a different model family. This is where the research-artifact bar is reached.
