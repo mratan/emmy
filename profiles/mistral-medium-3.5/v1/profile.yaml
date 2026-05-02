@@ -9,7 +9,7 @@ profile:
     \ an ask_claude target. Boot-only validation per CONTEXT D-05/D-06 (no KV-bisection,\
     \ no thermal replay)."
   created: '2026-05-01'
-  hash: sha256:3fea7f765a589c024d444a2ea7e2d838cbbd8a2e2ad46965441c8d4229d3e889
+  hash: sha256:5f3d25443a7ff9d414f37c23215712c8cd1b6f25a5e3d4025d9daf9a38a1b1ff
   hash_algorithm: sha256
   hash_manifest_version: 1
   tags:
