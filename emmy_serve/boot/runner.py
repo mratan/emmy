@@ -119,6 +119,14 @@ def render_vllm_cli_args(profile_path: Path) -> list[str]:
     # profiles where the field is unset.
     if e.hf_config_path:
         cli += ["--hf-config-path", e.hf_config_path]
+    # Phase 04.7-02 follow-up Decision Option 5 — explicit dtype override.
+    # Required for Mistral 3.x GGUF profiles whose source config.json declares
+    # bfloat16 (vLLM GGUF backend rejects bf16 — see schema docstring for
+    # the precise error class). Conditional emission preserves byte-identical
+    # render for pre-04.7-02-followup profiles where the field is unset
+    # (vLLM continues to auto-detect from config).
+    if e.dtype is not None:
+        cli += ["--dtype", e.dtype]
     return cli
 
 
@@ -145,6 +153,17 @@ def render_docker_only_args(
         "-v",
         f"{hf_cache_mount}:/hf-cache:ro",
     ]
+    # Phase 04.7-02 follow-up (Decision Option 5 — sitecustomize hot-patch).
+    # When set, mount the profile-bundle's airgap_patches dir into the
+    # container and arrange for sitecustomize.py to be auto-imported on
+    # Python startup (BEFORE vllm imports transformers). The path in
+    # serving.yaml is bundle-relative; we resolve it via profile_path
+    # (which IS the bundle dir) so the host-side bind source is absolute.
+    # Container-internal path is fixed at /airgap_patches (referenced by
+    # the docs in profiles/<bundle>/airgap_patches/README.md).
+    if engine.airgap_patch_dir is not None:
+        host_patch_dir = (profile_path / engine.airgap_patch_dir).resolve()
+        args += ["-v", f"{host_patch_dir}:/airgap_patches:ro"]
     # Phase 4 v2 — optional per-profile entrypoint override. Used by upstream
     # vllm-openai images where the ENTRYPOINT is baked to `[vllm serve]` and
     # concatenates with our `vllm serve <flags>` CMD. Empty string clears it.
@@ -186,6 +205,21 @@ def render_docker_only_args(
         "-e",
         "HF_HOME=/hf-cache",
     ]
+    # Phase 04.7-02 follow-up (Decision Option 5 — sitecustomize hot-patch).
+    # When the profile bundle ships an airgap_patches dir, prepend it to
+    # PYTHONPATH so Python's site machinery imports /airgap_patches/
+    # sitecustomize.py at process start (BEFORE vllm imports transformers).
+    # Per-patch opt-in env vars are wired here too, so other Python
+    # processes that happen to land on this PYTHONPATH (e.g. interactive
+    # debug shells) do NOT trigger the patches by accident — the patch
+    # gate is a deliberate operator gesture via this profile bundle.
+    if engine.airgap_patch_dir is not None:
+        args += [
+            "-e",
+            "PYTHONPATH=/airgap_patches",
+            "-e",
+            "EMMY_AIRGAP_PATCH_MISTRAL3=on",
+        ]
     return args
 
 

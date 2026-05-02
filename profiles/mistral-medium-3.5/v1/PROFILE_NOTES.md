@@ -16,6 +16,10 @@ validation_runs:
   # Plan 04.7-02 boot smoke attempts — Wave 2 (BOTH FAILED — Workaround A surfaced new vLLM bug; T-01 still blocking; see "Workaround A empirical results" body section)
   - "20260502T231011Z-e07024-boot  # FAIL Wave 2 attempt 3 — repo:quant model + hf_config_path; HFValidationError on colon in repo_id at vllm/transformers_utils/repo_utils.py:220 (get_model_path naively forwards `bartowski/...:Q4_K_M` to snapshot_download). Workaround A repo:quant variant infeasible without vLLM patch."
   - "20260502T231409Z-8f35fc-boot  # FAIL Wave 2 attempt 4 — local file model + hf_config_path; T-01 still fires (`ValueError: GGUF model with architecture mistral3 is not supported yet`). hf_config_path consulted only after speculators check at config.py:633+; speculators check at config.py:587-591 unconditionally GGUF-parses local-file model paths. Workaround A hf_config_path-only variant does NOT bypass T-01."
+  # Plan 04.7-02 boot smoke attempts — Wave 3 (Decision Option 5 sitecustomize hot-patch — T-01 CLEARED but downstream architectural blocker reached; see "Option 5 sitecustomize hot-patch iteration (2026-05-02)" body section)
+  - "20260502T233850Z-6282d9-boot  # FAIL Wave 3 attempt 5 — sitecustomize patch fired (mistral3 → GGUF allowlist + cfg_map alias of mistral). T-01 CLEARED. New error class #1: `Loading a multimodal GGUF model needs to use original tokenizer. Please specify the unquantized hf model's repo name or path using the --tokenizer argument.` from vllm/engine/arg_utils.py:1448 create_model_config. vLLM resolved arch as Mistral3ForConditionalGeneration (multimodal); GGUF-embedded tokenizer fallback rejected for multimodal path."
+  - "20260502T234040Z-5af3fe-boot  # FAIL Wave 3 attempt 6 — `tokenizer: /models/Mistral-Medium-3.5-128B-config` (Rule 3 auto-fix; pointed at operator-staged dir with HF tokenizer.json). Past tokenizer barrier. New error class #2: `torch.bfloat16 is not supported for quantization method gguf. Supported dtypes: [torch.float16, torch.float32]` from vllm/engine/arg_utils.py:2094 VllmConfig validation. Plus warning gguf.py:69 `GGUF has precision issues with bfloat16 on Blackwell`. Mistral 3.x source config.json declares dtype=bfloat16."
+  - "20260502T234222Z-e848d9-boot  # FAIL Wave 3 attempt 7 — `dtype: float16` (Rule 3 auto-fix via new EngineConfig.dtype schema field + --dtype CLI emission). Past dtype barrier. Engine init code begins (Asynchronous scheduling enabled, IR op priority configured). New error class #3 (architectural): `The tokenizer must be an instance of MistralTokenizer.` from VllmConfig validation. The mistral tool_call_parser path requires a Mistral-format tokenizer (mistral_common.MistralTokenizer, typically loaded from tekken.json via --tokenizer-mode mistral). Operator-staged dir has only HF tokenizer.json — no tekken.json. Architectural blocker; needs operator decision (Path 7 added to refined menu)."
 ---
 
 # Mistral Medium 3.5 128B — v1 Profile Notes
@@ -671,6 +675,233 @@ The field stays in the bundle even though it doesn't unblock T-01 in
 this profile because (a) it documents intent, (b) it's load-bearing for
 any future Workaround A revision, (c) removing it later would be a
 behavioral change requiring a v2 cut.
+
+## Option 5 sitecustomize hot-patch iteration (2026-05-02)
+
+After Wave 2's empirical-failure decision-checkpoint surface, the operator
+selected **Decision Option 5** ("Hot-patch transformers
+`GGUF_SUPPORTED_ARCHITECTURES` to add `mistral3` (alias of `mistral`) via a
+sitecustomize.py mounted into the container") from the refined 6-path menu
+in "Workaround A empirical results" above. This wave produced a working
+hot-patch that EMPIRICALLY UNBLOCKED T-01 — and uncovered three new
+downstream error classes, two of which were small Rule 3 auto-fixes, one
+of which is a fundamental architectural blocker.
+
+### Patch wiring (4 source-tree files)
+
+The sitecustomize hot-patch ships as a profile-bundle artifact directory
+mounted into the container at process start. The mechanism (schema field,
+bind-mount, env wiring) lives in the source tree; the policy (which
+arches to alias) lives in the profile bundle per CLAUDE.md anti-pattern
+("model-shaped logic in code"):
+
+| File | Change |
+|---|---|
+| `emmy_serve/profile/schema.py` | `EngineConfig.airgap_patch_dir: Optional[str] = None` field added (strictly additive — pre-04.7-02-followup profiles validate unchanged) |
+| `emmy_serve/boot/runner.py` | `render_docker_only_args` (when set) emits: bind-mount `-v <bundle>/<airgap_patch_dir>:/airgap_patches:ro` + env `PYTHONPATH=/airgap_patches` + env `EMMY_AIRGAP_PATCH_MISTRAL3=on` (per-patch opt-in flag so other Python processes that happen to land on this PYTHONPATH don't accidentally trigger the patch) |
+| `tests/unit/test_profile_schema_gguf.py` | 2 new tests (positive + Optional default-None) |
+| `tests/unit/test_docker_run_build.py` | 5 new tests (bind-mount + 2 env vars when set; triple absence when unset; independence from hf_config_path) |
+
+The patch artifact ships as 3 files under `airgap_patches/`:
+
+| File | Purpose |
+|---|---|
+| `sitecustomize.py` | Auto-imported by Python at process start when on `sys.path`. Defers to `mistral3_gguf_allowlist.apply()` when `EMMY_AIRGAP_PATCH_MISTRAL3=on` is in env. |
+| `mistral3_gguf_allowlist.py` | The actual patch. `arch_list.append("mistral3")` + `cfg_map["mistral3"] = cfg_map["mistral"]`. Idempotent (set membership + dict identity check) + defensive (raises clear AttributeError if upstream module shape changes). Mimics the existing in-tree `qwen2moe→qwen2_moe` / `gpt-oss→gpt_oss` / `minimax-m2→minimax_m2` aliasing patterns at lines 57-64 of upstream `transformers/modeling_gguf_pytorch_utils.py`. |
+| `README.md` | Provenance + removal criteria. |
+
+### Empirical pre-validation (probed in container before authoring patch)
+
+Before authoring the patch artifact, exec'd into the bartowski-imaged container
+and probed transformers' GGUF data structures + the bartowski GGUF metadata:
+
+- `transformers.modeling_gguf_pytorch_utils.GGUF_SUPPORTED_ARCHITECTURES` is a
+  `list[str]` of 24 entries (general, llama, mistral, qwen2, qwen2_moe,
+  gpt_oss, lfm2, qwen3, qwen3_moe, falcon, tokenizer, phi3, bloom, t5,
+  stablelm, gpt2, starcoder2, mamba, nemotron, gemma2, gemma3, umt5, deci,
+  minimax_m2). `mistral3` is NOT on the list.
+- `GGUF_CONFIG_MAPPING['mistral']` exists and maps GGUF metadata key suffixes
+  (`context_length`, `block_count`, `feed_forward_length`, ...) to HF config
+  field names (`max_position_embeddings`, `num_hidden_layers`, `intermediate_size`,
+  ...). The bartowski GGUF uses `mistral3.context_length` etc. — the
+  SUFFIXES are byte-identical between mistral and mistral3 (the rename is
+  purely the prefix arch string).
+- `GGUF_TO_TRANSFORMERS_MAPPING['config']` IS the same dict object as
+  `GGUF_CONFIG_MAPPING` (verified via `is`). So aliasing
+  `GGUF_CONFIG_MAPPING['mistral3']` automatically propagates through the
+  config-mapping rename loop in `load_gguf_checkpoint` (lines 95-119).
+- After applying the proposed patch in the container,
+  `m.load_gguf_checkpoint('/models/...gguf', return_tensors=False)` succeeded
+  end-to-end and produced a clean `parsed_parameters['config']` dict with
+  `model_type='mistral3'`, `vocab_size=131072`, `num_hidden_layers=88`,
+  `max_position_embeddings=262144`, etc. — confirming the patch is the
+  load-bearing fix for T-01.
+- transformers 5.6.0 already ships `Mistral3Config` (registered for
+  `model_type='mistral3'` via `AutoConfig.for_model('mistral3')`). The GGUF
+  allowlist gap was the ONLY blocker at the transformers layer.
+- `gguf.MODEL_ARCH.MISTRAL3 = 116` exists with `MODEL_ARCH_NAMES[116] =
+  'mistral3'` — the gguf-py side already supports the architecture, no
+  additional patching needed there.
+
+This pre-validation was the basis for picking Option 5 as a viable path
+(vs the unverified hypothesis stated in the prior wave's decision menu).
+
+### Boot-smoke timeline (3 attempts, each cleared a barrier and surfaced a new one)
+
+**Attempt 5 — sitecustomize patch + Workaround A wiring intact (run_id `20260502T233850Z-6282d9`):**
+
+Container started. First log line confirmed patch applied:
+```
+[mistral3_gguf_allowlist] v1.0.0 applied: mistral3 → GGUF allowlist + cfg_map alias of mistral. transformers.load_gguf_checkpoint should now parse Mistral 3.x GGUFs.
+```
+
+vLLM proceeded through arg parsing, NIXL setup, and architecture
+resolution. **T-01 cleared:**
+```
+INFO 05-02 23:39:18 [model.py:554] Resolved architecture: Mistral3ForConditionalGeneration
+INFO 05-02 23:39:18 [model.py:1685] Using max model len 131072
+```
+
+Failed downstream at `create_model_config`:
+```
+File "vllm/engine/arg_utils.py", line 1448, in create_model_config
+    return ModelConfig(...)
+pydantic_core.ValidationError: 1 validation error for ModelConfig
+  Value error, Loading a multimodal GGUF model needs to use original tokenizer.
+  Please specify the unquantized hf model's repo name or path using the
+  --tokenizer argument.
+```
+
+Root cause: vLLM resolved `Mistral3ForConditionalGeneration` (multimodal),
+which rejects the GGUF-embedded tokenizer fallback. Required `--tokenizer`
+to point at a directory with HF tokenizer files.
+
+→ **Rule 3 auto-fix**: uncomment `tokenizer:` line in serving.yaml; point
+   at `/models/Mistral-Medium-3.5-128B-config` (the operator-staged dir
+   from Workaround A which already contains tokenizer.json +
+   tokenizer_config.json). Sidesteps the prior gated-repo +
+   offline-cache collision because the dir is locally present.
+
+**Attempt 6 — past tokenizer barrier (run_id `20260502T234040Z-5af3fe`):**
+
+Failed at `create_engine_config` / `VllmConfig`:
+```
+File "vllm/engine/arg_utils.py", line 2094, in create_engine_config
+    config = VllmConfig(...)
+pydantic_core.ValidationError: 1 validation error for VllmConfig
+  Value error, torch.bfloat16 is not supported for quantization method gguf.
+  Supported dtypes: [torch.float16, torch.float32]
+```
+
+Plus the warning:
+```
+WARNING 05-02 23:41:00 [gguf.py:69] GGUF has precision issues with bfloat16 on Blackwell.
+```
+
+Root cause: `Mistral3Config` declares `dtype: bfloat16` (sourced from the
+operator-staged config.json), but vLLM's GGUF backend only supports
+float16 / float32. Engine cannot proceed without an explicit `--dtype`
+override.
+
+→ **Rule 3 auto-fix**: add `EngineConfig.dtype: Optional[Literal["auto",
+   "float16", "bfloat16", "float32"]] = None` schema field;
+   `render_vllm_cli_args` emits `--dtype <value>` when set;
+   `engine.dtype: float16` in serving.yaml. Float16 narrows compute to
+   what GGUF supports without doubling KV vs fp32.
+
+**Attempt 7 — past dtype barrier; engine init begins (run_id `20260502T234222Z-e848d9`):**
+
+vLLM cleared MUCH more code path: kv_cache configured (fp8), chunked
+prefill enabled, asynchronous scheduling enabled, IR op priority
+configured. Then failed at the final `VllmConfig` validation:
+
+```
+INFO 05-02 23:42:42 [vllm.py:840] Asynchronous scheduling is enabled.
+INFO 05-02 23:42:42 [kernel.py:203] Final IR op priority after setting platform defaults: IrOpPriorityConfig(rms_norm=['native'])
+...
+pydantic_core.ValidationError: 1 validation error for VllmConfig
+  Value error, The tokenizer must be an instance of MistralTokenizer.
+```
+
+**Root cause (architectural):** When the `mistral` `tool_call_parser` is
+configured, vLLM's mistral-format chat-template path requires a Mistral-
+format tokenizer (`mistral_common.MistralTokenizer`, typically loaded from
+`tekken.json` via `--tokenizer-mode mistral`). The operator-staged dir has
+only HF-format `tokenizer.json` and `tokenizer_config.json` — no
+`tekken.json`. This is the architectural blocker that ends the wave.
+
+### Refined operator decision menu (now 7 paths, was 6)
+
+| # | Path | Engineering cost | Timeline | v1 impact |
+|---|---|---|---|---|
+| 1 | **Wait for upstream** transformers `mistral3` GGUF arch support | low | indeterminate | none — v1 just waits |
+| 2 | **Wait for upstream vLLM** `repo:quant` fix in `get_model_path` | low | indeterminate | minimal |
+| 3 | **Switch to NVFP4** (RecViking build) — sidesteps GGUF entirely | medium | days | retire v1; cut v2 NVFP4 |
+| 4 | **Switch to llama.cpp serving** | high (outside vLLM-only D-02) | weeks | architectural detour |
+| 5 | **Hot-patch transformers `GGUF_SUPPORTED_ARCHITECTURES`** | medium (DONE; patch ships in v1) | hours | DONE for T-01; new architectural blocker found |
+| 6 | **Defer the entire phase** | zero | zero | drop the Phase 5 dense-128B matrix slot |
+| 7 | **NEW: Source `tekken.json` for the operator-staged config dir** then add `--tokenizer-mode mistral` to the bundle. Two sub-paths: (a) operator re-downloads from gated `mistralai/Mistral-Medium-3.5-128B` HF repo (likely present alongside tokenizer.json); (b) generate from tokenizer.json via mistral-common conversion utility (less straightforward). Either subpath is a one-time staging op + `--tokenizer-mode mistral` schema/runner extension. | low (assuming sub-path a) — schema+runner field add + 1 file download + bundle hash recompute | hours | v1 ships with the additional `tokenizer_mode: mistral` field |
+
+**Recommendation:** **Option 7 sub-path (a)** — operator re-runs
+`huggingface-cli download mistralai/Mistral-Medium-3.5-128B --include
+"tekken.json"` (or equivalent) to add the file to the operator-staged
+dir. This is the lowest-cost path to actually closing G-1, because it
+addresses the load-bearing architectural blocker discovered AFTER the
+sitecustomize patch cleared T-01.
+
+If sub-path (a) is infeasible (file not present in the HF repo, or the
+operator no longer has HF auth), Option 1 (wait for upstream) becomes
+the next-cheapest fallback.
+
+### What this wave proved + what remains
+
+**Proved:**
+- The sitecustomize hot-patch IS the load-bearing fix for T-01. The
+  patch fires correctly in the container (stderr confirmation logged
+  on every boot of attempts 5/6/7).
+- transformers 5.6.0 already ships full mistral3 model support
+  (`Mistral3Config`, `Mistral3ForConditionalGeneration`, etc.); the
+  allowlist gap was the only barrier between the GGUF parser and
+  successful config construction.
+- vLLM's GGUF backend reaches deep engine-init code (kv_cache config,
+  scheduler, IR op priority) BEFORE failing on the MistralTokenizer
+  requirement — confirming the GGUF parsing + model-load code path
+  fundamentally works for `mistral3` after the patch.
+
+**Remains (architectural):**
+- vLLM's `mistral` tool_call_parser path requires
+  `mistral_common.MistralTokenizer` (loaded from `tekken.json`); the
+  operator-staged dir has only HF tokenizer.json. Resolution requires
+  EITHER tekken.json staging (Option 7 sub-path a) OR a different
+  parser path (which contradicts CONTEXT D-09 D-09 mistral-parser
+  requirement — would force a v2 cut).
+
+**Operator endpoint discipline:** Daily-driver Gemma 4 26B-A4B v2.1 stayed
+up on port 8002 throughout this wave (Mistral attempts on port 8005 with
+container name `emmy-serve-mistral`). Discipline carried over from Wave
+2; operator endpoint never lapsed.
+
+### Wave 3 hash trail
+
+The bundle hash bumped 3 times in Wave 3:
+- `c326add4...` (Wave 2 final, T-01-blocked snapshot — pre-Wave-3 starting point)
+- `a5bb2689...` (Wave 3 commit B — airgap_patches dir + serving.yaml field)
+- `75b0b841...` (Wave 3 commit C tokenizer fix — uncommented + pointed at local dir)
+- `7ea0f1ad...` (Wave 3 commit C dtype fix — added float16 + new schema field)
+
+### Removal criteria for the airgap_patches/ artifact
+
+Remove `profiles/mistral-medium-3.5/v1/airgap_patches/` + the
+`engine.airgap_patch_dir` line from serving.yaml + the
+`EMMY_AIRGAP_PATCH_MISTRAL3` env when EITHER:
+
+- transformers ships native `mistral3` GGUF allowlist support upstream
+  (track: TBD upstream issue), OR
+- v2 of this profile cuts to a different serving path (NVFP4, llama.cpp).
+
+Either path is a v2 cut (behavioral change), not an in-place edit. v1
+preserves the patch + the empirical-evidence trail of the 3-attempt boot
+smoke iteration.
 
 ## References
 

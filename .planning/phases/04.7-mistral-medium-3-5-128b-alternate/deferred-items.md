@@ -129,3 +129,94 @@ field check."
   This would make `hf_config_path` a complete bypass for local-file GGUF
   model paths whose architecture isn't in transformers'
   `GGUF_SUPPORTED_ARCHITECTURES`.
+
+## 2026-05-02 (Wave 3 / Option 5 sitecustomize) — vLLM `mistral` parser path requires `MistralTokenizer` (not HF tokenizer)
+
+**Discovered during:** Plan 04.7-02 Wave 3 boot-smoke attempt 7
+(run_id `20260502T234222Z-e848d9`).
+
+**Symptom:** After the sitecustomize hot-patch cleared T-01 AND the
+tokenizer/dtype Rule 3 auto-fixes cleared two more downstream errors,
+vLLM proceeded into deep engine-init code (kv_cache configured,
+asynchronous scheduling enabled, IR op priority configured) and then
+failed at the FINAL VllmConfig validation:
+
+```
+pydantic_core.ValidationError: 1 validation error for VllmConfig
+  Value error, The tokenizer must be an instance of MistralTokenizer.
+```
+
+**Why this is a real architectural requirement:** vLLM's `mistral`
+tool_call_parser (CONTEXT D-09 LOCKED) routes through a chat-template
+implementation that requires `mistral_common.MistralTokenizer` — the
+Mistral-format tokenizer typically loaded from `tekken.json` via
+`--tokenizer-mode mistral`. The operator-staged dir at
+`/data/models/Mistral-Medium-3.5-128B-config/` (set up during Wave 2 for
+Workaround A) contains only HF-format `tokenizer.json` +
+`tokenizer_config.json`. No `tekken.json`. No `params.json` that
+mistral-common could consume.
+
+**Why out of scope for Plan 04.7-02 Wave 3:**
+- Auto-fix would require:
+  1. Operator re-staging — `huggingface-cli download
+     mistralai/Mistral-Medium-3.5-128B --include "tekken.json"` (or
+     equivalent) to add the file to the operator-staged dir, AND
+  2. Schema extension — `EngineConfig.tokenizer_mode:
+     Optional[Literal["auto", "mistral", ...]] = None`, AND
+  3. Runner extension — emit `--tokenizer-mode <value>` when set, AND
+  4. Profile bundle update — add `tokenizer_mode: mistral`
+- Each step is small but the FIRST step is operator-staging territory
+  (needs HF auth + gated-repo T&C acceptance + verification that the
+  file exists in the gated repo), so it's not unilateral executor work.
+- Even after auto-fix, the loaded model is still
+  `Mistral3ForConditionalGeneration` (multimodal); the bartowski GGUF
+  is text-only (795 tensors, no vision_tower); a fourth error class
+  around missing vision_tower weights MAY surface next. Pre-validation
+  would need another container exec.
+
+**Suggested fix:** documented as "Decision Option 7" (NEW) in the
+refined 7-path operator decision menu — see SUMMARY.md "Option 5
+sitecustomize hot-patch iteration (2026-05-02)" + PROFILE_NOTES.md
+"Option 5 sitecustomize hot-patch iteration (2026-05-02)" §"Refined
+operator decision menu (now 7 paths, was 6)".
+
+## 2026-05-02 (Wave 3 / Option 5 sitecustomize) — vLLM GGUF backend rejects bfloat16 (now auto-fixed; tracking for upstream awareness)
+
+**Discovered during:** Plan 04.7-02 Wave 3 boot-smoke attempt 6
+(run_id `20260502T234040Z-5af3fe`). **Status: AUTO-FIXED in commit
+`35aee85` via new `EngineConfig.dtype` schema field + `--dtype float16`
+in profile bundle.** Tracking here as deferred upstream-awareness item.
+
+**Symptom:**
+```
+pydantic_core.ValidationError: 1 validation error for VllmConfig
+  Value error, torch.bfloat16 is not supported for quantization method gguf.
+  Supported dtypes: [torch.float16, torch.float32]
+```
+
+Plus warning at `vllm/model_executor/layers/quantization/gguf.py:69`:
+```
+GGUF has precision issues with bfloat16 on Blackwell.
+```
+
+**Root cause:** Mistral 3.x's source `config.json` declares `"dtype":
+"bfloat16"`. vLLM auto-detects this from the config and propagates to
+VllmConfig validation. The GGUF backend's allowlist of supported
+dtypes is `{torch.float16, torch.float32}` only — bfloat16 is rejected
+hard.
+
+**Auto-fix applied (Plan 04.7-02 commit 35aee85):**
+- Added `EngineConfig.dtype: Optional[Literal["auto", "float16",
+  "bfloat16", "float32"]] = None` schema field (strictly additive).
+- `render_vllm_cli_args` emits `--dtype <value>` when set.
+- `engine.dtype: float16` in `profiles/mistral-medium-3.5/v1/serving.yaml`.
+
+**Why still listed here:** this is upstream awareness — vLLM's GGUF
+backend's bf16 rejection is a known kernel limitation; the upstream
+warning at gguf.py:69 ("GGUF has precision issues with bfloat16 on
+Blackwell") suggests this is a Blackwell-specific GPU constraint, not
+an arbitrary check. If a future vLLM release fixes the Blackwell GGUF
+bf16 path, the `dtype: float16` override could be dropped and the
+profile would auto-detect bf16 from config (matching the "stand on
+shoulders" principle from CLAUDE.md). Track via the gguf.py:69 warning
+location.

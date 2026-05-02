@@ -164,3 +164,57 @@ def test_engine_hf_config_path_optional_default_none():
     kwargs.pop("hf_config_path", None)
     ec = schema.EngineConfig(**kwargs)
     assert ec.hf_config_path is None
+
+
+# -----------------------------------------------------------------------------
+# Test 5 — 04.7-02 follow-up (Decision Option 5): airgap_patch_dir field
+# -----------------------------------------------------------------------------
+
+
+def test_engine_accepts_airgap_patch_dir():
+    """04.7-02 Decision Option 5: ``airgap_patch_dir`` field accepts a relative
+    bundle-internal path string.
+
+    When set, the boot runner mounts ``<bundle>/<airgap_patch_dir>`` into the
+    container at ``/airgap_patches`` and prepends that path to PYTHONPATH so
+    Python's site machinery imports ``sitecustomize.py`` from the dir at
+    process start (BEFORE vllm imports transformers). Used to monkey-patch
+    transformers' GGUF allowlist for ``mistral3`` per Plan 04.7-02 follow-up.
+    """
+    ec = schema.EngineConfig(
+        **_kwargs(
+            quantization="gguf",
+            tokenizer=None,
+            hf_config_path="/models/Mistral-Medium-3.5-128B-config",
+            airgap_patch_dir="airgap_patches",
+        )
+    )
+    assert ec.airgap_patch_dir == "airgap_patches"
+    # Spot-check: the field coexists cleanly with the other GGUF knobs
+    assert ec.quantization == "gguf"
+    assert ec.hf_config_path == "/models/Mistral-Medium-3.5-128B-config"
+
+
+def test_engine_airgap_patch_dir_optional_default_none():
+    """04.7-02 Decision Option 5 — backward-compat: pre-04.7-02-followup profiles
+    validate with airgap_patch_dir=None.
+
+    Mirrors the ``test_engine_hf_config_path_optional_default_none`` invariant
+    for the partner field. All 7+ shipped bundles (Gemma 4 v1/v2/v2.1, Gemma
+    31B v1/v1.1/v1.2, Qwen 27B v1/v1.1, etc.) MUST continue to validate
+    without declaring this field. (And for non-Mistral GGUF profiles the
+    sitecustomize hot-patch is irrelevant — leaving the field unset keeps
+    them unaffected.)
+    """
+    kwargs = _kwargs(
+        model="/models/gemma-4-26B-A4B-it",
+        model_hf_id="google/gemma-4-26B-A4B-it",
+        served_model_name="gemma-4-26b-a4b-it",
+        quantization="fp8",
+        load_format="fastsafetensors",
+        tool_call_parser="gemma4",
+        reasoning_parser="gemma4",
+    )
+    kwargs.pop("airgap_patch_dir", None)
+    ec = schema.EngineConfig(**kwargs)
+    assert ec.airgap_patch_dir is None
