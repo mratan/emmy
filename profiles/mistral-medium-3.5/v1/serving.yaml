@@ -36,9 +36,28 @@
 
 engine:
   # --- immutable identity ---
-  model: /models/Mistral-Medium-3.5-128B-Q4_K_M.gguf   # container-internal path; matches /data/models bind mount + basename produced by Plan 04.7-02 gguf-split --merge
+  # Plan 04.7-02 Workaround A wiring (2026-05-02 follow-up): switched from a
+  # local `/models/...gguf` path to the HF `repo:quant` form. Rationale: the
+  # local-file path triggered vLLM 0.19.2rc1.dev134's `maybe_override_with_speculators`
+  # → transformers' GGUF parser → `mistral3` not on the GGUF_SUPPORTED_ARCHITECTURES
+  # allowlist → ValueError. The `bartowski/...:Q4_K_M` form takes the `is_remote_gguf`
+  # branch (transformers/utils/config.py:587-591) which does NOT pass `gguf_file=` to
+  # `PretrainedConfig.get_config_dict` — so it reads a plain config.json from the
+  # bartowski snapshot dir instead of parsing the GGUF, sidestepping the allowlist
+  # gap. The actual GGUF weight load goes through vLLM's GGUFModelLoader which finds
+  # `mistral3` in `gguf.MODEL_ARCH_NAMES` (which IS in that map) and uses it for
+  # tensor-name mapping. `hf_config_path` (below) is the partner setting that points
+  # `get_config()` at the local Mistral3 config dir (config.json + tokenizer*),
+  # avoiding any further HF resolution at boot. The bartowski snapshot dir at
+  # /data/hf-cache/hub/models--bartowski--mistralai_Mistral-Medium-3.5-128B-GGUF/
+  # snapshots/<rev>/ is operator-staged with a config.json (copied from the local
+  # config dir) and a symlink mistralai_Mistral-Medium-3.5-128B-Q4_K_M.gguf →
+  # /models/Mistral-Medium-3.5-128B-Q4_K_M.gguf so vLLM's GGUFModelLoader can
+  # resolve the weight file via `snapshot_download(local_files_only=True)`.
+  model: bartowski/mistralai_Mistral-Medium-3.5-128B-GGUF:Q4_K_M   # repo:quant form — Workaround A bypass for transformers GGUF allowlist gap (vLLM bug #36456 family)
   model_hf_id: mistralai/Mistral-Medium-3.5-128B       # BASE model HF id (NOT bartowski's GGUF repo); vLLM extracts tokenizer+chat template from base per RESEARCH §1.1
   # tokenizer: mistralai/Mistral-Medium-3.5-128B       # 04.7-01 schema extension. Originally set to the BASE model HF id per vLLM GGUF docs recommendation. UNSET 2026-05-02 at Plan 04.7-02 Task 3 attempt 1 — the gated `mistralai/Mistral-Medium-3.5-128B` repo is not in the local HF cache and `HF_HUB_OFFLINE=1` (D-12 air-gap) blocks the runtime download, causing vLLM to crash with `LocalEntryNotFoundError`. Falling back to the GGUF-embedded tokenizer (vLLM's default when --tokenizer is unset). See PROFILE_NOTES.md "Tokenizer fallback (T-tokenizer)" for the full failure trace + the operator path to re-enable explicit-tokenizer mode in v2 (HF auth + accept gated-repo T&C → cache the tokenizer files locally → uncomment this line). The schema field stays in EngineConfig (Plan 04.7-01 Wave 0 work intact); this is a per-profile fallback, not a schema rollback.
+  hf_config_path: /models/Mistral-Medium-3.5-128B-config   # Plan 04.7-02 Workaround A — container-internal path to a directory containing the unquantized base model's config.json + tokenizer.json + tokenizer_config.json + generation_config.json, copied from /data/models/Mistral-Medium-3.5-128B-config/ (operator-staged from the gated mistralai HF repo at HF cache populate time). vLLM's get_config() reads this dir directly for the PretrainedConfig, bypassing the GGUF parser for everything except actual weight load. See PROFILE_NOTES.md "Workaround A wiring (2026-05-02)" for the full code-flow analysis + Anthropic-CLI-style operator setup notes.
   served_model_name: mistral-medium-3.5                # name vLLM exposes on /v1/models; matches `/profile mistral-medium-3.5` route per CONTEXT D-13
   container_image: vllm/vllm-openai:cu130-nightly-aarch64   # CONTEXT D-10 + RESEARCH §1.4 — Docker-Hub-confirmed nightly aarch64+CUDA13 spelling worked at first pull on 2026-05-02 (RepoDigest sha256:d5a8e53a... — see PROFILE_NOTES.md "Container nightly drift (T-02)"). CONTEXT D-10's `nightly-arm64-cu130` spelling was NOT seen on Docker Hub.
   container_image_digest: sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc  # LOCAL image Id (`docker inspect --format '{{.Id}}'`); render_image_ref uses bare-digest form for the `vllm/vllm-openai` repo per `runner.py:48-50`. Captured 2026-05-02 at Plan 04.7-02 Task 1; supersedes the schema sentinel.

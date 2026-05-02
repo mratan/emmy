@@ -460,6 +460,115 @@ rarely fires because the Mistral parser converts to OpenAI shape upstream.
   CLAUDE.md Pinned Tech Stack). Ship Mistral siblings only if Phase 5
   shows the model is worth the effort.
 
+## Workaround A wiring (2026-05-02 follow-up to T-01)
+
+After the 2026-05-02 boot-smoke failure cascade documented in "Plan 04.7-02
+boot-smoke failure timeline (T-01 fired)" above, the operator authenticated
+to HuggingFace and pre-staged the unquantized base model's config files at
+`/data/models/Mistral-Medium-3.5-128B-config/` (config.json, tokenizer.json,
+tokenizer_config.json, generation_config.json, params.json — *no weights*,
+the gated base repo's safetensors are 200+ GB and we don't need them for
+inference; vLLM's GGUFModelLoader will load weights from the bartowski GGUF).
+A second 04.7-02 wave then wired Workaround A: a different model-path shape
++ a new EngineConfig field (`hf_config_path`) + an out-of-band HF cache
+staging step.
+
+### What changed in v1's serving.yaml
+
+| Key | Before (T-01-blocked v1) | After (Workaround A v1) | Rationale |
+|---|---|---|---|
+| `engine.model` | `/models/Mistral-Medium-3.5-128B-Q4_K_M.gguf` (local file path) | `bartowski/mistralai_Mistral-Medium-3.5-128B-GGUF:Q4_K_M` (HF repo:quant form) | The local-file path triggers vLLM's `maybe_override_with_speculators` (transformers_utils/config.py:587-591) → calls `PretrainedConfig.get_config_dict("/models", gguf_file=..., local_files_only=True)` → transformers' GGUF parser → `mistral3` not in `GGUF_SUPPORTED_ARCHITECTURES` → ValueError. The repo:quant form takes the `is_remote_gguf` branch (config.py:590-591) which does NOT pass `gguf_file=` to `get_config_dict` — so it reads a plain config.json from the bartowski snapshot dir instead of parsing the GGUF, sidestepping the allowlist gap. |
+| `engine.hf_config_path` | _(field did not exist)_ | `/models/Mistral-Medium-3.5-128B-config` | Forces `get_config()` (config.py:633-700) to construct the PretrainedConfig from the operator-staged config dir directly. vLLM treats it as `config_format='hf'` (because it has a config.json) and parses normally as `Mistral3Config`. No GGUF parsing in this path. Mounted via the existing `/data/models:/models:ro` bind in runner.py:133. |
+
+The bundle hash bumped: `sha256:5f3d2544…` (T-01-blocked snapshot) →
+`sha256:cc7d8db8…` (Workaround A wiring). Recomputed via
+`uv run emmy profile hash profiles/mistral-medium-3.5/v1 --write` per the
+in-development-bundle convention used throughout 04.7-02 (4 prior in-place
+hash bumps already committed; Workaround A is the 5th).
+
+### Schema + runner extension (Plan 04.7-02 Wave 2)
+
+`EngineConfig.hf_config_path: Optional[str] = None` was added to
+`emmy_serve/profile/schema.py` (mirrors the Plan 04.7-01 tokenizer field
+pattern exactly — strictly additive; pre-04.7-02 profiles validate
+unchanged). `render_vllm_cli_args` in `emmy_serve/boot/runner.py` emits
+`--hf-config-path <value>` when set; conditional emission preserves
+byte-identical render for pre-04.7-02 profiles. Tests added to
+`tests/unit/test_profile_schema_gguf.py` (positive + Optional default-None)
+and `tests/unit/test_docker_run_build.py` (renderer positive + absence in
+two pre-existing fixtures). Committed as
+`feat(04.7-02): add hf_config_path EngineConfig field + runner CLI emission`.
+
+### Operator-staged HF cache state (out-of-band; survives across boots)
+
+These artifacts live OUTSIDE the source tree (under `/data/hf-cache/` and
+`/data/models/`); they are inputs to v1's bootability, not products of it.
+Re-staging required if `/data/hf-cache/` or `/data/models/` are wiped.
+
+```
+/data/models/Mistral-Medium-3.5-128B-config/                # operator-copied from gated mistralai HF repo
+├── config.json                                              #  → also referenced by hf_config_path (above)
+├── generation_config.json
+├── params.json                                              # Mistral-format equivalent (informational)
+├── tokenizer.json                                           # used by vLLM via GGUF-embedded fallback path
+├── tokenizer_config.json
+├── consolidated.safetensors.index.json                      # Mistral consolidated index (informational)
+└── model.safetensors.index.json                             # HF safetensors index (informational; no weights)
+
+/data/hf-cache/hub/models--bartowski--mistralai_Mistral-Medium-3.5-128B-GGUF/
+├── refs/main                                                # operator-set to bartowski commit hash
+└── snapshots/<commit-hash>/                                 # operator-staged for offline mode
+    ├── config.json                                          # copy of /data/models/.../config.json (used by maybe_override_with_speculators)
+    └── mistralai_Mistral-Medium-3.5-128B-Q4_K_M.gguf       # symlink → /models/Mistral-Medium-3.5-128B-Q4_K_M.gguf (used by GGUFModelLoader weight load)
+```
+
+The symlink target (`/models/Mistral-Medium-3.5-128B-Q4_K_M.gguf`) is the
+container-internal view. From the host the symlink dangles, but inside
+the container `/data/models` is bind-mounted to `/models` (runner.py:133),
+so the link resolves correctly to the 78.4 GB merged GGUF on the same
+filesystem (no double-storage).
+
+### Boot precondition (HF_HUB_OFFLINE=1 stays the default)
+
+CONTEXT D-12 air-gap is preserved at runtime. The operator's HF auth was a
+populate-only operation (one-time download of config files). At boot the
+container runs with `HF_HUB_OFFLINE=1` (env block enforces it), and vLLM's
+`local_files_only` reads from the operator-staged cache without any
+network access. STRICT air-gap CI (`ci_verify_phase3`) remains
+correctness-equivalent to before.
+
+### Failure modes still possible at next boot attempt
+
+Workaround A specifically unblocks the `mistral3` GGUF allowlist gap. Three
+failure classes could still surface (priority order):
+
+1. **Multimodal config mismatch.** `config.json` declares
+   `architectures: ["Mistral3ForConditionalGeneration"]` (multimodal —
+   requires vision_tower weights) but the bartowski GGUF has 795 tensors
+   all on the text side, NO vision-tower tensors. vLLM's GGUF loader
+   computes `is_multimodal=True` (because `vision_config` is in the
+   parsed PretrainedConfig) and tries to map vision tensors that don't
+   exist → likely fails at weight load with "missing tensor" error class.
+   Resolution path: stage a stripped text-only config dir
+   (`/data/models/Mistral-Medium-3.5-128B-config-text/`) that drops
+   vision_config + sets `architectures=["Ministral3ForCausalLM"]`, point
+   `hf_config_path:` at it. The text-only config dir is already prepared
+   under the same root.
+
+2. **vLLM GGUF tensor name mismatch.** vLLM's `gguf.MODEL_ARCH_NAMES`
+   contains `mistral3` (verified empirically, gguf python pkg). Tensor
+   names in the bartowski GGUF use the standard `blk.N.attn_q.weight`
+   convention. If vLLM's mistral3 tensor name map (which we have NOT
+   verified against the bartowski file) misses some tensors, the load
+   fails with "unmapped tensor" or similar.
+
+3. **Other vLLM-side surprise.** vLLM nightly is moving fast; the
+   non-allowlist-gap bugs in this code path are uncharacterized.
+
+If any of (1)-(3) surface, the next iteration would surface a checkpoint
+with the new error class evidence (NOT auto-cycle through fallbacks —
+each fallback has an operator-policy dimension).
+
 ## References
 
 - HF: [mistralai/Mistral-Medium-3.5-128B](https://huggingface.co/mistralai/Mistral-Medium-3.5-128B) (base, gated)
