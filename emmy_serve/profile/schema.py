@@ -70,6 +70,20 @@ class EngineConfig(BaseModel):
     # `model:` for config resolution. Strictly additive — every pre-04.7
     # profile validates with .hf_config_path is None and renders identically.
     hf_config_path: Optional[str] = None
+    # Phase 04.7-02 follow-up (Decision Option 5, sitecustomize hot-patch
+    # iteration, 2026-05-02). Profile-bundle-relative path to a directory of
+    # Python hot-patches mounted into the vLLM container at /airgap_patches/
+    # and prepended to PYTHONPATH so `sitecustomize.py` is auto-imported at
+    # process start (BEFORE vLLM imports transformers). Used when an upstream
+    # gap blocks boot AND the gap is small enough to bridge with a
+    # narrowly-scoped runtime monkey-patch (e.g. the `mistral3` allowlist gap
+    # in transformers 5.6.0 — see profiles/mistral-medium-3.5/v1/airgap_patches/
+    # README.md for the canonical case). Each patch is opt-in via its own env
+    # variable that the boot runner sets; the bind-mount alone does NOT enable
+    # any patch. Container-internal mount path is fixed at /airgap_patches.
+    # Strictly additive — every pre-04.7-02 profile validates with the field
+    # unset and renders identically (no new bind-mount, no new env var).
+    airgap_patch_dir: Optional[str] = None
     served_model_name: str
     container_image: str
     container_image_digest: str

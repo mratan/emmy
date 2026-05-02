@@ -377,3 +377,182 @@ def test_render_omits_hf_config_path_when_unset_in_new_flags_fixture(
     --hf-config-path. Confirms hf_config_path is independently optional.
     """
     assert "--hf-config-path" not in rendered_args_with_new_flags, rendered_args_with_new_flags
+
+
+# -----------------------------------------------------------------------------
+# Plan 04.7-02 Decision Option 5 — airgap_patch_dir bind-mount + PYTHONPATH env
+# -----------------------------------------------------------------------------
+#
+# When `engine.airgap_patch_dir: <bundle-relative-dir>` is set, the boot
+# runner MUST:
+#   1. emit `-v <bundle>/<airgap_patch_dir>:/airgap_patches:ro` (bind-mount)
+#   2. emit `-e PYTHONPATH=/airgap_patches`
+#   3. emit `-e EMMY_AIRGAP_PATCH_MISTRAL3=on` (per-patch opt-in)
+#
+# When unset, NONE of the three MUST appear (byte-additive guarantee for the
+# 7+ shipping bundles + Plan 04.7-02 v1 pre-Option-5 state).
+
+
+_VALID_SERVING_YAML_WITH_AIRGAP_PATCH_DIR = """\
+engine:
+  model: /models/Mistral-Medium-3.5-128B-Q4_K_M.gguf
+  model_hf_id: mistralai/Mistral-Medium-3.5-128B
+  served_model_name: mistral-medium-3.5
+  container_image: vllm/vllm-openai:cu130-nightly-aarch64
+  container_image_digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  hf_config_path: /models/Mistral-Medium-3.5-128B-config
+  airgap_patch_dir: airgap_patches
+  max_model_len: 131072
+  gpu_memory_utilization: 0.78
+  kv_cache_dtype: fp8
+  enable_prefix_caching: true
+  enable_chunked_prefill: true
+  max_num_batched_tokens: 8192
+  max_num_seqs: 1
+  load_format: auto
+  quantization: gguf
+  tool_call_parser: mistral
+  reasoning_parser: mistral
+  enable_auto_tool_choice: true
+  host: 0.0.0.0
+  port: 8000
+sampling_defaults:
+  temperature: 0.15
+  top_p: 0.95
+  top_k: 40
+  repetition_penalty: 1.0
+  max_tokens: 8192
+  stop: []
+speculative: null
+guided_decoding:
+  default_backend: xgrammar
+quirks:
+  strip_thinking_tags: false
+  promote_reasoning_to_content: false
+  buffer_tool_streams: false
+env:
+  VLLM_NO_USAGE_STATS: "1"
+  DO_NOT_TRACK: "1"
+  VLLM_LOAD_FORMAT: auto
+  VLLM_FLASHINFER_MOE_BACKEND: latency
+  VLLM_DISABLE_COMPILE_CACHE: "1"
+  HF_HUB_OFFLINE: "1"
+  TRANSFORMERS_OFFLINE: "1"
+"""
+
+
+@pytest.fixture
+def test_profile_path_with_airgap_patch_dir(tmp_path: Path) -> Path:
+    """Bundle dir whose serving.yaml declares airgap_patch_dir + a stub patches dir."""
+    bundle = tmp_path / "v1"
+    bundle.mkdir()
+    (bundle / "serving.yaml").write_text(
+        _VALID_SERVING_YAML_WITH_AIRGAP_PATCH_DIR, encoding="utf-8"
+    )
+    # Stub the patches dir (sitecustomize.py + patch module) so the bind-mount
+    # source resolves cleanly. Contents are not exercised by the renderer test;
+    # the runtime patch test belongs in tests/integration/.
+    patches = bundle / "airgap_patches"
+    patches.mkdir()
+    (patches / "sitecustomize.py").write_text("# stub for fixture\n", encoding="utf-8")
+    return bundle
+
+
+def test_render_emits_airgap_patch_dir_bind_mount(
+    test_profile_path_with_airgap_patch_dir: Path, tmp_runs_dir: Path
+):
+    """04.7-02 Decision Option 5: bind-mount appears with the resolved host path.
+
+    Source path is the bundle-resolved absolute path (host-side); destination
+    is fixed at /airgap_patches (container-side). :ro suffix is required —
+    the patch should never be writable from inside the container.
+    """
+    args = runner.render_docker_only_args(
+        profile_path=test_profile_path_with_airgap_patch_dir,
+        run_dir=tmp_runs_dir,
+        port=8002,
+        airgap=False,
+    )
+    expected_src = (
+        test_profile_path_with_airgap_patch_dir / "airgap_patches"
+    ).resolve()
+    expected_mount = f"{expected_src}:/airgap_patches:ro"
+    assert expected_mount in args, (expected_mount, args)
+
+
+def test_render_emits_airgap_patch_pythonpath_env(
+    test_profile_path_with_airgap_patch_dir: Path, tmp_runs_dir: Path
+):
+    """04.7-02 Decision Option 5: PYTHONPATH=/airgap_patches env var emitted.
+
+    The env var is what makes Python's site machinery import the
+    /airgap_patches/sitecustomize.py at process start. Without it the
+    bind-mount is operationally inert.
+    """
+    args = runner.render_docker_only_args(
+        profile_path=test_profile_path_with_airgap_patch_dir,
+        run_dir=tmp_runs_dir,
+        port=8002,
+        airgap=False,
+    )
+    assert "PYTHONPATH=/airgap_patches" in args, args
+
+
+def test_render_emits_airgap_patch_mistral3_optin_env(
+    test_profile_path_with_airgap_patch_dir: Path, tmp_runs_dir: Path
+):
+    """04.7-02 Decision Option 5: per-patch opt-in env emitted.
+
+    The sitecustomize.py file checks EMMY_AIRGAP_PATCH_MISTRAL3 before
+    actually applying the mistral3 allowlist patch — so other Python
+    processes that happen to land on this PYTHONPATH (e.g. operator debug
+    shells, test harnesses) do NOT trigger the patch by accident. The boot
+    runner sets the opt-in alongside the PYTHONPATH so the deliberate
+    operator gesture is the bundle declaration.
+    """
+    args = runner.render_docker_only_args(
+        profile_path=test_profile_path_with_airgap_patch_dir,
+        run_dir=tmp_runs_dir,
+        port=8002,
+        airgap=False,
+    )
+    assert "EMMY_AIRGAP_PATCH_MISTRAL3=on" in args, args
+
+
+def test_render_omits_airgap_patch_dir_when_unset(
+    test_profile_path: Path, tmp_runs_dir: Path
+):
+    """04.7-02 Decision Option 5 — backward compat: pre-Option-5 fixtures (no
+    airgap_patch_dir) MUST render WITHOUT the bind-mount or PYTHONPATH env.
+
+    Confirms additive-only behavior: the 7+ shipped bundles + Plan 04.7-02
+    pre-Option-5 v1 state continue to render byte-identically — no new
+    docker volume, no new env vars.
+    """
+    args = runner.render_docker_only_args(
+        profile_path=test_profile_path,
+        run_dir=tmp_runs_dir,
+        port=8002,
+        airgap=False,
+    )
+    assert "/airgap_patches:ro" not in " ".join(args), args
+    assert "PYTHONPATH=/airgap_patches" not in args, args
+    assert "EMMY_AIRGAP_PATCH_MISTRAL3=on" not in args, args
+
+
+def test_render_omits_airgap_patch_dir_when_unset_in_hf_config_fixture(
+    test_profile_path_with_hf_config_path: Path, tmp_runs_dir: Path
+):
+    """04.7-02 Decision Option 5: a Workaround-A fixture that sets
+    hf_config_path but NOT airgap_patch_dir MUST render without the
+    bind-mount/env wiring. Confirms the two fields are independently optional.
+    """
+    args = runner.render_docker_only_args(
+        profile_path=test_profile_path_with_hf_config_path,
+        run_dir=tmp_runs_dir,
+        port=8002,
+        airgap=False,
+    )
+    assert "/airgap_patches:ro" not in " ".join(args), args
+    assert "PYTHONPATH=/airgap_patches" not in args, args
+    assert "EMMY_AIRGAP_PATCH_MISTRAL3=on" not in args, args
