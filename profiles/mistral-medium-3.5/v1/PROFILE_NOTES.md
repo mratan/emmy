@@ -4,12 +4,15 @@ profile_version: v1
 created: 2026-05-01
 hardware_id: dgx-spark-01
 measured_values:
-  gpu_memory_utilization: 0.78  # CONTEXT D-04 — operational ceiling, NOT bisected (D-05 skip)
-  decode_throughput_p50_smoke_tokps: null  # filled at Plan 04.7-02 boot smoke; informational, NOT a gate (D-13)
-  cold_start_seconds: null  # filled at Plan 04.7-02
+  gpu_memory_utilization: 0.78  # CONTEXT D-04 — STRUCTURAL ceiling, NOT validated by boot smoke (T-01 backend gap blocked it; see "GGUF backend experimental status (T-01)" body section)
+  decode_throughput_p50_smoke_tokps: null  # NOT measured — Plan 04.7-02 boot smoke blocked at T-01; v2 (Mistral architecture support upstream) re-runs
+  cold_start_seconds: null  # NOT measured — same reason
   # NO thermal fields — D-06 skips 2× 2h thermal replay; CLAUDE.md Pitfall #4 retained for daily-drivers only.
   # NO KV-bisection fields — D-05 skips formal protocol; gmu=0.78 is structural fit, not measured ceiling.
-validation_runs: []  # filled at Plan 04.7-02
+validation_runs:
+  # Plan 04.7-02 boot smoke attempts (BOTH FAILED — T-01 GGUF backend gap on vLLM nightly; see "GGUF backend experimental status (T-01)" + "Plan 04.7-02 boot-smoke failure timeline" body sections)
+  - "20260502T214035Z-004263-boot  # FAIL — wait_for_vllm 900s; container exited 1 with huggingface_hub.errors.LocalEntryNotFoundError; --tokenizer mistralai/Mistral-Medium-3.5-128B not in HF cache + HF_HUB_OFFLINE=1; led to per-profile tokenizer-fallback edit"
+  - "20260502T222054Z-576671-boot  # FAIL — same wait_for_vllm symptom; container exited 1 with `ValueError: GGUF model with architecture mistral3 is not supported yet.`; T-01 backend gap, no profile knob fixes this"
 ---
 
 # Mistral Medium 3.5 128B — v1 Profile Notes
@@ -195,14 +198,18 @@ first run; if 0.78 OOMs, the step-down protocol kicks in.
 
 ### gmu convergence table (filled at Plan 04.7-02 boot smoke)
 
-| Attempt | gmu | max_model_len | Outcome | Notes |
+| Attempt | gmu | max_model_len | Outcome | run_id |
 |---|---:|---:|---|---|
-| 1 (planned) | 0.78 | 131072 | TBD | First boot per CONTEXT D-05 |
-| 2 (fallback) | 0.73 | 131072 | TBD | Step-down -0.05 if 0.78 OOMs |
-| 3 (fallback) | 0.68 | 131072 | TBD | Step-down -0.05 if 0.73 OOMs |
-| 4 (fallback) | 0.68 | 65536 | TBD | Halve context if 0.68 still OOMs at 128K |
+| 1 | 0.78 | 131072 | **NOT REACHED** — boot blocked at vLLM startup before any GPU allocation; failed first on tokenizer fetch (LocalEntryNotFoundError), then on GGUF architecture support gap | 20260502T214035Z-004263 (tokenizer fetch) and 20260502T222054Z-576671 (mistral3 architecture) |
 
-A successful run at attempt 1 is the expected outcome (structural math
+The gmu step-down protocol from CONTEXT D-05 was **NEVER EXERCISED** — both
+boot attempts failed at vLLM startup before any GPU memory allocation, so
+the gmu=0.78 structural fit hypothesis remains UNVERIFIED on this hardware.
+See "Plan 04.7-02 boot-smoke failure timeline" body section below for the
+full traces. v1 ships with gmu=0.78 as the structural prediction; whichever
+follow-up plan unblocks T-01 will validate or revise it.
+
+A successful run at attempt 1 was the expected outcome (structural math
 above predicts it). Any other outcome triggers a v2 cut with the converged
 values + new bundle hash; this v1 stays as the structural-math evidence
 artifact per CLAUDE.md immutability rules.
@@ -265,6 +272,136 @@ Specific risks tracked:
 
 If 128K turns out unusable, re-cap to 32K via v2 cut (NOT in-place edit
 per immutability rules).
+
+## Plan 04.7-02 boot-smoke failure timeline (T-01 fired)
+
+The Plan 04.7-02 boot smoke fired T-01 in its strongest form: vLLM's GGUF
+backend (in the `vllm/vllm-openai:cu130-nightly-aarch64` image,
+build `0.19.2rc1.dev134+gfe9c3d6c5`, pulled 2026-05-02) **does not yet
+support the `mistral3` GGUF architecture**. Two attempts, two distinct
+failure modes; the second is the load-bearing one.
+
+**Attempt 1 — 2026-05-02 (run_id 20260502T214035Z-004263):**
+Configuration: serving.yaml as committed by Plan 04.7-01 + Plan 04.7-02
+Task 1, with `tokenizer: mistralai/Mistral-Medium-3.5-128B` set per the
+RESEARCH §1.1 + vLLM GGUF docs recommendation. Container started; vLLM
+crashed during arg parsing with:
+
+```
+huggingface_hub.errors.LocalEntryNotFoundError: Cannot find an appropriate
+cached snapshot folder for the specified revision on the local disk and
+outgoing traffic has been disabled.
+```
+
+Root cause: the explicit `--tokenizer mistralai/Mistral-Medium-3.5-128B`
+points at a **gated** HF repo, the local `/data/hf-cache/` does not have
+a snapshot of it, and `HF_HUB_OFFLINE=1` (D-12 air-gap) blocks the runtime
+download. The plan + RESEARCH did not anticipate this — gated-repo +
+offline-cache + tokenizer-extraction is a three-way collision.
+
+**Attempt 2 — 2026-05-02 (run_id 20260502T222054Z-576671):**
+Auto-fix applied (Rule 3 deviation): commented out the `tokenizer:` line in
+serving.yaml so vLLM falls back to the GGUF-embedded tokenizer (the field
+stays in `EngineConfig` schema; this is a per-profile fallback, not a
+schema rollback). Bundle hash recomputed. Container started; vLLM crashed
+during model load with:
+
+```
+ValueError: GGUF model with architecture mistral3 is not supported yet.
+```
+
+Root cause: vLLM's GGUF backend has a per-architecture allowlist, and
+`mistral3` (the GGUF-embedded architecture string for Mistral 3.x family
+models) is not on it as of build `0.19.2rc1.dev134+gfe9c3d6c5`. **No
+profile knob fixes this** — gmu, max_model_len, max_num_seqs, kv_cache_dtype,
+tool_call_parser, reasoning_parser are all irrelevant when the backend
+rejects the architecture upfront. The CONTEXT D-05 gmu step-down protocol
+was therefore **not exercised**: the failure was at startup, before any
+GPU memory allocation.
+
+### What this means for the v1 ship state
+
+1. v1 ships with the configuration the plan specified (gmu=0.78,
+   max_model_len=131072, kv_cache_dtype=fp8, max_num_seqs=1) PLUS the
+   tokenizer-fallback edit (commented `tokenizer:` line). It is not
+   bootable on this Spark with the currently-available vLLM nightly.
+2. The structural-fit gmu=0.78 hypothesis (D-04) remains UNVERIFIED on
+   this hardware — both boot attempts failed before GPU allocation.
+3. CONTEXT G-1 (Bootable), G-2 (First chat completion), G-3 (Tool-call
+   probe) all CANNOT close until upstream vLLM lands `mistral3` GGUF
+   architecture support.
+
+### Operator paths to unblock
+
+Plan 04.7-02 surfaces these as a decision-checkpoint to the operator. In
+order of expected effort:
+
+1. **Wait for upstream support** — track the next `vllm/vllm-openai:cu130-nightly-aarch64`
+   nightly until `mistral3` is on the GGUF arch allowlist; re-pull, capture
+   new digest, re-run boot smoke. Lowest engineering cost, indeterminate
+   timeline (depends on vLLM project priorities).
+2. **Switch to a different Mistral 3.x quant path** — e.g., the rejected
+   NVFP4 path (CONTEXT D-01 rejection rationale was "slower than FP16 on
+   GB10 UMA" — still functional, just slower). RecViking's NVFP4 build is
+   single-GPU re-tune away from booting. Phase 5 calibration question
+   becomes "how slow is too slow for an eval-only escalation profile?"
+3. **Switch to a llama.cpp-based serving path** — outside the vLLM-only
+   architectural envelope (CONTEXT D-02); would require new sidecar shape,
+   new harness adapter. Highest engineering cost, completely sidesteps T-01.
+4. **Defer the entire phase** — drop Mistral 3.5 128B from the active
+   stack until vLLM GGUF backend matures; re-open the phase when upstream
+   support lands. Zero engineering cost; loses the Phase 5 dense-128B
+   matrix participant slot.
+
+The decision is operator-level; the plan-level executor cannot pick
+unilaterally because (1) and (2) trigger different downstream artifact
+shapes (different bundle hash, different evidence trail), (3) is a phase
+re-architecture, and (4) abandons the phase. v1 is left in the documented
+"structurally-correct, T-01-blocked" state pending the operator decision.
+
+## Tokenizer fallback (T-tokenizer)
+
+The `engine.tokenizer` field (Plan 04.7-01 Wave 0 schema extension) was
+originally set to `mistralai/Mistral-Medium-3.5-128B` per vLLM GGUF docs
+which warn that bundled-tokenizer extraction is "time-consuming and
+unstable." Plan 04.7-02 boot smoke attempt 1 surfaced a previously-unmapped
+collision:
+
+- The base model `mistralai/Mistral-Medium-3.5-128B` is a **gated** HF
+  repo (requires accepting T&C on the HF model card before even tokenizer
+  files are downloadable).
+- `HF_HUB_OFFLINE=1` (CONTEXT D-12 air-gap) is enforced at runtime, so the
+  container CANNOT pull the gated tokenizer at boot even if the operator
+  is authenticated.
+- The local HF cache `/data/hf-cache/` was empty for this repo, and the
+  bartowski GGUF source repo (which IS public) does NOT carry tokenizer
+  files — the GGUF format embeds the tokenizer internally instead.
+
+Resolution applied at 2026-05-02 (Plan 04.7-02 Task 3): commented out the
+`tokenizer:` line in serving.yaml. vLLM's default behavior when
+`--tokenizer` is unset is to extract the tokenizer from the GGUF file
+itself. This is the path vLLM docs flag as "time-consuming and unstable"
+but IT IS the only path that doesn't require gated-repo HF auth + cache
+seeding.
+
+The schema field stays in `EngineConfig` (Plan 04.7-01 Wave 0 work intact).
+This is a per-profile fallback, not a schema rollback. If/when v2 is
+authored, the operator path to re-enable explicit-tokenizer mode is:
+
+1. `hf auth login` with a token that has accepted T&C for
+   `mistralai/Mistral-Medium-3.5-128B` (visit the HF model card, click
+   "Agree and access repository").
+2. `huggingface-cli download mistralai/Mistral-Medium-3.5-128B
+   --include "*tokenizer*" --include "*.json" --include "*.model"
+   --local-dir /data/hf-cache/...` to seed just the tokenizer files
+   (no weights — those are 200 GiB of safetensors we don't want).
+3. Uncomment the `tokenizer:` line in serving.yaml (now in v2 bundle).
+4. Re-run boot smoke — vLLM will read the cached tokenizer instead of
+   trying to download.
+
+NOTE: this resolution did NOT unblock boot smoke — attempt 2 then hit
+T-01 (mistral3 architecture not supported). The tokenizer fallback is
+documented here for completeness; T-01 is the load-bearing blocker.
 
 ## Tool-call parser fallback (T-04)
 
