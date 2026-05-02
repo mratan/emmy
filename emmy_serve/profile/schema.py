@@ -56,6 +56,20 @@ class EngineConfig(BaseModel):
     # of `model:` (HF model_id or local path). Strictly additive — every pre-
     # 04.7 profile validates with .tokenizer is None and renders identically.
     tokenizer: Optional[str] = None
+    # Phase 04.7-02 (Workaround A) — explicit HF config path override. Used when
+    # vLLM's GGUF backend cannot derive a usable HF config from the GGUF file
+    # itself (e.g. transformers' GGUF parser does not yet allowlist a given
+    # `general.architecture` string — Mistral 3.x's `mistral3` falls in this
+    # gap as of vLLM 0.19.2rc1.dev134). Pointing at a directory that contains
+    # config.json (and optionally tokenizer.json/tokenizer_config.json/
+    # generation_config.json) lets vLLM's get_config() construct the
+    # PretrainedConfig directly from those files, bypassing the GGUF parser
+    # for everything except the actual weight load. Container-internal path —
+    # the directory must be visible inside the container (typically mounted
+    # under /models or /hf-cache). Default None = vLLM uses the value of
+    # `model:` for config resolution. Strictly additive — every pre-04.7
+    # profile validates with .hf_config_path is None and renders identically.
+    hf_config_path: Optional[str] = None
     served_model_name: str
     container_image: str
     container_image_digest: str

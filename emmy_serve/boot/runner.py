@@ -108,6 +108,17 @@ def render_vllm_cli_args(profile_path: Path) -> list[str]:
         cli += ["--max-num-seqs", str(e.max_num_seqs)]
     if e.tokenizer:
         cli += ["--tokenizer", e.tokenizer]
+    # Phase 04.7-02 (Workaround A) — explicit HF config path. Forces vLLM's
+    # get_config() to construct the PretrainedConfig from a directory-on-disk
+    # rather than letting it derive one from the model path (which, for local
+    # GGUF files, triggers transformers' GGUF parser and the per-architecture
+    # allowlist gap that blocks `mistral3` as of vLLM 0.19.2rc1.dev134). When
+    # set, the value points at a container-internal directory (typically
+    # mounted under /models) containing config.json + optionally tokenizer*.
+    # Conditional emission preserves byte-identical render for pre-04.7-02
+    # profiles where the field is unset.
+    if e.hf_config_path:
+        cli += ["--hf-config-path", e.hf_config_path]
     return cli
 
 

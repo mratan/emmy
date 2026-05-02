@@ -282,3 +282,98 @@ def test_render_omits_new_flags_when_unset(rendered_args):
     assert "--reasoning-parser" not in rendered_args, rendered_args
     assert "--max-num-seqs" not in rendered_args, rendered_args
     assert "--tokenizer" not in rendered_args, rendered_args
+
+
+# -----------------------------------------------------------------------------
+# Plan 04.7-02 Workaround A — --hf-config-path emission coverage
+# -----------------------------------------------------------------------------
+#
+# Workaround A is the response to vLLM's GGUF backend not yet allowlisting
+# the `mistral3` GGUF architecture (vLLM 0.19.2rc1.dev134). By pointing
+# vLLM's get_config() at a directory-on-disk that already contains a
+# config.json (the unquantized base model's config, copied locally), we
+# bypass the GGUF parser for everything except the actual weight load.
+# See profiles/mistral-medium-3.5/v1/PROFILE_NOTES.md "Workaround A wiring".
+
+
+_VALID_SERVING_YAML_WITH_HF_CONFIG_PATH = """\
+engine:
+  model: /models/Mistral-Medium-3.5-128B-Q4_K_M.gguf
+  model_hf_id: mistralai/Mistral-Medium-3.5-128B
+  served_model_name: mistral-medium-3.5
+  container_image: vllm/vllm-openai:cu130-nightly-aarch64
+  container_image_digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  hf_config_path: /models/Mistral-Medium-3.5-128B-config
+  max_model_len: 131072
+  gpu_memory_utilization: 0.78
+  kv_cache_dtype: fp8
+  enable_prefix_caching: true
+  enable_chunked_prefill: true
+  max_num_batched_tokens: 8192
+  max_num_seqs: 1
+  load_format: auto
+  quantization: gguf
+  tool_call_parser: mistral
+  reasoning_parser: mistral
+  enable_auto_tool_choice: true
+  host: 0.0.0.0
+  port: 8000
+sampling_defaults:
+  temperature: 0.15
+  top_p: 0.95
+  top_k: 40
+  repetition_penalty: 1.0
+  max_tokens: 8192
+  stop: []
+speculative: null
+guided_decoding:
+  default_backend: xgrammar
+quirks:
+  strip_thinking_tags: false
+  promote_reasoning_to_content: false
+  buffer_tool_streams: false
+env:
+  VLLM_NO_USAGE_STATS: "1"
+  DO_NOT_TRACK: "1"
+  VLLM_LOAD_FORMAT: auto
+  VLLM_FLASHINFER_MOE_BACKEND: latency
+  VLLM_DISABLE_COMPILE_CACHE: "1"
+  HF_HUB_OFFLINE: "1"
+  TRANSFORMERS_OFFLINE: "1"
+"""
+
+
+@pytest.fixture
+def test_profile_path_with_hf_config_path(tmp_path: Path) -> Path:
+    """Schema-valid serving.yaml that exercises the hf_config_path field."""
+    bundle = tmp_path / "v1"
+    bundle.mkdir()
+    (bundle / "serving.yaml").write_text(
+        _VALID_SERVING_YAML_WITH_HF_CONFIG_PATH, encoding="utf-8"
+    )
+    return bundle
+
+
+def test_render_emits_hf_config_path_when_set(test_profile_path_with_hf_config_path: Path):
+    """04.7-02 Workaround A: ``--hf-config-path <dir>`` appears as a contiguous pair."""
+    args = runner.render_vllm_cli_args(test_profile_path_with_hf_config_path)
+    assert "--hf-config-path" in args, args
+    idx = args.index("--hf-config-path")
+    assert args[idx + 1] == "/models/Mistral-Medium-3.5-128B-config", (idx, args)
+
+
+def test_render_omits_hf_config_path_when_unset(rendered_args):
+    """04.7-02 Workaround A: pre-04.7-02 fixture does NOT declare hf_config_path,
+    so ``--hf-config-path`` MUST NOT appear (byte-additive guarantee).
+    """
+    assert "--hf-config-path" not in rendered_args, rendered_args
+
+
+def test_render_omits_hf_config_path_when_unset_in_new_flags_fixture(
+    rendered_args_with_new_flags,
+):
+    """04.7-02 Workaround A: the 04.7-01 fixture (which exercises tokenizer/
+    reasoning_parser/max_num_seqs but NOT hf_config_path) MUST render without
+    --hf-config-path. Confirms hf_config_path is independently optional.
+    """
+    assert "--hf-config-path" not in rendered_args_with_new_flags, rendered_args_with_new_flags
