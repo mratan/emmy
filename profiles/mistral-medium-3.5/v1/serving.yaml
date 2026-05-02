@@ -40,8 +40,8 @@ engine:
   model_hf_id: mistralai/Mistral-Medium-3.5-128B       # BASE model HF id (NOT bartowski's GGUF repo); vLLM extracts tokenizer+chat template from base per RESEARCH §1.1
   tokenizer: mistralai/Mistral-Medium-3.5-128B         # 04.7-01 schema extension; explicit override per vLLM GGUF docs ("time-consuming and unstable" to extract from bundled GGUF). Same id as model_hf_id by design.
   served_model_name: mistral-medium-3.5                # name vLLM exposes on /v1/models; matches `/profile mistral-medium-3.5` route per CONTEXT D-13
-  container_image: vllm/vllm-openai:cu130-nightly-aarch64   # CONTEXT D-10 + RESEARCH §1.4 — Docker-Hub-confirmed nightly aarch64+CUDA13 spelling. Plan 04.7-02 first task may rewrite this line if the actual working tag differs at first pull.
-  container_image_digest: sha256:REPLACE_AT_FIRST_PULL # SCHEMA SENTINEL — Plan 04.7-02 captures real digest at `docker pull` and overwrites this line. `emmy profile validate` will reject this until then; that is the intentional G-5 handoff.
+  container_image: vllm/vllm-openai:cu130-nightly-aarch64   # CONTEXT D-10 + RESEARCH §1.4 — Docker-Hub-confirmed nightly aarch64+CUDA13 spelling worked at first pull on 2026-05-02 (RepoDigest sha256:d5a8e53a... — see PROFILE_NOTES.md "Container nightly drift (T-02)"). CONTEXT D-10's `nightly-arm64-cu130` spelling was NOT seen on Docker Hub.
+  container_image_digest: sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc  # LOCAL image Id (`docker inspect --format '{{.Id}}'`); render_image_ref uses bare-digest form for the `vllm/vllm-openai` repo per `runner.py:48-50`. Captured 2026-05-02 at Plan 04.7-02 Task 1; supersedes the schema sentinel.
   container_entrypoint_override: ""                    # Upstream vllm-openai images bake ENTRYPOINT=[vllm serve] — empty override clears it so our CMD `vllm serve <flags>` runs as the full exec chain (carried over from Gemma 31B v1.2 analog).
 
   # --- context + memory ---
