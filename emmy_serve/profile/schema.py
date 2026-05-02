@@ -114,6 +114,20 @@ class EngineConfig(BaseModel):
     # --- loader ---
     load_format: Literal["auto", "fastsafetensors", "safetensors"] = "fastsafetensors"
 
+    # Phase 04.7-02 follow-up Decision Option 5 (sitecustomize boot smoke
+    # 2026-05-02). Optional dtype override for the model weights/computation.
+    # Required for Mistral Medium 3.5 128B Q4_K_M GGUF: the upstream config.json
+    # declares `"dtype": "bfloat16"` but vLLM's GGUF backend rejects bfloat16
+    # with `torch.bfloat16 is not supported for quantization method gguf.
+    # Supported dtypes: [torch.float16, torch.float32]` from
+    # `vllm/engine/arg_utils.py:2094` create_engine_config (and the GGUF
+    # backend separately warns "GGUF has precision issues with bfloat16 on
+    # Blackwell" — gguf.py:69). Setting `float16` makes the GGUF backend
+    # happy without forcing fp32 (which would double KV cache size).
+    # Strictly additive — every pre-04.7-02-followup profile validates with
+    # dtype=None and renders identically (vLLM auto-detects from config).
+    dtype: Optional[Literal["auto", "float16", "bfloat16", "float32"]] = None
+
     # --- quantization ---
     # Phase 04.7 — "gguf" added for Mistral Medium 3.5 128B Q4_K_M (CONTEXT D-02).
     # vLLM experimental GGUF backend; long-context flagged WIP by Mistral. The

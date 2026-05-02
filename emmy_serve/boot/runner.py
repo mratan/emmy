@@ -119,6 +119,14 @@ def render_vllm_cli_args(profile_path: Path) -> list[str]:
     # profiles where the field is unset.
     if e.hf_config_path:
         cli += ["--hf-config-path", e.hf_config_path]
+    # Phase 04.7-02 follow-up Decision Option 5 — explicit dtype override.
+    # Required for Mistral 3.x GGUF profiles whose source config.json declares
+    # bfloat16 (vLLM GGUF backend rejects bf16 — see schema docstring for
+    # the precise error class). Conditional emission preserves byte-identical
+    # render for pre-04.7-02-followup profiles where the field is unset
+    # (vLLM continues to auto-detect from config).
+    if e.dtype is not None:
+        cli += ["--dtype", e.dtype]
     return cli
 
 
