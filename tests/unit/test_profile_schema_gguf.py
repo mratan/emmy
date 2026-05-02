@@ -113,3 +113,54 @@ def test_engine_tokenizer_optional_default_none():
     ec = schema.EngineConfig(**kwargs)
     assert ec.tokenizer is None
     assert ec.quantization == "fp8"
+
+
+# -----------------------------------------------------------------------------
+# Test 4 — 04.7-02 Workaround A: hf_config_path field accepted + Optional default
+# -----------------------------------------------------------------------------
+
+
+def test_engine_accepts_hf_config_path():
+    """04.7-02 Workaround A: ``hf_config_path`` field accepts a string path.
+
+    When set, the value is the container-internal path to a directory
+    containing ``config.json`` (and optionally tokenizer files). vLLM consumes
+    it via the ``--hf-config-path`` CLI flag and uses it as the FIRST argument
+    to ``get_config()`` instead of the model path — bypassing the GGUF
+    parser's per-architecture allowlist for the config-resolution step.
+    """
+    ec = schema.EngineConfig(
+        **_kwargs(
+            quantization="gguf",
+            tokenizer=None,  # Mistral profile uses GGUF-embedded tokenizer per Plan 04.7-02 attempt 2 fallback
+            hf_config_path="/models/Mistral-Medium-3.5-128B-config",
+        )
+    )
+    assert ec.hf_config_path == "/models/Mistral-Medium-3.5-128B-config"
+    # Spot-check: the field coexists cleanly with the other GGUF knobs
+    assert ec.quantization == "gguf"
+    assert ec.tokenizer is None  # explicit None is the Mistral v1 fallback shape
+
+
+def test_engine_hf_config_path_optional_default_none():
+    """04.7-02 Workaround A — backward-compat: pre-04.7-02 profiles validate
+    with hf_config_path=None.
+
+    Mirrors the ``test_engine_tokenizer_optional_default_none`` invariant for
+    the partner field. All 7+ shipped bundles (Gemma 4 v1/v2/v2.1, Gemma 31B
+    v1/v1.1/v1.2, Qwen 27B v1/v1.1, etc.) MUST continue to validate without
+    declaring this field.
+    """
+    kwargs = _kwargs(
+        model="/models/gemma-4-26B-A4B-it",
+        model_hf_id="google/gemma-4-26B-A4B-it",
+        served_model_name="gemma-4-26b-a4b-it",
+        quantization="fp8",
+        load_format="fastsafetensors",
+        tool_call_parser="gemma4",
+        reasoning_parser="gemma4",
+    )
+    # Deliberately do NOT pass hf_config_path kwarg here.
+    kwargs.pop("hf_config_path", None)
+    ec = schema.EngineConfig(**kwargs)
+    assert ec.hf_config_path is None

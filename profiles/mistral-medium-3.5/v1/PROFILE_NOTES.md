@@ -10,9 +10,12 @@ measured_values:
   # NO thermal fields — D-06 skips 2× 2h thermal replay; CLAUDE.md Pitfall #4 retained for daily-drivers only.
   # NO KV-bisection fields — D-05 skips formal protocol; gmu=0.78 is structural fit, not measured ceiling.
 validation_runs:
-  # Plan 04.7-02 boot smoke attempts (BOTH FAILED — T-01 GGUF backend gap on vLLM nightly; see "GGUF backend experimental status (T-01)" + "Plan 04.7-02 boot-smoke failure timeline" body sections)
-  - "20260502T214035Z-004263-boot  # FAIL — wait_for_vllm 900s; container exited 1 with huggingface_hub.errors.LocalEntryNotFoundError; --tokenizer mistralai/Mistral-Medium-3.5-128B not in HF cache + HF_HUB_OFFLINE=1; led to per-profile tokenizer-fallback edit"
-  - "20260502T222054Z-576671-boot  # FAIL — same wait_for_vllm symptom; container exited 1 with `ValueError: GGUF model with architecture mistral3 is not supported yet.`; T-01 backend gap, no profile knob fixes this"
+  # Plan 04.7-02 boot smoke attempts — Wave 1 (BOTH FAILED — T-01 GGUF backend gap on vLLM nightly; see "GGUF backend experimental status (T-01)" + "Plan 04.7-02 boot-smoke failure timeline" body sections)
+  - "20260502T214035Z-004263-boot  # FAIL Wave 1 attempt 1 — wait_for_vllm 900s; container exited 1 with huggingface_hub.errors.LocalEntryNotFoundError; --tokenizer mistralai/Mistral-Medium-3.5-128B not in HF cache + HF_HUB_OFFLINE=1; led to per-profile tokenizer-fallback edit"
+  - "20260502T222054Z-576671-boot  # FAIL Wave 1 attempt 2 — same wait_for_vllm symptom; container exited 1 with `ValueError: GGUF model with architecture mistral3 is not supported yet.`; T-01 backend gap, no profile knob fixes this"
+  # Plan 04.7-02 boot smoke attempts — Wave 2 (BOTH FAILED — Workaround A surfaced new vLLM bug; T-01 still blocking; see "Workaround A empirical results" body section)
+  - "20260502T231011Z-e07024-boot  # FAIL Wave 2 attempt 3 — repo:quant model + hf_config_path; HFValidationError on colon in repo_id at vllm/transformers_utils/repo_utils.py:220 (get_model_path naively forwards `bartowski/...:Q4_K_M` to snapshot_download). Workaround A repo:quant variant infeasible without vLLM patch."
+  - "20260502T231409Z-8f35fc-boot  # FAIL Wave 2 attempt 4 — local file model + hf_config_path; T-01 still fires (`ValueError: GGUF model with architecture mistral3 is not supported yet`). hf_config_path consulted only after speculators check at config.py:633+; speculators check at config.py:587-591 unconditionally GGUF-parses local-file model paths. Workaround A hf_config_path-only variant does NOT bypass T-01."
 ---
 
 # Mistral Medium 3.5 128B — v1 Profile Notes
@@ -459,6 +462,215 @@ rarely fires because the Mistral parser converts to OpenAI shape upstream.
   siblings shipped; routes.yaml stays Gemma-only (currently dormant per
   CLAUDE.md Pinned Tech Stack). Ship Mistral siblings only if Phase 5
   shows the model is worth the effort.
+
+## Workaround A wiring (2026-05-02 follow-up to T-01)
+
+After the 2026-05-02 boot-smoke failure cascade documented in "Plan 04.7-02
+boot-smoke failure timeline (T-01 fired)" above, the operator authenticated
+to HuggingFace and pre-staged the unquantized base model's config files at
+`/data/models/Mistral-Medium-3.5-128B-config/` (config.json, tokenizer.json,
+tokenizer_config.json, generation_config.json, params.json — *no weights*,
+the gated base repo's safetensors are 200+ GB and we don't need them for
+inference; vLLM's GGUFModelLoader will load weights from the bartowski GGUF).
+A second 04.7-02 wave then wired Workaround A: a different model-path shape
++ a new EngineConfig field (`hf_config_path`) + an out-of-band HF cache
+staging step.
+
+### What changed in v1's serving.yaml
+
+| Key | Before (T-01-blocked v1) | After (Workaround A v1) | Rationale |
+|---|---|---|---|
+| `engine.model` | `/models/Mistral-Medium-3.5-128B-Q4_K_M.gguf` (local file path) | `bartowski/mistralai_Mistral-Medium-3.5-128B-GGUF:Q4_K_M` (HF repo:quant form) | The local-file path triggers vLLM's `maybe_override_with_speculators` (transformers_utils/config.py:587-591) → calls `PretrainedConfig.get_config_dict("/models", gguf_file=..., local_files_only=True)` → transformers' GGUF parser → `mistral3` not in `GGUF_SUPPORTED_ARCHITECTURES` → ValueError. The repo:quant form takes the `is_remote_gguf` branch (config.py:590-591) which does NOT pass `gguf_file=` to `get_config_dict` — so it reads a plain config.json from the bartowski snapshot dir instead of parsing the GGUF, sidestepping the allowlist gap. |
+| `engine.hf_config_path` | _(field did not exist)_ | `/models/Mistral-Medium-3.5-128B-config` | Forces `get_config()` (config.py:633-700) to construct the PretrainedConfig from the operator-staged config dir directly. vLLM treats it as `config_format='hf'` (because it has a config.json) and parses normally as `Mistral3Config`. No GGUF parsing in this path. Mounted via the existing `/data/models:/models:ro` bind in runner.py:133. |
+
+The bundle hash bumped: `sha256:5f3d2544…` (T-01-blocked snapshot) →
+`sha256:cc7d8db8…` (Workaround A wiring). Recomputed via
+`uv run emmy profile hash profiles/mistral-medium-3.5/v1 --write` per the
+in-development-bundle convention used throughout 04.7-02 (4 prior in-place
+hash bumps already committed; Workaround A is the 5th).
+
+### Schema + runner extension (Plan 04.7-02 Wave 2)
+
+`EngineConfig.hf_config_path: Optional[str] = None` was added to
+`emmy_serve/profile/schema.py` (mirrors the Plan 04.7-01 tokenizer field
+pattern exactly — strictly additive; pre-04.7-02 profiles validate
+unchanged). `render_vllm_cli_args` in `emmy_serve/boot/runner.py` emits
+`--hf-config-path <value>` when set; conditional emission preserves
+byte-identical render for pre-04.7-02 profiles. Tests added to
+`tests/unit/test_profile_schema_gguf.py` (positive + Optional default-None)
+and `tests/unit/test_docker_run_build.py` (renderer positive + absence in
+two pre-existing fixtures). Committed as
+`feat(04.7-02): add hf_config_path EngineConfig field + runner CLI emission`.
+
+### Operator-staged HF cache state (out-of-band; survives across boots)
+
+These artifacts live OUTSIDE the source tree (under `/data/hf-cache/` and
+`/data/models/`); they are inputs to v1's bootability, not products of it.
+Re-staging required if `/data/hf-cache/` or `/data/models/` are wiped.
+
+```
+/data/models/Mistral-Medium-3.5-128B-config/                # operator-copied from gated mistralai HF repo
+├── config.json                                              #  → also referenced by hf_config_path (above)
+├── generation_config.json
+├── params.json                                              # Mistral-format equivalent (informational)
+├── tokenizer.json                                           # used by vLLM via GGUF-embedded fallback path
+├── tokenizer_config.json
+├── consolidated.safetensors.index.json                      # Mistral consolidated index (informational)
+└── model.safetensors.index.json                             # HF safetensors index (informational; no weights)
+
+/data/hf-cache/hub/models--bartowski--mistralai_Mistral-Medium-3.5-128B-GGUF/
+├── refs/main                                                # operator-set to bartowski commit hash
+└── snapshots/<commit-hash>/                                 # operator-staged for offline mode
+    ├── config.json                                          # copy of /data/models/.../config.json (used by maybe_override_with_speculators)
+    └── mistralai_Mistral-Medium-3.5-128B-Q4_K_M.gguf       # symlink → /models/Mistral-Medium-3.5-128B-Q4_K_M.gguf (used by GGUFModelLoader weight load)
+```
+
+The symlink target (`/models/Mistral-Medium-3.5-128B-Q4_K_M.gguf`) is the
+container-internal view. From the host the symlink dangles, but inside
+the container `/data/models` is bind-mounted to `/models` (runner.py:133),
+so the link resolves correctly to the 78.4 GB merged GGUF on the same
+filesystem (no double-storage).
+
+### Boot precondition (HF_HUB_OFFLINE=1 stays the default)
+
+CONTEXT D-12 air-gap is preserved at runtime. The operator's HF auth was a
+populate-only operation (one-time download of config files). At boot the
+container runs with `HF_HUB_OFFLINE=1` (env block enforces it), and vLLM's
+`local_files_only` reads from the operator-staged cache without any
+network access. STRICT air-gap CI (`ci_verify_phase3`) remains
+correctness-equivalent to before.
+
+### Workaround A empirical results (2026-05-02 follow-up boot smoke)
+
+Two more boot attempts run on 2026-05-02 with the Workaround A wiring;
+both failed at vLLM startup before any GPU memory allocation. Daily-driver
+Gemma 4 26B-A4B v2.1 stayed up on port 8002 throughout (Mistral attempts
+ran on port 8005 with container name `emmy-serve-mistral` to avoid
+evicting the daily-driver — discipline carried over from the prior wave).
+
+**Attempt 3 — repo:quant model + hf_config_path (run_id `20260502T231011Z-e07024`):**
+
+```
+engine.model: bartowski/mistralai_Mistral-Medium-3.5-128B-GGUF:Q4_K_M
+engine.hf_config_path: /models/Mistral-Medium-3.5-128B-config
+```
+
+Container exited within ~10 seconds. Trace excerpt
+(`runs/boot-failures/20260502T231011Z-e07024-boot-failure/vllm-stdout-stderr.log`):
+
+```
+File "/usr/local/lib/python3.12/dist-packages/vllm/engine/arg_utils.py", line 689, in __post_init__
+    self.model = get_model_path(self.model, self.revision)
+File "/usr/local/lib/python3.12/dist-packages/vllm/transformers_utils/repo_utils.py", line 220, in get_model_path
+    return snapshot_download(repo_id=model, **common_kwargs)
+File "/usr/local/lib/python3.12/dist-packages/huggingface_hub/utils/_validators.py", line 138, in validate_repo_id
+    raise HFValidationError(...)
+huggingface_hub.errors.HFValidationError: Repo id must use alphanumeric chars, '-', '_' or '.'.
+The name cannot start or end with '-' or '.' and the maximum length is 96:
+'bartowski/mistralai_Mistral-Medium-3.5-128B-GGUF:Q4_K_M'.
+```
+
+**Root cause:** vLLM's `get_model_path` (called from
+`AsyncEngineArgs.__post_init__` line 689 when `HF_HUB_OFFLINE=1`) does
+NOT recognize the `repo:quant` model format. It naively passes the
+string to `huggingface_hub.snapshot_download(repo_id=...)`, which fails
+the HF Hub repo_id validator on the colon. Only vLLM's
+`GGUFModelLoader._prepare_weights` knows how to handle `repo:quant`
+(model_loader/gguf_loader.py:60-67) — but the offline-mode short-circuit
+runs FIRST and never reaches the GGUF loader. **Workaround A as the
+orchestrator described it (repo:quant + hf_config_path) is INFEASIBLE
+without a vLLM-side patch.**
+
+**Attempt 4 — local file + hf_config_path (run_id `20260502T231409Z-8f35fc`):**
+
+```
+engine.model: /models/Mistral-Medium-3.5-128B-Q4_K_M.gguf
+engine.hf_config_path: /models/Mistral-Medium-3.5-128B-config
+```
+
+Container exited within ~15 seconds. Trace excerpt
+(`runs/boot-failures/20260502T231409Z-8f35fc-boot-failure/vllm-stdout-stderr.log`):
+
+```
+File "/usr/local/lib/python3.12/dist-packages/vllm/engine/arg_utils.py", line 1590, in create_engine_config
+    maybe_override_with_speculators(...)
+File "/usr/local/lib/python3.12/dist-packages/vllm/transformers_utils/config.py", line 596, in maybe_override_with_speculators
+    config_dict, _ = PretrainedConfig.get_config_dict(...)
+File "/usr/local/lib/python3.12/dist-packages/transformers/configuration_utils.py", line 759, in _get_config_dict
+    config_dict = load_gguf_checkpoint(resolved_config_file, return_tensors=False)["config"]
+File "/usr/local/lib/python3.12/dist-packages/transformers/modeling_gguf_pytorch_utils.py", line 648, in load_gguf_checkpoint
+    raise ValueError(f"GGUF model with architecture {architecture} is not supported yet.")
+ValueError: GGUF model with architecture mistral3 is not supported yet.
+```
+
+**Root cause:** Same T-01 blocker as the prior wave's Attempt 2. The
+`maybe_override_with_speculators` path UNCONDITIONALLY parses the GGUF
+file when given a local path (`config.py:587-591`: `check_gguf_file →
+gguf_file=basename → get_config_dict(parent, gguf_file=...)`). The
+`hf_config_path` field is consulted only AFTER, in `get_config()`
+(`config.py:633+`), so it does NOT bypass the speculators check.
+
+### Empirical conclusions
+
+- **Workaround A repo:quant variant** does NOT work due to a separately-
+  preexisting vLLM bug — the offline-mode short-circuit in
+  `arg_utils.py:687-694` calls `get_model_path()` for ALL models when
+  `HF_HUB_OFFLINE=1`, and `get_model_path` does not recognize `repo:quant`.
+  This is a NEW upstream bug to file against vLLM (or a bug in our
+  understanding of the orchestrator's "repo:quant bypass" hypothesis).
+
+- **Workaround A hf_config_path-only variant** does NOT bypass T-01.
+  The speculators check at `config.py:587-591` parses the GGUF
+  unconditionally for local-file model paths, and the `hf_config_path`
+  field is only consulted later in `get_config()`. T-01 still fires
+  with the same `mistral3 not supported yet` error class.
+
+- The schema/runner extension (`hf_config_path: Optional[str] = None`
+  + `--hf-config-path` CLI emission) is correct work that lands
+  regardless. It will be useful when paired with an alternative
+  speculators-check bypass (e.g., a vLLM monkey-patch that gates
+  GGUF parsing on `hf_config_path is None`, OR a transformers-side
+  patch adding `mistral3` to `GGUF_SUPPORTED_ARCHITECTURES`).
+
+### Refined operator decision menu (now 6 paths)
+
+The Plan 04.7-02 v1 prior decision menu had 4 paths (wait / NVFP4 /
+llama.cpp / defer). The empirical Workaround A failure adds 2 more
+paths and refines the decision shape:
+
+| # | Path | Engineering cost | Timeline | v1 impact |
+|---|---|---|---|---|
+| 1 | **Wait for upstream `mistral3` GGUF arch support** in transformers' `GGUF_SUPPORTED_ARCHITECTURES` (the load-bearing fix) | low (re-pull container + re-run smoke) | indeterminate (depends on transformers project) | none — v1 just waits |
+| 2 | **Wait for upstream `repo:quant` fix** in vLLM's `get_model_path` so the orchestrator's Workaround A could be used | low (re-pull container + re-run smoke) | indeterminate (less-load-bearing than #1) | minimal — flip back to repo:quant model path |
+| 3 | **Switch to NVFP4** (RecViking build) — sidesteps GGUF entirely | medium (new bundle authoring per Plan 04.7-01 pattern; Phase 5 calibration question becomes "is NVFP4 throughput acceptable on GB10 UMA?") | days | retire v1; cut v2 NVFP4 |
+| 4 | **Switch to llama.cpp serving** | high (outside vLLM-only D-02 envelope; new sidecar shape; new harness adapter) | weeks | full architectural detour |
+| 5 | **Hot-patch transformers `GGUF_SUPPORTED_ARCHITECTURES`** to add `mistral3` (alias of `mistral`) via a sitecustomize.py mounted into the container | medium (small hot-patch; risk of subtle GGUF parsing differences between mistral and mistral3 metadata-key naming conventions; requires testing each tensor) | hours | v1 ships with patch artifact in source tree (4 files: patch script + mount in runner.py + tests + PROFILE_NOTES section) |
+| 6 | **Defer the entire phase** — drop Mistral 3.5 128B from the active stack until upstream GGUF support lands | zero | zero | drop the Phase 5 dense-128B matrix slot |
+
+**Recommendation:** Option 1 + Option 2 (just wait for upstream — both
+are no-cost and Phase 04.7 is eval-only). Option 5 is tempting but
+unverified — the `mistral3` GGUF metadata uses keys like
+`mistral3.context_length` (vs `mistral.context_length`); transformers'
+GGUF_TO_TRANSFORMERS_MAPPING `mistral` → `context_length` mapping
+might-or-might-not work with the mistral3 keys. Empirical verification
+before claiming Option 5 is safe.
+
+### What hf_config_path IS still good for
+
+The schema/runner work is committed and operationally valid:
+- Pre-04.7-02 profiles unaffected (Optional default None).
+- A future Workaround A iteration that uses an architecture vLLM DOES
+  allowlist (e.g., a hypothetical `mistral` GGUF where the GGUF
+  architecture string was `mistral` not `mistral3`) would benefit from
+  the field.
+- Operator-side patching (Option 5) would benefit from having
+  `hf_config_path` available so the patched config-load path can read
+  from a local dir bypassing GGUF parsing.
+
+The field stays in the bundle even though it doesn't unblock T-01 in
+this profile because (a) it documents intent, (b) it's load-bearing for
+any future Workaround A revision, (c) removing it later would be a
+behavioral change requiring a v2 cut.
 
 ## References
 
