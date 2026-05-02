@@ -47,7 +47,13 @@ def test_serving_yaml_loads_with_gguf_quantization():
     )
     s = schema.ServingConfig(**raw)
     assert s.engine.quantization == "gguf"
-    assert s.engine.tokenizer == "mistralai/Mistral-Medium-3.5-128B"
+    # Plan 04.7-02 commented out the tokenizer line in serving.yaml as a Rule-3
+    # auto-fix for the T-tokenizer collision (HF gated repo + HF_HUB_OFFLINE=1
+    # blocks the recommended `mistralai/Mistral-Medium-3.5-128B` from being
+    # downloaded at boot). vLLM falls back to the GGUF-embedded tokenizer.
+    # See profiles/mistral-medium-3.5/v1/PROFILE_NOTES.md "Tokenizer fallback
+    # (T-tokenizer)" for the full rationale.
+    assert s.engine.tokenizer is None
     assert s.engine.tool_call_parser == "mistral"
     assert s.engine.reasoning_parser == "mistral"
     assert s.engine.max_num_seqs == 1
