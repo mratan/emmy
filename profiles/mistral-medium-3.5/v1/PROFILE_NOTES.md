@@ -903,6 +903,122 @@ Either path is a v2 cut (behavioral change), not an in-place edit. v1
 preserves the patch + the empirical-evidence trail of the 3-attempt boot
 smoke iteration.
 
+## Option 7a wiring (2026-05-02 — tokenizer_mode iteration)
+
+After the Wave 3 sitecustomize iteration cleared T-01 + the dtype +
+tokenizer-pointed-at-local-dir Rule 3 auto-fixes, the deepest engine-init
+code path reached failed at the FINAL VllmConfig validation:
+
+```
+pydantic_core.ValidationError: 1 validation error for VllmConfig
+  Value error, The tokenizer must be an instance of MistralTokenizer.
+```
+
+Wave 3 SUMMARY surfaced this as Decision Option 7. Operator selected
+**sub-path (a)** ("source `tekken.json` for the operator-staged config
+dir + add `tokenizer_mode: mistral` to bundle"). This Wave 4 iteration
+wires the bundle side of that decision.
+
+### What unblocks the MistralTokenizer requirement
+
+vLLM's `mistral` tool_call_parser path (CONTEXT D-09 LOCKED) routes
+through a chat-template implementation gated on the loaded tokenizer
+being a `mistral_common.MistralTokenizer` instance — not the HF
+`AutoTokenizer` that vLLM's default `tokenizer_mode=auto` loads from
+`tokenizer.json`. The `MistralTokenizer` class loads from a tekken-format
+file (`tekken.json`) via `MistralTokenizer.from_file()`, which only
+fires when `--tokenizer-mode mistral` is passed.
+
+**Two coupled requirements** (BOTH must be satisfied):
+
+1. **`tekken.json` must be present** in the directory pointed at by
+   `engine.tokenizer:`. Operator-staged 2026-05-02 16:55:
+   ```
+   /data/models/Mistral-Medium-3.5-128B-config/tekken.json (16,275,354 bytes)
+   /data/models/Mistral-Medium-3.5-128B-config/SYSTEM_PROMPT.txt (1,461 bytes)
+   ```
+   via `huggingface-cli download mistralai/Mistral-Medium-3.5-128B
+   --include "tekken.json" "tokenization_mistral.py" "*.txt"
+   --local-dir /data/models/Mistral-Medium-3.5-128B-config`.
+   Note: `tokenization_mistral.py` was NOT downloaded — the gated repo
+   doesn't ship a custom tokenization helper; mistral-common's own
+   MistralTokenizer is the loader.
+
+2. **`engine.tokenizer_mode: mistral`** must be set so vLLM uses
+   `MistralTokenizer.from_file()` instead of `AutoTokenizer.from_pretrained()`.
+
+### Schema/runner extension
+
+| Layer | Change |
+|---|---|
+| `EngineConfig.tokenizer_mode` (schema.py) | NEW field: `Optional[Literal["auto", "hf", "slow", "mistral", "deepseek_v32"]] = None`. Literal mirrors vLLM 0.19's `vllm/config/model.py:85` `TokenizerMode` exactly. Strictly additive. |
+| `render_vllm_cli_args` (runner.py) | Emits `--tokenizer-mode <value>` when set. Conditional emission preserves byte-identical render for pre-04.7-02-followup profiles. |
+| Tests | 4 new in `test_profile_schema_gguf.py` + 4 new in `test_docker_run_build.py` (positive + negative + 2 absence guarantees) + 3 NEW `dtype` schema tests closing a Wave-3-commit gap |
+
+### Bundle update
+
+`profiles/mistral-medium-3.5/v1/serving.yaml`:
+```yaml
+  tokenizer_mode: mistral
+```
+inserted under the existing `dtype: float16` line. Bundle hash bumped
+in-place per CLAUDE.md additive-bundle rules
+(`tokenizer_mode: Optional[...] = None` field whose absence validates as
+None elsewhere — every pre-04.7-02-followup profile renders byte-identically).
+
+### Why this is sub-path (a), not sub-path (b)
+
+Option 7 sub-path (b) was "generate tekken.json from tokenizer.json via
+mistral-common conversion utility". That path:
+- Is NOT documented in mistral-common's public surface (no
+  `MistralTokenizer.from_hf_tokenizer_json()` or equivalent we could
+  find in 5 minutes of source review).
+- Risks subtle BPE-vocabulary differences if the conversion is lossy
+  (the "tekken" format encodes special-token offsets, byte-fallback
+  rules, etc. that may not map 1:1 onto HF's tokenizer.json layout).
+- Even if successful, would carry a custom-conversion-script
+  maintenance burden in the source tree — every time mistral-common
+  bumps a version, we'd have to re-verify the conversion produces
+  byte-identical output.
+
+Sub-path (a) is operator-cheap (one HF download command) and uses the
+upstream-blessed file. The only added attack surface is the staged
+file's integrity (no different from the existing tokenizer.json staging).
+
+### Decision Option 7a hash trail
+
+| Stage | Hash (8-char prefix) |
+|---|---|
+| Wave 3 final (post-Option-5 sitecustomize) | `sha256:7a597f67…` |
+| Wave 4 commit B (this commit — `tokenizer_mode: mistral` added to serving.yaml + this Option-7a wiring section appended) | (final hash in profile.yaml `profile.hash`) |
+
+The exact final bundle hash lives in `profiles/mistral-medium-3.5/v1/profile.yaml`
+under `profile.hash` and was computed via `uv run emmy profile hash
+profiles/mistral-medium-3.5/v1 --write`. We DON'T inline the exact value
+in this trail because doing so creates a self-referential loop (the trail
+is part of the bundle the hash covers, so any value we inline becomes
+stale on the next recompute). For Wave-4 commit B the final hash will be
+whatever `profile.yaml` records at the time of the `git commit` that
+lands this section.
+
+### What this DOES NOT yet prove
+
+The schema + runner + bundle are wired correctly and the bundle hash
+recomputes cleanly. **Boot smoke is the next step (Task C below).**
+Three plausible outcomes:
+
+1. **Boot succeeds** (G-1+G-2+G-3 close): backfill `measured_values:`
+   frontmatter with real gmu/throughput/cold-start values; surface G-4
+   /profile swap as operator checkpoint.
+2. **vision_tower mismatch fires** (predicted by Wave 3 hand-off):
+   `Mistral3ForConditionalGeneration` is the multimodal architecture;
+   the bartowski Q4_K_M GGUF is text-only (795 tensors, no vision_tower
+   weights). vLLM may try to allocate vision-encoder buffers and crash.
+   Resolution: Decision Option 7 sub-step iv (text-only stripped config
+   pointing model_type at `ministral3` or `mistral`).
+3. **Different unexpected error**: documented precisely, surfaced as
+   refined decision checkpoint.
+
 ## References
 
 - HF: [mistralai/Mistral-Medium-3.5-128B](https://huggingface.co/mistralai/Mistral-Medium-3.5-128B) (base, gated)
