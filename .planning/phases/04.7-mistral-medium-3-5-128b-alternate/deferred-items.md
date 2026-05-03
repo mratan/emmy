@@ -220,3 +220,137 @@ bf16 path, the `dtype: float16` override could be dropped and the
 profile would auto-detect bf16 from config (matching the "stand on
 shoulders" principle from CLAUDE.md). Track via the gguf.py:69 warning
 location.
+
+## 2026-05-03 (Wave 4 / Option 7a tokenizer_mode) — vLLM Mistral3ForConditionalGeneration multimodal-init blocks text-only GGUF (now auto-fixed via stripped config; tracking for upstream awareness)
+
+**Discovered during:** Plan 04.7-02 Wave 4 boot-smoke attempt 8
+(run_id `20260503T000823Z-a92397`). **Status: AUTO-FIXED in commit
+`2205adb` via stripped text-only config dir + `Ministral3ForCausalLM`
+arch.** Tracking here as deferred upstream-awareness item.
+
+**Symptom:** After Wave 3's MistralTokenizer barrier was cleared by
+Wave 4's `tokenizer_mode: mistral` + tekken.json staging, vLLM
+proceeded into MultiModalBudget construction and failed:
+
+```
+File "vllm/v1/engine/input_processor.py", line 61, in __init__
+    mm_budget = MultiModalBudget(vllm_config, mm_registry)
+File "vllm/multimodal/encoder_budget.py", line 32, in get_mm_max_toks_per_item
+    mm_inputs = mm_registry.get_dummy_mm_inputs(...)
+File "vllm/model_executor/models/mistral3.py", line 181, in get_hf_processor
+    return self.ctx.get_hf_processor(PixtralProcessor, **kwargs)
+File "transformers/models/auto/image_processing_auto.py", line 569, in from_pretrained
+    raise initial_exception
+File "transformers/image_processing_base.py", line 334, in get_image_processor_dict
+    raise OSError(...)
+OSError: Can't load image processor for '/models/Mistral-Medium-3.5-128B-config'.
+... preprocessor_config.json file
+```
+
+**Root cause:** vLLM resolves architecture from the HF config's
+`architectures + model_type` fields. The operator-staged
+`/data/models/Mistral-Medium-3.5-128B-config/config.json` (copied
+verbatim from the gated `mistralai/Mistral-Medium-3.5-128B` HF repo)
+declares `architectures: ["Mistral3ForConditionalGeneration"] +
+model_type: mistral3` — i.e. the multimodal architecture. vLLM then
+constructs `MultiModalBudget` for this arch, which probes
+`PixtralProcessor.from_pretrained(<tokenizer-dir>)`, which probes
+`image_processing_auto.from_pretrained(<dir>)`, which fails because
+there's no `preprocessor_config.json` (the bartowski text-only Q4_K_M
+GGUF has 795 tensors, no vision_tower, and ships no preprocessor config).
+
+**Auto-fix applied (Plan 04.7-02 commit 2205adb):**
+- Created sibling dir `/data/models/Mistral-Medium-3.5-128B-text-only-config/`
+- Wrote stripped `config.json` with top-level `architectures:
+  ["Ministral3ForCausalLM"] + model_type: ministral3 + text_config
+  fields hoisted + multimodal fields dropped`
+- Symlinked tokenizer files from the original config dir
+- Flipped `engine.hf_config_path` in serving.yaml to point at the new
+  dir; `engine.tokenizer:` left at the original dir
+- vLLM registry maps `Ministral3ForCausalLM → ("mistral",
+  "MistralForCausalLM")` at `vllm/model_executor/models/registry.py:164`,
+  so the text-only architecture loads cleanly without ever entering
+  the Mistral3 multimodal init code path
+
+**Why still listed here:** this is upstream awareness — there are TWO
+upstream paths that would let us remove the text-only-config-strip
+operator-staging step:
+
+1. **vLLM PR:** add a `Mistral3ForCausalLM` text-only registry entry
+   (alongside the existing `Mistral3ForConditionalGeneration` multimodal
+   entry) so a model with the upstream multimodal architecture string
+   can degrade gracefully when no vision weights are present. This
+   would let the bartowski GGUF load with the original (unstripped)
+   config dir.
+2. **bartowski-side:** ship a separate GGUF repo with text-only-mode
+   metadata (`general.architecture: ministral3` + a paired
+   `Ministral3ForCausalLM` HF config). This is the "right" upstream
+   fix but depends on the GGUF maintainer.
+
+If either lands, the text-only-config strip can be removed and the
+profile reverts to the simpler single-config-dir setup. Track via the
+mistral3 entry in vLLM's `ModelRegistry` and the bartowski GGUF
+repository for any text-only variant.
+
+## 2026-05-03 (Wave 4 / Option 7a tokenizer_mode) — Spark coexistence at gmu=0.78 (T-06 fired; OPERATOR DECISION required, not deferrable)
+
+**Discovered during:** Plan 04.7-02 Wave 4 boot-smoke attempt 9
+(run_id `20260503T001143Z-2ff544`).
+
+**Symptom:** After Wave 4's multimodal-init blocker was cleared via
+the stripped text-only config (architecture resolved as
+`Ministral3ForCausalLM`, MultiModalBudget bypassed entirely), vLLM
+spawned the engine core and reached `init_device` (the FIRST
+CUDA-touching code in the boot sequence):
+
+```
+File "vllm/v1/worker/gpu_worker.py", line 282, in init_device
+    self.free_memory, self.total_memory = current_platform.mem_get_info(device)
+File "torch/cuda/memory.py", line 842, in mem_get_info
+    return torch.cuda.cudart().cudaMemGetInfo(device)
+torch.AcceleratorError: CUDA error: out of memory
+```
+
+**Root cause:** **T-06 (Spark coexistence at gmu=0.78)** firing as
+predicted by CONTEXT D-06. Daily-driver Gemma 4 26B-A4B v2.1 holds
+~68.7 GB on the same GB10 UMA box (verified via
+`nvidia-smi --query-compute-apps=process_name,used_memory
+--format=csv`). Mistral's `gpu_memory_utilization=0.78 → 99.8 GB` pool
+target doesn't fit alongside (99.8+68.7=168.5 > 128 GB total).
+
+**Why this is NOT deferred (operator decision required):**
+- This is a resource gate, NOT an architectural blocker. The
+  configuration is well-formed; vLLM just can't allocate the requested
+  pool because the daily-driver is using ~half the UMA box.
+- Per CONTEXT D-13 the Mistral profile is eval-only opt-in by design.
+  The typical workflow is `/profile mistral-medium-3.5` swap, which
+  evicts the daily-driver and boots Mistral solo at gmu=0.78. The
+  `/profile` slash command in pi-emmy already handles this via the
+  sidecar's container-swap controller.
+- Stopping the daily-driver mid-execution is the operator's choice
+  (the executor doesn't unilaterally evict the operator's primary
+  serving endpoint).
+
+**No upstream fix available:** this is a fundamental constraint of the
+GB10 UMA / 128 GB box + the 73 GB Q4_K_M weights + the daily-driver's
+~68.7 GB footprint. The math doesn't work for coexistence. The
+"resolution" is operator workflow, not code.
+
+**Operator action to close G-1 (when ready):**
+```bash
+docker stop emmy-serve              # frees ~68.7 GB
+RUN_ID="$(date -u +'%Y%m%dT%H%M%SZ')-$(head -c 6 /dev/urandom | xxd -p | head -c 6)"
+RUN_DIR="runs/${RUN_ID}-boot-mistral"
+mkdir -p "$RUN_DIR"
+DOCKER_RUN_ARGS="$(uv run python -m emmy_serve.boot.runner render-docker-args \
+  --profile profiles/mistral-medium-3.5/v1 --run-dir "$RUN_DIR" --port 8005)"
+eval docker run --name emmy-serve-mistral --detach "$DOCKER_RUN_ARGS"
+# wait 5-10 min for cold start; then curl http://127.0.0.1:8005/v1/models
+```
+
+OR via the `/profile mistral-medium-3.5` slash command in pi-emmy.
+After Mistral run, restore daily-driver:
+```bash
+docker stop emmy-serve-mistral
+bash scripts/start_emmy.sh   # restores Gemma daily-driver
+```
