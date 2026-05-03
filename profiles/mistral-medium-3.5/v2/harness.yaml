@@ -1,0 +1,111 @@
+# profiles/mistral-medium-3.5/v1/harness.yaml
+# Phase 04.7 Plan 04.7-01 — Mistral Medium 3.5 128B v1 bundle (eval-only).
+# Body byte-cloned from profiles/gemma-4-31b-it/v1.2/harness.yaml (PATTERNS.md
+# §"harness.yaml" + plan 04.7-01 Task 2 step C). Per CONTEXT D-12 the absent
+# `tools.ask_claude` block validates as Optional[AskClaudeConfig] = None, so no
+# changes needed there. context.max_input_tokens = max_model_len(131072) -
+# output_reserve(16384) = 114688 — same arithmetic value as the Gemma 31B
+# v1.2 analog despite Gemma's 256K max_model_len (analog inherited the value
+# from v1.1's 128K formula). Per CLAUDE.md Pitfall #1, NO Mistral-specific
+# tweaks in v1; Phase 5 calibration may revise.
+# See PROFILE_NOTES.md for per-knob provenance (SC-5 / D-16).
+
+prompts:
+  system: prompts/system.md                        # SP_OK canary (Pitfall #6 / D-07)
+  edit_format: prompts/edit_format.md              # Hashline per-line hash-anchored (model-agnostic)
+  tool_descriptions: prompts/tool_descriptions.md  # 9 native tools; same as Qwen v3.1
+  use_system_role: true                             # Gemma 4 honors system role; verified by SP_OK canary at boot
+  prepend_system_text: ""                           # CONTEXT-04 layering done at runtime in @emmy/ux
+
+context:
+  max_input_tokens: 114688                          # = max_model_len(131072) - output_reserve(16384); same formula as Qwen
+  include_repo_map: false                           # Phase 3 feature (Aider-style) not wired in v1
+  repo_map_max_tokens: 0
+  default_pruning: head_tail                        # Legacy; superseded by compaction block below
+  compaction:
+    soft_threshold_pct: 0.75                       # D-11 industry default (Claude Code / Cursor / Cline); crosses at ~86K of 114K
+    preserve_recent_turns: 5                       # D-14 pi 0.68 DEFAULT_COMPACTION_SETTINGS-equivalent
+    summarization_prompt_path: prompts/compact.md   # D-13 emmy-authored; layers on pi's SUMMARIZATION_SYSTEM_PROMPT
+    preserve_tool_results: error_only              # D-14/D-15 Pitfall #15 — stacktraces ARE the error signal
+  memory:
+    # Phase 04.4 plan 03 — filesystem memory tool config (LOCKED defaults from
+    # CONTEXT.md §decisions). Runtime in packages/emmy-tools/src/memory/.
+    enabled: true
+    project_root: ".emmy/notes"          # relative to cwd; null = disable scope
+    global_root: "~/.emmy/memory"        # ~-prefixed; null = disable scope
+    read_at_session_start: true
+    max_file_bytes: 65536                # per-file write cap
+    max_total_bytes: 10485760            # per-scope cap (10 MiB)
+    blocked_extensions: [".env", ".key", ".pem"]
+
+tools:
+  format: openai                                    # gemma4 parser emits OpenAI tool_calls
+  schemas: tool_schemas/                            # 9 JSON schema files (8 native + web_search)
+  grammar:
+    path: grammars/tool_call.lark                   # Gemma-4-shape Lark: over-accepting backstop (Pitfall #3 / D-11)
+    mode: reactive                                   # D-11 production path — correctness backstop, NOT a shape enforcer
+  per_tool_sampling:
+    edit: { temperature: 0.0 }                       # Structured-output determinism (Google Gemma 4 card recommends T=0 for structured output)
+    bash: { temperature: 0.0 }                       # Deterministic command emission
+    read: { temperature: 0.0 }                       # File reads are deterministic
+  web_fetch:
+    # D-26 default-deny allowlist; hostname-EXACT runtime enforcement (Plan 03-06).
+    # ai.google.dev NEW for Gemma 4 (model card + function-calling docs hostname).
+    allowlist:
+      - docs.python.org
+      - developer.mozilla.org
+      - docs.vllm.ai
+      - huggingface.co
+      - ai.google.dev
+      - docs.langfuse.com
+    # Plan 03.1-02 D-35 — returned-URL bypass TTL (ms). URLs returned by a
+    # recent web_search call are fetchable without allowlist entry for this
+    # many ms. 0 disables bypass entirely.
+    search_bypass_ttl_ms: 300000
+  web_search:
+    # Plan 03.1-02 D-34 — SearxNG-backed web_search tool. base_url loopback-only;
+    # rate-limited per-turn (T-03.1-02-03); tool NOT registered when
+    # enabled=false OR EMMY_WEB_SEARCH=off OR EMMY_TELEMETRY=off.
+    enabled: true
+    base_url: http://127.0.0.1:8888
+    max_results_default: 10
+    rate_limit_per_turn: 10
+    timeout_ms: 10000
+
+agent_loop:
+  max_iterations: 25                                # Revisit at Phase 5 eval
+  retry_on_unparseable_tool_call: 2                 # D-11 reactive-retry budget
+  retry_on_empty_response: 1                        # Pitfall #6 — one retry before surfacing as SP-delivery suspicion
+  self_correction: enabled                          # ReAct self-correction on parseable tool errors
+
+advanced_settings_whitelist:
+  - reasoning_effort                                 # Aider allowlist pattern; per-call knob without engine restart
+  - thinking_budget                                  # Aider allowlist pattern
+
+subagents:
+  enabled: true
+  max_concurrent: 2                              # hardware-imposed cap
+  long_context_serialize_threshold_tokens: 40000 # parent input > 40K → serialize
+  default_memory_scope: "project"                # project | global | none
+  personas:
+    research:
+      description: "Investigate a specific question without polluting parent's context."
+      pattern: "persona"
+      persona_dir: "subagents/research"
+      tool_allowlist: ["read", "grep", "find", "ls"]
+      model_override: null
+      max_turns: 10
+      persist_transcript: false
+    code_reviewer:
+      description: "Review a diff or file for bugs and style."
+      pattern: "persona"
+      persona_dir: "subagents/code-reviewer"
+      tool_allowlist: ["read", "grep"]
+      max_turns: 5
+      persist_transcript: false
+    bash_runner:
+      description: "Execute a bash task and return the output."
+      pattern: "lean"
+      tool_allowlist: ["bash", "read"]
+      max_turns: 3
+      persist_transcript: false
