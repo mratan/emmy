@@ -128,6 +128,33 @@ class EngineConfig(BaseModel):
     # dtype=None and renders identically (vLLM auto-detects from config).
     dtype: Optional[Literal["auto", "float16", "bfloat16", "float32"]] = None
 
+    # Phase 04.7-02 follow-up Decision Option 7a (tokenizer_mode iteration
+    # 2026-05-02). Optional override for vLLM's `--tokenizer-mode` CLI flag.
+    # The Literal is the byte-identical set vLLM 0.19 accepts at
+    # `vllm/config/model.py:85` (`TokenizerMode = Literal["auto", "hf",
+    # "slow", "mistral", "deepseek_v32"]`).
+    #
+    # Used by Mistral 3.x GGUF profiles whose `tool_call_parser: mistral`
+    # routes through a chat-template implementation that requires
+    # `mistral_common.MistralTokenizer` — not the HF AutoTokenizer that
+    # `tokenizer_mode=auto` (the vLLM default) loads. Plan 04.7-02 Wave 3
+    # attempt 7 (run_id `20260502T234222Z-e848d9`) reached the deepest
+    # engine-init code yet (kv_cache configured, scheduler initialized,
+    # asynchronous scheduling enabled) before failing the FINAL VllmConfig
+    # validation with `pydantic_core.ValidationError: The tokenizer must be
+    # an instance of MistralTokenizer.` — the architectural gap the
+    # Wave-3 SUMMARY surfaced as Decision Option 7. Sub-path (a) of that
+    # option requires `tokenizer_mode: mistral` PLUS a sibling `tekken.json`
+    # in the directory pointed at by `tokenizer:`; mistral-common's
+    # `MistralTokenizer.from_file` consumes that file directly.
+    #
+    # Strictly additive — every pre-04.7-02-followup profile validates with
+    # tokenizer_mode=None and renders identically (vLLM defaults to "auto"
+    # internally, so the byte-identical absence is preserved).
+    tokenizer_mode: Optional[
+        Literal["auto", "hf", "slow", "mistral", "deepseek_v32"]
+    ] = None
+
     # --- quantization ---
     # Phase 04.7 — "gguf" added for Mistral Medium 3.5 128B Q4_K_M (CONTEXT D-02).
     # vLLM experimental GGUF backend; long-context flagged WIP by Mistral. The

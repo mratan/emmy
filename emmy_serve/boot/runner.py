@@ -127,6 +127,16 @@ def render_vllm_cli_args(profile_path: Path) -> list[str]:
     # (vLLM continues to auto-detect from config).
     if e.dtype is not None:
         cli += ["--dtype", e.dtype]
+    # Phase 04.7-02 follow-up Decision Option 7a — explicit tokenizer_mode.
+    # Required for Mistral 3.x GGUF profiles whose `tool_call_parser: mistral`
+    # routes through a chat-template implementation that needs
+    # `mistral_common.MistralTokenizer` — see schema docstring for the precise
+    # `pydantic_core.ValidationError: The tokenizer must be an instance of
+    # MistralTokenizer.` error class surfaced by Plan 04.7-02 Wave 3 attempt 7.
+    # Conditional emission preserves byte-identical render for every pre-04.7-02-
+    # followup profile where the field is unset (vLLM defaults to "auto" itself).
+    if e.tokenizer_mode is not None:
+        cli += ["--tokenizer-mode", e.tokenizer_mode]
     return cli
 
 

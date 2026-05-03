@@ -218,3 +218,154 @@ def test_engine_airgap_patch_dir_optional_default_none():
     kwargs.pop("airgap_patch_dir", None)
     ec = schema.EngineConfig(**kwargs)
     assert ec.airgap_patch_dir is None
+
+
+# -----------------------------------------------------------------------------
+# Test 6 — 04.7-02 follow-up Decision Option 5 (sitecustomize wave): dtype field
+# -----------------------------------------------------------------------------
+#
+# `EngineConfig.dtype: Optional[Literal["auto", "float16", "bfloat16",
+# "float32"]] = None` was added in commit `35aee85` (Wave 3 / sitecustomize
+# iteration) without a paired schema-test commit. These two tests close that
+# coverage gap so the field's accept/Optional contract has a regression guard
+# alongside its sibling additive fields (tokenizer / hf_config_path /
+# airgap_patch_dir / tokenizer_mode).
+
+
+def test_engine_accepts_dtype_float16():
+    """04.7-02 sitecustomize wave: ``dtype`` field accepts ``"float16"``.
+
+    Required for Mistral 3.x GGUF whose source config.json declares
+    `dtype=bfloat16` but vLLM's GGUF backend allowlists only
+    `[torch.float16, torch.float32]` (see schema docstring for the
+    `vllm/engine/arg_utils.py:2094 create_engine_config` rejection trace).
+    """
+    ec = schema.EngineConfig(
+        **_kwargs(
+            quantization="gguf",
+            tokenizer=None,
+            hf_config_path="/models/Mistral-Medium-3.5-128B-config",
+            airgap_patch_dir="airgap_patches",
+            dtype="float16",
+        )
+    )
+    assert ec.dtype == "float16"
+    # Spot-check: dtype coexists with the other GGUF knobs
+    assert ec.quantization == "gguf"
+    assert ec.airgap_patch_dir == "airgap_patches"
+
+
+def test_engine_dtype_optional_default_none():
+    """04.7-02 sitecustomize wave — backward-compat: pre-04.7-02-followup
+    profiles validate with dtype=None.
+
+    Mirrors the airgap_patch_dir / hf_config_path / tokenizer Optional-default
+    invariants. All 7+ shipped bundles (Gemma 4 v1/v2/v2.1, Gemma 31B
+    v1/v1.1/v1.2, Qwen 27B v1/v1.1) MUST continue to validate without
+    declaring this field.
+    """
+    kwargs = _kwargs(
+        model="/models/gemma-4-26B-A4B-it",
+        model_hf_id="google/gemma-4-26B-A4B-it",
+        served_model_name="gemma-4-26b-a4b-it",
+        quantization="fp8",
+        load_format="fastsafetensors",
+        tool_call_parser="gemma4",
+        reasoning_parser="gemma4",
+    )
+    kwargs.pop("dtype", None)
+    ec = schema.EngineConfig(**kwargs)
+    assert ec.dtype is None
+
+
+def test_engine_rejects_unknown_dtype():
+    """04.7-02 sitecustomize wave — adjacent-typo guard: only the
+    Literal["auto","float16","bfloat16","float32"] values pass.
+    A typo like ``"fp16"`` (the kv_cache_dtype name, not torch's) must
+    be rejected so the schema catches profile-author confusion early.
+    """
+    with pytest.raises(pydantic.ValidationError):
+        schema.EngineConfig(**_kwargs(quantization="gguf", dtype="fp16"))
+
+
+# -----------------------------------------------------------------------------
+# Test 7 — 04.7-02 follow-up Decision Option 7a: tokenizer_mode field
+# -----------------------------------------------------------------------------
+#
+# Plan 04.7-02 Wave 3 attempt 7 (run_id `20260502T234222Z-e848d9`) reached the
+# deepest engine-init code yet then failed with `pydantic_core.ValidationError:
+# The tokenizer must be an instance of MistralTokenizer.` because vLLM's
+# `tool_call_parser: mistral` path requires `mistral_common.MistralTokenizer`,
+# which `tokenizer_mode=auto` (vLLM default) does NOT load. Decision Option 7a
+# is `tokenizer_mode: mistral` + sibling `tekken.json` in the
+# `tokenizer:`-pointed dir.
+
+
+def test_engine_accepts_tokenizer_mode_mistral():
+    """04.7-02 Option 7a: ``tokenizer_mode="mistral"`` accepted.
+
+    The Literal must include "mistral" because vLLM's `mistral` tool-call
+    parser path is gated on the tokenizer being a `MistralTokenizer`
+    instance, which only loads when `--tokenizer-mode mistral` is set.
+    """
+    ec = schema.EngineConfig(
+        **_kwargs(
+            quantization="gguf",
+            tokenizer="/models/Mistral-Medium-3.5-128B-config",
+            hf_config_path="/models/Mistral-Medium-3.5-128B-config",
+            airgap_patch_dir="airgap_patches",
+            dtype="float16",
+            tokenizer_mode="mistral",
+        )
+    )
+    assert ec.tokenizer_mode == "mistral"
+    # Spot-check: tokenizer_mode coexists with the rest of the Mistral GGUF
+    # knob stack (sitecustomize + dtype + workaround-A hf_config_path)
+    assert ec.tool_call_parser == "mistral"
+    assert ec.reasoning_parser == "mistral"
+
+
+def test_engine_accepts_tokenizer_mode_other_values():
+    """04.7-02 Option 7a — Literal contains the byte-identical set vLLM 0.19
+    exposes at vllm/config/model.py:85 (`Literal["auto","hf","slow",
+    "mistral","deepseek_v32"]`). The four non-mistral values are sanity-
+    checked here so a future vLLM-side rename surfaces as a test failure
+    rather than a silent profile-validation diff.
+    """
+    for value in ("auto", "hf", "slow", "deepseek_v32"):
+        ec = schema.EngineConfig(**_kwargs(tokenizer_mode=value))
+        assert ec.tokenizer_mode == value
+
+
+def test_engine_rejects_unknown_tokenizer_mode():
+    """04.7-02 Option 7a — adjacent-typo guard: invented values rejected.
+
+    "tekken" is the format name; vLLM does NOT have it as a `tokenizer_mode`
+    Literal (the right value is `mistral`, which then loads tekken.json
+    via mistral-common). A profile author who confuses the file format with
+    the mode name must be caught at validation time.
+    """
+    with pytest.raises(pydantic.ValidationError):
+        schema.EngineConfig(**_kwargs(tokenizer_mode="tekken"))
+
+
+def test_engine_tokenizer_mode_optional_default_none():
+    """04.7-02 Option 7a — backward-compat: pre-04.7-02-followup profiles
+    validate with tokenizer_mode=None.
+
+    Mirrors the dtype / airgap_patch_dir / hf_config_path / tokenizer
+    Optional-default invariants. All 7+ shipped non-Mistral bundles MUST
+    continue to validate without declaring this field.
+    """
+    kwargs = _kwargs(
+        model="/models/gemma-4-26B-A4B-it",
+        model_hf_id="google/gemma-4-26B-A4B-it",
+        served_model_name="gemma-4-26b-a4b-it",
+        quantization="fp8",
+        load_format="fastsafetensors",
+        tool_call_parser="gemma4",
+        reasoning_parser="gemma4",
+    )
+    kwargs.pop("tokenizer_mode", None)
+    ec = schema.EngineConfig(**kwargs)
+    assert ec.tokenizer_mode is None
