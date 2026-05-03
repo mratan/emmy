@@ -20,6 +20,9 @@ validation_runs:
   - "20260502T233850Z-6282d9-boot  # FAIL Wave 3 attempt 5 — sitecustomize patch fired (mistral3 → GGUF allowlist + cfg_map alias of mistral). T-01 CLEARED. New error class #1: `Loading a multimodal GGUF model needs to use original tokenizer. Please specify the unquantized hf model's repo name or path using the --tokenizer argument.` from vllm/engine/arg_utils.py:1448 create_model_config. vLLM resolved arch as Mistral3ForConditionalGeneration (multimodal); GGUF-embedded tokenizer fallback rejected for multimodal path."
   - "20260502T234040Z-5af3fe-boot  # FAIL Wave 3 attempt 6 — `tokenizer: /models/Mistral-Medium-3.5-128B-config` (Rule 3 auto-fix; pointed at operator-staged dir with HF tokenizer.json). Past tokenizer barrier. New error class #2: `torch.bfloat16 is not supported for quantization method gguf. Supported dtypes: [torch.float16, torch.float32]` from vllm/engine/arg_utils.py:2094 VllmConfig validation. Plus warning gguf.py:69 `GGUF has precision issues with bfloat16 on Blackwell`. Mistral 3.x source config.json declares dtype=bfloat16."
   - "20260502T234222Z-e848d9-boot  # FAIL Wave 3 attempt 7 — `dtype: float16` (Rule 3 auto-fix via new EngineConfig.dtype schema field + --dtype CLI emission). Past dtype barrier. Engine init code begins (Asynchronous scheduling enabled, IR op priority configured). New error class #3 (architectural): `The tokenizer must be an instance of MistralTokenizer.` from VllmConfig validation. The mistral tool_call_parser path requires a Mistral-format tokenizer (mistral_common.MistralTokenizer, typically loaded from tekken.json via --tokenizer-mode mistral). Operator-staged dir has only HF tokenizer.json — no tekken.json. Architectural blocker; needs operator decision (Path 7 added to refined menu)."
+  # Plan 04.7-02 boot smoke attempts — Wave 4 (Decision Option 7a tokenizer_mode + text-only-config strip — MistralTokenizer barrier CLEARED; multimodal-init barrier CLEARED via stripped config; CUDA OOM next; see "Option 7a wiring (2026-05-02 — tokenizer_mode iteration)" body section + "Wave 4 boot smoke (Option 7a + text-only-config strip)" body section)
+  - "20260503T000823Z-a92397-boot-mistral  # FAIL Wave 4 attempt 8 — `tokenizer_mode: mistral` set (operator-staged tekken.json, 16,275,354 bytes, sibling of tokenizer.json in /data/models/Mistral-Medium-3.5-128B-config/). MistralTokenizer barrier CLEARED — engine init proceeded past kernel.py:203 (the prior failure point). New error class #4 (multimodal-init): `OSError: Can't load image processor for '/models/Mistral-Medium-3.5-128B-config'. ... preprocessor_config.json file` from transformers/image_processing_base.py:334 → vllm/multimodal/encoder_budget.py:32 → vllm/v1/engine/input_processor.py:61 MultiModalBudget. Triggered because vLLM resolved architecture as Mistral3ForConditionalGeneration (multimodal — config.json had model_type=mistral3 + architectures=[Mistral3ForConditionalGeneration]) and tries to construct PixtralProcessor for the bartowski Q4_K_M GGUF (which is text-only, 795 tensors, no vision_tower). Same class as predicted by Wave 3 hand-off (vision_tower mismatch); auto-fixed in Wave 4 attempt 9 via stripped text-only config dir."
+  - "20260503T001143Z-2ff544-boot-mistral  # FAIL Wave 4 attempt 9 — Rule 3 auto-fix: stripped text-only config dir at /data/models/Mistral-Medium-3.5-128B-text-only-config/ (top-level model_type=ministral3 + architectures=[Ministral3ForCausalLM]; text_config hoisted; vision_config + image_token_index + multimodal_projector_bias dropped; tokenizer files symlinked). vLLM resolved architecture as Ministral3ForCausalLM (vllm/model_executor/models/registry.py:164 maps Ministral3ForCausalLM → MistralForCausalLM). MultiModalBudget barrier CLEARED — engine core proceeded into init_device. New error class #5 (resource): `torch.AcceleratorError: CUDA error: out of memory` from torch/cuda/memory.py:842 cudaMemGetInfo at vllm/v1/worker/gpu_worker.py:282 init_device. Daily-driver Gemma 4 26B-A4B v2.1 holding ~68.7 GB on the same GB10 UMA box; Mistral's gmu=0.78 → 99.8 GB pool target doesn't fit alongside. NOT an architectural blocker — this is T-06 (Spark coexistence at gmu=0.78) firing as predicted by CONTEXT D-06. Operator decision: stop Gemma to run Mistral solo, OR step gmu down (D-05 protocol: 0.78→0.73→0.68; risky because at 0.55 the pool is below 73 GB GGUF weight size), OR accept Mistral as solo-only profile."
 ---
 
 # Mistral Medium 3.5 128B — v1 Profile Notes
@@ -902,6 +905,302 @@ Remove `profiles/mistral-medium-3.5/v1/airgap_patches/` + the
 Either path is a v2 cut (behavioral change), not an in-place edit. v1
 preserves the patch + the empirical-evidence trail of the 3-attempt boot
 smoke iteration.
+
+## Option 7a wiring (2026-05-02 — tokenizer_mode iteration)
+
+After the Wave 3 sitecustomize iteration cleared T-01 + the dtype +
+tokenizer-pointed-at-local-dir Rule 3 auto-fixes, the deepest engine-init
+code path reached failed at the FINAL VllmConfig validation:
+
+```
+pydantic_core.ValidationError: 1 validation error for VllmConfig
+  Value error, The tokenizer must be an instance of MistralTokenizer.
+```
+
+Wave 3 SUMMARY surfaced this as Decision Option 7. Operator selected
+**sub-path (a)** ("source `tekken.json` for the operator-staged config
+dir + add `tokenizer_mode: mistral` to bundle"). This Wave 4 iteration
+wires the bundle side of that decision.
+
+### What unblocks the MistralTokenizer requirement
+
+vLLM's `mistral` tool_call_parser path (CONTEXT D-09 LOCKED) routes
+through a chat-template implementation gated on the loaded tokenizer
+being a `mistral_common.MistralTokenizer` instance — not the HF
+`AutoTokenizer` that vLLM's default `tokenizer_mode=auto` loads from
+`tokenizer.json`. The `MistralTokenizer` class loads from a tekken-format
+file (`tekken.json`) via `MistralTokenizer.from_file()`, which only
+fires when `--tokenizer-mode mistral` is passed.
+
+**Two coupled requirements** (BOTH must be satisfied):
+
+1. **`tekken.json` must be present** in the directory pointed at by
+   `engine.tokenizer:`. Operator-staged 2026-05-02 16:55:
+   ```
+   /data/models/Mistral-Medium-3.5-128B-config/tekken.json (16,275,354 bytes)
+   /data/models/Mistral-Medium-3.5-128B-config/SYSTEM_PROMPT.txt (1,461 bytes)
+   ```
+   via `huggingface-cli download mistralai/Mistral-Medium-3.5-128B
+   --include "tekken.json" "tokenization_mistral.py" "*.txt"
+   --local-dir /data/models/Mistral-Medium-3.5-128B-config`.
+   Note: `tokenization_mistral.py` was NOT downloaded — the gated repo
+   doesn't ship a custom tokenization helper; mistral-common's own
+   MistralTokenizer is the loader.
+
+2. **`engine.tokenizer_mode: mistral`** must be set so vLLM uses
+   `MistralTokenizer.from_file()` instead of `AutoTokenizer.from_pretrained()`.
+
+### Schema/runner extension
+
+| Layer | Change |
+|---|---|
+| `EngineConfig.tokenizer_mode` (schema.py) | NEW field: `Optional[Literal["auto", "hf", "slow", "mistral", "deepseek_v32"]] = None`. Literal mirrors vLLM 0.19's `vllm/config/model.py:85` `TokenizerMode` exactly. Strictly additive. |
+| `render_vllm_cli_args` (runner.py) | Emits `--tokenizer-mode <value>` when set. Conditional emission preserves byte-identical render for pre-04.7-02-followup profiles. |
+| Tests | 4 new in `test_profile_schema_gguf.py` + 4 new in `test_docker_run_build.py` (positive + negative + 2 absence guarantees) + 3 NEW `dtype` schema tests closing a Wave-3-commit gap |
+
+### Bundle update
+
+`profiles/mistral-medium-3.5/v1/serving.yaml`:
+```yaml
+  tokenizer_mode: mistral
+```
+inserted under the existing `dtype: float16` line. Bundle hash bumped
+in-place per CLAUDE.md additive-bundle rules
+(`tokenizer_mode: Optional[...] = None` field whose absence validates as
+None elsewhere — every pre-04.7-02-followup profile renders byte-identically).
+
+### Why this is sub-path (a), not sub-path (b)
+
+Option 7 sub-path (b) was "generate tekken.json from tokenizer.json via
+mistral-common conversion utility". That path:
+- Is NOT documented in mistral-common's public surface (no
+  `MistralTokenizer.from_hf_tokenizer_json()` or equivalent we could
+  find in 5 minutes of source review).
+- Risks subtle BPE-vocabulary differences if the conversion is lossy
+  (the "tekken" format encodes special-token offsets, byte-fallback
+  rules, etc. that may not map 1:1 onto HF's tokenizer.json layout).
+- Even if successful, would carry a custom-conversion-script
+  maintenance burden in the source tree — every time mistral-common
+  bumps a version, we'd have to re-verify the conversion produces
+  byte-identical output.
+
+Sub-path (a) is operator-cheap (one HF download command) and uses the
+upstream-blessed file. The only added attack surface is the staged
+file's integrity (no different from the existing tokenizer.json staging).
+
+### Decision Option 7a hash trail
+
+| Stage | Hash (8-char prefix) |
+|---|---|
+| Wave 3 final (post-Option-5 sitecustomize) | `sha256:7a597f67…` |
+| Wave 4 commit B (this commit — `tokenizer_mode: mistral` added to serving.yaml + this Option-7a wiring section appended) | (final hash in profile.yaml `profile.hash`) |
+
+The exact final bundle hash lives in `profiles/mistral-medium-3.5/v1/profile.yaml`
+under `profile.hash` and was computed via `uv run emmy profile hash
+profiles/mistral-medium-3.5/v1 --write`. We DON'T inline the exact value
+in this trail because doing so creates a self-referential loop (the trail
+is part of the bundle the hash covers, so any value we inline becomes
+stale on the next recompute). For Wave-4 commit B the final hash will be
+whatever `profile.yaml` records at the time of the `git commit` that
+lands this section.
+
+### What this DOES NOT yet prove
+
+The schema + runner + bundle are wired correctly and the bundle hash
+recomputes cleanly. **Boot smoke is the next step (Task C below).**
+Three plausible outcomes:
+
+1. **Boot succeeds** (G-1+G-2+G-3 close): backfill `measured_values:`
+   frontmatter with real gmu/throughput/cold-start values; surface G-4
+   /profile swap as operator checkpoint.
+2. **vision_tower mismatch fires** (predicted by Wave 3 hand-off):
+   `Mistral3ForConditionalGeneration` is the multimodal architecture;
+   the bartowski Q4_K_M GGUF is text-only (795 tensors, no vision_tower
+   weights). vLLM may try to allocate vision-encoder buffers and crash.
+   Resolution: Decision Option 7 sub-step iv (text-only stripped config
+   pointing model_type at `ministral3` or `mistral`).
+3. **Different unexpected error**: documented precisely, surfaced as
+   refined decision checkpoint.
+
+## Wave 4 boot smoke (Option 7a + text-only-config strip — 2026-05-03)
+
+Two boot attempts run on 2026-05-03 with the Wave-4 wiring; both made
+substantial progress past the prior Wave-3 architectural blocker BUT
+each surfaced a new downstream error class. Daily-driver Gemma 4
+26B-A4B v2.1 stayed up on port 8002 throughout (Mistral attempts ran
+on port 8005 with container name `emmy-serve-mistral`).
+
+### Attempt 8 — `tokenizer_mode: mistral` ALONE (run_id `20260503T000823Z-a92397`)
+
+```
+engine.tokenizer: /models/Mistral-Medium-3.5-128B-config
+engine.tokenizer_mode: mistral
+engine.hf_config_path: /models/Mistral-Medium-3.5-128B-config
+```
+
+vLLM successfully consumed `--tokenizer-mode mistral` AND loaded the
+operator-staged `tekken.json` via mistral-common. The Wave-3 prior
+failure point (`pydantic_core.ValidationError: The tokenizer must be an
+instance of MistralTokenizer.` at `kernel.py:203` adjacent code path)
+was CLEARED — engine init proceeded ~30 seconds further into:
+
+```
+File "vllm/v1/engine/async_llm.py", line 135, in __init__
+    self.input_processor = InputProcessor(self.vllm_config, renderer)
+File "vllm/v1/engine/input_processor.py", line 61, in __init__
+    mm_budget = MultiModalBudget(vllm_config, mm_registry)
+File "vllm/multimodal/encoder_budget.py", line 87, in __init__
+    all_mm_max_toks_per_item = get_mm_max_toks_per_item(...)
+File "vllm/multimodal/encoder_budget.py", line 32, in get_mm_max_toks_per_item
+    mm_inputs = mm_registry.get_dummy_mm_inputs(...)
+File "vllm/model_executor/models/mistral3.py", line 181, in get_hf_processor
+    return self.ctx.get_hf_processor(PixtralProcessor, **kwargs)
+File "transformers/processing_utils.py", line 1429, in from_pretrained
+    args = cls._get_arguments_from_pretrained(...)
+File "transformers/models/auto/image_processing_auto.py", line 569, in from_pretrained
+    raise initial_exception
+OSError: Can't load image processor for '/models/Mistral-Medium-3.5-128B-config'.
+If you were trying to load it from 'https://huggingface.co/models', make sure
+you don't have a local directory with the same name. Otherwise, make sure
+'/models/Mistral-Medium-3.5-128B-config' is the correct path to a directory
+containing a preprocessor_config.json file
+```
+
+**Root cause:** vLLM resolved architecture as `Mistral3ForConditionalGeneration`
+(read from the Workaround-A staged config.json's
+`architectures: ["Mistral3ForConditionalGeneration"]` + `model_type: mistral3`).
+That is the multimodal architecture; vLLM constructs MultiModalBudget for
+it, which probes `PixtralProcessor.from_pretrained(<tokenizer-dir>)`,
+which probes `image_processing_auto.from_pretrained(<dir>)`, which fails
+because there's no `preprocessor_config.json` in the dir (the bartowski
+text-only GGUF doesn't ship one and we don't synthesize one).
+
+This is exactly the predicted "vision_tower mismatch" class from the
+Wave-3 hand-off — same shape, different specific exception. The
+multimodal-arch-with-text-only-weights mismatch surfaces in vLLM's
+`MultiModalBudget` initialization, not in vision_tower weight load.
+
+### Attempt 9 — text-only-config strip (run_id `20260503T001143Z-2ff544`)
+
+**Rule 3 auto-fix:** create a sibling stripped config dir
+`/data/models/Mistral-Medium-3.5-128B-text-only-config/` whose
+`config.json` has top-level `model_type: ministral3` +
+`architectures: ["Ministral3ForCausalLM"]` (text-only).
+`engine.hf_config_path:` flipped to point at the new dir;
+`engine.tokenizer:` left at the original `/...config/` dir (which has
+the tekken.json + tokenizer files). Tokenizer files symlinked into the
+new dir for completeness:
+
+```
+/data/models/Mistral-Medium-3.5-128B-text-only-config/
+├── config.json                    # NEW (stripped; ~1KB)
+├── tekken.json                    # symlink → ../config/tekken.json
+├── tokenizer.json                 # symlink → ../config/tokenizer.json
+├── tokenizer_config.json          # symlink
+├── generation_config.json         # symlink
+├── params.json                    # symlink
+└── SYSTEM_PROMPT.txt              # symlink
+```
+
+The stripped config.json hoists `text_config` to top-level (so vLLM gets
+all the model dims + rope params from there) + drops `vision_config`,
+`image_token_index`, `multimodal_projector_bias`, `projector_hidden_act`,
+`spatial_merge_size`, `vision_feature_layer`. The vLLM registry
+(`vllm/model_executor/models/registry.py:164`) maps
+`Ministral3ForCausalLM → ("mistral", "MistralForCausalLM")` so the
+text-only architecture loads the existing `MistralForCausalLM`
+implementation.
+
+**Result:** vLLM resolved architecture as `Ministral3ForCausalLM` (no
+multimodal init code path triggered). MultiModalBudget barrier CLEARED.
+Engine core process spawned. Then:
+
+```
+File "vllm/v1/worker/gpu_worker.py", line 282, in init_device
+    self.free_memory, self.total_memory = current_platform.mem_get_info(device)
+File "torch/cuda/memory.py", line 842, in mem_get_info
+    return torch.cuda.cudart().cudaMemGetInfo(device)
+torch.AcceleratorError: CUDA error: out of memory
+```
+
+**Root cause:** This is **T-06 (Spark coexistence at gmu=0.78)** firing
+as predicted by CONTEXT D-06. Daily-driver Gemma 4 26B-A4B v2.1 holds
+~68.7 GB on the same GB10 UMA box (verified via
+`nvidia-smi --query-compute-apps=process_name,used_memory --format=csv`).
+Mistral's `gpu_memory_utilization=0.78 → 99.8 GB` pool target
+mathematically cannot coexist with Gemma's 68.7 GB on a 128 GB UMA box
+(99.8 + 68.7 = 168.5 > 128). The OOM fires at `cudaMemGetInfo` because
+vLLM's first action after CUDA context creation is to ask the GPU for
+free memory, and there's none left for the requested allocation.
+
+**This is NOT an architectural blocker.** It's a resource gate that
+operates on the existing well-formed configuration. Three operator
+choices:
+
+1. **Stop Gemma → boot Mistral solo at gmu=0.78** (the eval-only
+   profile is designed for this; D-13 explicitly says Mistral is
+   eval-only opt-in). Test path: Task C completes with G-1+G-2+G-3
+   green.
+2. **Step Mistral gmu down with D-05 protocol** (0.78 → 0.73 → 0.68).
+   Risky: at 0.55 the pool would be 70 GB which is BELOW the 73 GB GGUF
+   weight size; the model wouldn't load at all. Each gmu step alone
+   wouldn't fix the OOM (Gemma's 68.7 GB stays put). Probably won't
+   help; documented for completeness.
+3. **Accept Mistral as solo-only profile** (operator opts to swap to
+   Mistral when needed; daily-driver Gemma always-on otherwise). This
+   matches CONTEXT D-13 ("eval-only") + the typical /profile swap
+   workflow.
+
+### What this iteration proved (architecturally)
+
+| Barrier | Wave | Status |
+|---|---|---|
+| T-01 (mistral3 GGUF arch not in transformers allowlist) | 3 | CLEARED via sitecustomize hot-patch |
+| `tokenizer:` gated-repo + offline collision | 3 | CLEARED via Workaround-A staged dir |
+| bf16-not-supported-for-GGUF | 3 | CLEARED via `dtype: float16` field |
+| MistralTokenizer requirement | 4 (this) | CLEARED via `tokenizer_mode: mistral` + tekken.json |
+| Multimodal-arch + text-only-weights mismatch | 4 (this) | CLEARED via stripped text-only config (`Ministral3ForCausalLM`) |
+| Coexistence with daily-driver at gmu=0.78 | 4 (this) | NOT CLEARED — operator decision required (T-06 fired exactly per CONTEXT D-06 prediction) |
+
+**Boot is now ONE operator gesture away from G-1.** Stop Gemma, re-run
+Mistral, expect G-1+G-2+G-3 closure (assuming no further surprises in
+the GGUF → MistralForCausalLM weight load path; the 73 GB Q4_K_M
+weights themselves are well-formed and the architecture load path is
+the standard MistralForCausalLM implementation).
+
+### Refined operator decision menu (now 8 paths, was 7)
+
+| # | Path | Eng. cost | Timeline | v1 impact |
+|---|---|---|---|---|
+| 1 | Wait for upstream transformers `mistral3` GGUF arch support | low | indeterminate | none |
+| 2 | Wait for upstream vLLM `repo:quant` fix in `get_model_path` | low | indeterminate | minimal |
+| 3 | Switch to NVFP4 (RecViking build) | medium | days | retire v1; cut v2 NVFP4 |
+| 4 | Switch to llama.cpp serving | high | weeks | architectural detour |
+| 5 | Hot-patch transformers GGUF allowlist via sitecustomize | DONE | DONE | DONE for T-01 |
+| 6 | Defer the entire phase | zero | zero | drop Phase 5 dense-128B matrix slot |
+| 7a | Source `tekken.json` + `tokenizer_mode: mistral` | DONE | DONE | DONE for MistralTokenizer barrier |
+| 7-strip | Stripped text-only config dir + Ministral3ForCausalLM arch | DONE | DONE | DONE for multimodal-init barrier |
+| **8** | **NEW: Stop daily-driver Gemma and boot Mistral solo at gmu=0.78** (matches CONTEXT D-13 eval-only stance; operator gesture only — no new code/config) | zero | minutes | none — daily-driver is operator-restartable |
+
+**Recommendation:** Option 8 — eval-only profile by design (D-13). The
+typical workflow is `/profile mistral-medium-3.5` swap when operator
+wants the heavy 128B reasoning, then `/profile gemma-4-26b-a4b-it`
+back to daily-driver. The `/profile` slash command in pi-emmy already
+handles container swap; this just needs the operator to confirm they
+want to evict Gemma temporarily.
+
+### Wave 4 self-check
+
+- `profiles/mistral-medium-3.5/v1/serving.yaml` has `tokenizer_mode: mistral` ✓
+- `profiles/mistral-medium-3.5/v1/serving.yaml` has `hf_config_path: /models/Mistral-Medium-3.5-128B-text-only-config` ✓
+- `/data/models/Mistral-Medium-3.5-128B-text-only-config/config.json` exists with `architectures: ["Ministral3ForCausalLM"]` + `model_type: ministral3` ✓
+- `/data/models/Mistral-Medium-3.5-128B-text-only-config/tekken.json` is a symlink to the original config dir ✓
+- `EngineConfig.tokenizer_mode: Optional[Literal["auto","hf","slow","mistral","deepseek_v32"]] = None` field added ✓
+- `render_vllm_cli_args` emits `--tokenizer-mode <value>` when set ✓
+- Bundle hash bumped per CLAUDE.md additive rules; final hash in profile.yaml ✓
+- 369 unit tests pass (was 354 before Wave 4) ✓
+- Daily-driver Gemma 4 26B-A4B v2.1 still on port 8002 (verified via `curl http://127.0.0.1:8002/v1/models`) ✓
+- Wave-4 attempts logged in runs/20260503T000823Z-a92397-boot-mistral/ + runs/20260503T001143Z-2ff544-boot-mistral/ (gitignored per `runs/**`) ✓
 
 ## References
 

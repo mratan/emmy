@@ -556,3 +556,171 @@ def test_render_omits_airgap_patch_dir_when_unset_in_hf_config_fixture(
     assert "/airgap_patches:ro" not in " ".join(args), args
     assert "PYTHONPATH=/airgap_patches" not in args, args
     assert "EMMY_AIRGAP_PATCH_MISTRAL3=on" not in args, args
+
+
+# -----------------------------------------------------------------------------
+# Plan 04.7-02 follow-up Decision Option 5/7a — `--dtype` + `--tokenizer-mode`
+# CLI emission coverage
+# -----------------------------------------------------------------------------
+#
+# `--dtype` lands a missing-test gap from Wave 3 commit `35aee85` (the schema
+# field was added, the CLI emission was added, but a renderer test wasn't).
+# `--tokenizer-mode` is the new field added by this iteration to address the
+# `MistralTokenizer` requirement surfaced by Wave 3 attempt 7. Both fields
+# are conditional-emission so the absence assertions below guarantee
+# byte-identical render for the 7+ shipped bundles.
+
+
+_VALID_SERVING_YAML_WITH_DTYPE_AND_TOKENIZER_MODE = """\
+engine:
+  model: /models/Mistral-Medium-3.5-128B-Q4_K_M.gguf
+  model_hf_id: mistralai/Mistral-Medium-3.5-128B
+  served_model_name: mistral-medium-3.5
+  container_image: vllm/vllm-openai:cu130-nightly-aarch64
+  container_image_digest: sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+  tokenizer: /models/Mistral-Medium-3.5-128B-config
+  hf_config_path: /models/Mistral-Medium-3.5-128B-config
+  airgap_patch_dir: airgap_patches
+  dtype: float16
+  tokenizer_mode: mistral
+  max_model_len: 131072
+  gpu_memory_utilization: 0.78
+  kv_cache_dtype: fp8
+  enable_prefix_caching: true
+  enable_chunked_prefill: true
+  max_num_batched_tokens: 8192
+  max_num_seqs: 1
+  load_format: auto
+  quantization: gguf
+  tool_call_parser: mistral
+  reasoning_parser: mistral
+  enable_auto_tool_choice: true
+  host: 0.0.0.0
+  port: 8000
+sampling_defaults:
+  temperature: 0.15
+  top_p: 0.95
+  top_k: 40
+  repetition_penalty: 1.0
+  max_tokens: 8192
+  stop: []
+speculative: null
+guided_decoding:
+  default_backend: xgrammar
+quirks:
+  strip_thinking_tags: false
+  promote_reasoning_to_content: false
+  buffer_tool_streams: false
+env:
+  VLLM_NO_USAGE_STATS: "1"
+  DO_NOT_TRACK: "1"
+  VLLM_LOAD_FORMAT: auto
+  VLLM_FLASHINFER_MOE_BACKEND: latency
+  VLLM_DISABLE_COMPILE_CACHE: "1"
+  HF_HUB_OFFLINE: "1"
+  TRANSFORMERS_OFFLINE: "1"
+"""
+
+
+@pytest.fixture
+def test_profile_path_with_dtype_and_tokenizer_mode(tmp_path: Path) -> Path:
+    """Bundle dir whose serving.yaml declares dtype + tokenizer_mode + the
+    full Wave-3/7a stack (airgap_patches + hf_config_path + tokenizer).
+    """
+    bundle = tmp_path / "v1"
+    bundle.mkdir()
+    (bundle / "serving.yaml").write_text(
+        _VALID_SERVING_YAML_WITH_DTYPE_AND_TOKENIZER_MODE, encoding="utf-8"
+    )
+    # Stub the airgap_patches dir so the docker-only renderer's bind-mount
+    # source resolves cleanly (same pattern as the Option-5 fixture above).
+    patches = bundle / "airgap_patches"
+    patches.mkdir()
+    (patches / "sitecustomize.py").write_text("# stub for fixture\n", encoding="utf-8")
+    return bundle
+
+
+def test_render_emits_dtype_when_set(
+    test_profile_path_with_dtype_and_tokenizer_mode: Path,
+):
+    """04.7-02 sitecustomize wave: ``--dtype <value>`` appears as a contiguous
+    pair when ``engine.dtype`` is set.
+
+    Closes the test-coverage gap for the Wave-3 ``EngineConfig.dtype`` field
+    (commit 35aee85 added the field + CLI emission but no renderer test).
+    """
+    args = runner.render_vllm_cli_args(test_profile_path_with_dtype_and_tokenizer_mode)
+    assert "--dtype" in args, args
+    idx = args.index("--dtype")
+    assert args[idx + 1] == "float16", (idx, args)
+
+
+def test_render_emits_tokenizer_mode_when_set(
+    test_profile_path_with_dtype_and_tokenizer_mode: Path,
+):
+    """04.7-02 Option 7a: ``--tokenizer-mode <value>`` appears as a contiguous
+    pair when ``engine.tokenizer_mode`` is set. The Wave-3 attempt-7 trace
+    pinned this as the load-bearing CLI flag for the MistralTokenizer
+    architectural blocker — without it vLLM defaults to "auto" and rejects
+    the loaded HF tokenizer at the FINAL VllmConfig validation step.
+    """
+    args = runner.render_vllm_cli_args(test_profile_path_with_dtype_and_tokenizer_mode)
+    assert "--tokenizer-mode" in args, args
+    idx = args.index("--tokenizer-mode")
+    assert args[idx + 1] == "mistral", (idx, args)
+
+
+def test_render_omits_dtype_when_unset(rendered_args):
+    """04.7-02 sitecustomize wave: pre-04.7-02-followup fixture (no
+    ``dtype`` field) MUST render without ``--dtype`` (byte-additive).
+    """
+    assert "--dtype" not in rendered_args, rendered_args
+
+
+def test_render_omits_tokenizer_mode_when_unset(rendered_args):
+    """04.7-02 Option 7a: pre-04.7-02-followup fixture (no ``tokenizer_mode``)
+    MUST render without ``--tokenizer-mode`` (byte-additive).
+    """
+    assert "--tokenizer-mode" not in rendered_args, rendered_args
+
+
+def test_render_omits_dtype_when_unset_in_new_flags_fixture(
+    rendered_args_with_new_flags,
+):
+    """04.7-02: the 04.7-01 fixture (which exercises tokenizer/
+    reasoning_parser/max_num_seqs but NOT dtype) MUST render without
+    --dtype. Confirms dtype is independently optional.
+    """
+    assert "--dtype" not in rendered_args_with_new_flags, rendered_args_with_new_flags
+
+
+def test_render_omits_tokenizer_mode_when_unset_in_new_flags_fixture(
+    rendered_args_with_new_flags,
+):
+    """04.7-02 Option 7a: same independence guarantee for tokenizer_mode."""
+    assert (
+        "--tokenizer-mode" not in rendered_args_with_new_flags
+    ), rendered_args_with_new_flags
+
+
+def test_render_omits_dtype_when_unset_in_hf_config_fixture(
+    test_profile_path_with_hf_config_path: Path,
+):
+    """04.7-02: the Workaround-A fixture (hf_config_path set, dtype unset)
+    MUST render without --dtype. Confirms dtype is independent of
+    hf_config_path.
+    """
+    args = runner.render_vllm_cli_args(test_profile_path_with_hf_config_path)
+    assert "--dtype" not in args, args
+
+
+def test_render_omits_tokenizer_mode_when_unset_in_airgap_fixture(
+    test_profile_path_with_airgap_patch_dir: Path,
+):
+    """04.7-02 Option 7a: the Wave-3 sitecustomize-only fixture (airgap_patch_dir
+    set, tokenizer_mode unset) MUST render without --tokenizer-mode.
+    Confirms tokenizer_mode is independent of airgap_patch_dir — the new
+    7a wiring sits on TOP of Option 5, not coupled to it.
+    """
+    args = runner.render_vllm_cli_args(test_profile_path_with_airgap_patch_dir)
+    assert "--tokenizer-mode" not in args, args
