@@ -89,10 +89,19 @@ export function handleBeforeProviderRequest(args: {
 	payload.model = profile.serving.engine.served_model_name;
 
 	// (a) D-02a: enable_thinking:false at request level. Removes a17f4a9.
-	payload.chat_template_kwargs = {
-		...(payload.chat_template_kwargs ?? {}),
-		enable_thinking: false,
-	};
+	// Phase 04.7-02 Wave 5: vLLM's MistralTokenizer (tokenizer_mode=mistral)
+	// REJECTS chat_template_kwargs with HTTP 400 ("chat_template is not
+	// supported for Mistral tokenizers" — vllm/tokenizers/mistral.py:217).
+	// mistral_common has its own chat formatting that doesn't honor
+	// enable_thinking kwargs anyway, so the injection is silently no-op for
+	// Mistral and actively breaks the request shape — skip it entirely.
+	const isMistralTokenizer = profile.serving.engine.tokenizer_mode === "mistral";
+	if (!isMistralTokenizer) {
+		payload.chat_template_kwargs = {
+			...(payload.chat_template_kwargs ?? {}),
+			enable_thinking: false,
+		};
+	}
 
 	// (a1) Phase 4 HARNESS-08 — variant snapshot application. Overrides the
 	// enable_thinking default (a) and the base profile sampling whenever a

@@ -30,6 +30,13 @@ export interface ProfileSnapshot {
 		engine: {
 			served_model_name: string;
 			max_model_len: number; // REQUIRED per W4 fix; downstream honest-max-model-len tests depend on it.
+			// Phase 04.7-02 Wave 5 (Mistral NVFP4): when "mistral", vLLM uses
+			// mistral_common.MistralTokenizer which REJECTS chat_template_kwargs
+			// in chat-completion requests with HTTP 400. The before-request hook
+			// + SP_OK canary gate enable_thinking injection on this field.
+			// Optional + undefined-by-default keeps non-Mistral profiles
+			// rendering byte-identically.
+			tokenizer_mode?: "auto" | "hf" | "slow" | "mistral" | "deepseek_v32";
 		};
 		sampling_defaults: {
 			temperature: number;

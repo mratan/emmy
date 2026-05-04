@@ -75,7 +75,7 @@ engine:
 
   # --- context + memory ---
   max_model_len: 131072                                 # CONTEXT D-03 (128K) — same as v1; 256K deferred to v3 candidate
-  gpu_memory_utilization: 0.78                          # CONTEXT D-04 — same as v1; weights (~75 GB on GPU after dequant; safetensors load is direct) + 22 GB FP8 KV @ 128K + scratch fits 99.8 GB pool
+  gpu_memory_utilization: 0.84                          # Wave 5 attempt 9: 0.80 → 0.84. Attempt 8 (gmu=0.80) still 0.57 GiB short — vLLM logged "current 0.80 = effective 0.7961 after CUDA graph memory profiling" + "estimated max_model_len = 127680". Per-0.01 gmu yields ~0.18 GiB KV; need +0.57 GiB → +0.032 gmu minimum. Bumping to 0.84 gives ~22.15 GiB KV (clean margin over 22.0 needed) without razor-thin sizing. Host-RAM headroom drops to ~20 GB but plain safetensors path doesn't trip the host-OOM trap that fastsafetensors did at gmu=0.86 (attempt 5).
   kv_cache_dtype: fp8                                   # CONTEXT D-08 — NOT turboquant_4bit_nc (HF card recommends that for 200K context; we cap at 128K so fp8 is sufficient and proven on Spark)
   enable_prefix_caching: true                           # SERVE-07
   enable_chunked_prefill: true                          # SERVE-07
@@ -83,7 +83,7 @@ engine:
   max_num_seqs: 1                                       # CONTEXT D-07 — single-stream; pool too tight for batching
 
   # --- loader ---
-  load_format: fastsafetensors                          # NVFP4 PIVOT: enables direct GPU streaming; the GGUF mmap-page-cache OOM mode is structurally absent. Reverts to Emmy's prior-profile convention (Gemma 31B v1.2 analog uses safetensors).
+  load_format: safetensors                              # Wave 5 attempt 6 fix: was `fastsafetensors`, now plain safetensors. Matches the documented Gemma 26B v2.1 + Gemma 31B v1.2 precedent on the same `vllm/vllm-openai:cu130-nightly-aarch64` container family — that container does NOT bundle fastsafetensors; the fallback path on Spark (no GDS) stages the entire shard (~50 GB for shard 1) in host RAM before GPU memcpy, which collides with vLLM's pool reservation on the 128 GB UMA box. Plain safetensors loads tensor-by-tensor with peak host buffer in the few-hundred-MB range. Tradeoff: cold start ~5-8 min vs ~1-2 min for fastsafetensors. Acceptable for an eval-only profile.
   # dtype: (UNSET — let vLLM auto-detect from config.json's torch_dtype: bfloat16)
   # NVFP4 backend handles bfloat16 fine; the v1 `dtype: float16` override was a
   # GGUF-backend-specific workaround for a Blackwell-GGUF kernel limitation that
@@ -91,7 +91,7 @@ engine:
   tokenizer_mode: mistral                               # vLLM `mistral` tool_call_parser still requires MistralTokenizer instance (carries forward from v1 Wave 4)
 
   # --- quantization ---
-  quantization: auto                                    # NVFP4 PIVOT: vLLM 0.19+ auto-detects compressed-tensors nvfp4-pack-quantized from config.json's quantization_config block. HF card explicitly says "No --quantization flag — the checkpoint is already quantized". `auto` causes vLLM to read quantization_config and set the right backend.
+  quantization: compressed-tensors                      # NVFP4 PIVOT (Wave 5 attempt 2 fix): vLLM strictly matches model config's quantization_config.quant_method against --quantization arg (vllm/transformers_utils/config.py ModelConfig validator). RecViking's quantization_config.quant_method = "compressed-tensors" — passing --quantization auto fails strict-match. Schema Literal extended in 04.7-02 Wave 5 commit.
 
   # --- tool-call parser ---
   tool_call_parser: mistral                             # CONTEXT D-09 — same as v1
@@ -151,7 +151,7 @@ quirks:
 env:
   VLLM_NO_USAGE_STATS: "1"                              # SERVE-09 / D-12 layer c (enforced by schema._airgap_policy)
   DO_NOT_TRACK: "1"
-  VLLM_LOAD_FORMAT: fastsafetensors                     # matches engine.load_format; NVFP4 PIVOT (was `auto` for GGUF in v1)
+  VLLM_LOAD_FORMAT: safetensors                         # matches engine.load_format. Note: vLLM nightly logs "Unknown vLLM environment variable detected: VLLM_LOAD_FORMAT" — this env var is no-op as of vLLM 0.19+ (only --load-format CLI arg is honored); kept for parity with prior-profile convention.
   VLLM_FLASHINFER_MOE_BACKEND: latency                  # carry-over (no-op for non-MoE; harmless)
   VLLM_DISABLE_COMPILE_CACHE: "1"
   HF_HUB_OFFLINE: "1"                                   # REPRO-04 (enforced by schema._airgap_policy)

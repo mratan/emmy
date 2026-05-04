@@ -161,7 +161,17 @@ class EngineConfig(BaseModel):
     # tokenizer field above is the partner setting — GGUF docs strongly recommend
     # passing --tokenizer <base-model-hf-id> rather than letting vLLM extract from
     # the bundled GGUF (slow + unstable). See profiles/mistral-medium-3.5/v1/.
-    quantization: Literal["fp8", "bf16", "auto", "gguf"] = "fp8"
+    # Phase 04.7-02 Wave 5 (NVFP4 pivot) — "compressed-tensors" added for the
+    # NVFP4 v2 sibling. vLLM strictly matches the model config's
+    # quantization_config.quant_method against the --quantization arg
+    # (vllm/transformers_utils/config.py ModelConfig validator: "Quantization
+    # method specified in the model config (X) does not match the quantization
+    # method specified in the `quantization` argument (Y)"). The HF card
+    # recommendation "no --quantization flag" only works if the schema makes
+    # the field Optional, which would be a wider behavioral change than this
+    # Literal extension. Strictly additive — every prior profile validates
+    # byte-identically with the existing values.
+    quantization: Literal["fp8", "bf16", "auto", "gguf", "compressed-tensors"] = "fp8"
 
     # --- tool-call parser ---
     tool_call_parser: Optional[str] = None

@@ -800,7 +800,11 @@ export async function createEmmySession(
 	}
 
 	if (!spOkSkipped) {
-		const spOk = await runSpOk(opts.baseUrl, opts.profile.serving.engine.served_model_name);
+		const spOk = await runSpOk(
+			opts.baseUrl,
+			opts.profile.serving.engine.served_model_name,
+			opts.profile.serving.engine.tokenizer_mode,
+		);
 		if (!spOk.ok) throw new SpOkCanaryError(spOk.responseText);
 		emitEvent({
 			event: "session.sp_ok.pass",

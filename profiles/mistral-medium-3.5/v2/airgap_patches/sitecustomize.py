@@ -46,4 +46,35 @@ def _maybe_apply_mistral3_patch() -> None:
         )
 
 
+def _maybe_apply_mistral3_safetensors_remap() -> None:
+    """Apply the v2 NVFP4 safetensors name-remap patch (Wave 5 attempt 7+).
+
+    Same env gate as the GGUF patch (`EMMY_AIRGAP_PATCH_MISTRAL3=on`) — both
+    are Mistral3-on-vLLM compat patches that ride together. The GGUF patch
+    is a no-op for safetensors load paths and vice-versa, so they don't
+    interfere; gating both with the same env var keeps wiring simple.
+    """
+    if os.environ.get("EMMY_AIRGAP_PATCH_MISTRAL3", "").lower() not in ("on", "1", "true"):
+        return
+    try:
+        from mistral3_safetensors_remap import apply as apply_safetensors
+    except Exception as exc:  # pragma: no cover - defensive: log + continue
+        print(
+            f"[airgap_patches/sitecustomize] WARN: cannot import "
+            f"mistral3_safetensors_remap ({type(exc).__name__}: {exc}); "
+            "safetensors remap NOT applied",
+            file=sys.stderr,
+        )
+        return
+    try:
+        apply_safetensors()
+    except Exception as exc:  # pragma: no cover - defensive: log + continue
+        print(
+            f"[airgap_patches/sitecustomize] WARN: mistral3 safetensors remap raised "
+            f"({type(exc).__name__}: {exc}); patch NOT applied",
+            file=sys.stderr,
+        )
+
+
 _maybe_apply_mistral3_patch()
+_maybe_apply_mistral3_safetensors_remap()

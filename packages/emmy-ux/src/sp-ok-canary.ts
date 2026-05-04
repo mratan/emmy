@@ -24,20 +24,30 @@ export const SP_OK_ASSERTION_SUBSTR = "[SP_OK]";
 export async function runSpOk(
 	baseUrl: string,
 	servedModelName: string,
+	tokenizerMode?: string,
 ): Promise<{ ok: boolean; responseText: string }> {
+	// Phase 04.7-02 Wave 5: vLLM's MistralTokenizer (tokenizer_mode=mistral)
+	// rejects ANY chat_template_kwargs with HTTP 400 ("chat_template is not
+	// supported for Mistral tokenizers" — vllm/tokenizers/mistral.py:217).
+	// Skip the enable_thinking injection for Mistral profiles; mistral_common
+	// has its own chat formatting that doesn't honor thinking-mode kwargs.
+	const isMistralTokenizer = tokenizerMode === "mistral";
+	const body: Record<string, unknown> = {
+		model: servedModelName,
+		messages: [
+			{ role: "system", content: SP_OK_SYSTEM_PROMPT },
+			{ role: "user", content: SP_OK_USER_MESSAGE },
+		],
+		temperature: 0,
+		max_tokens: 32,
+		stream: false,
+	};
+	if (!isMistralTokenizer) {
+		body.chat_template_kwargs = { enable_thinking: false };
+	}
 	const resp = await postChat(
 		baseUrl,
-		{
-			model: servedModelName,
-			messages: [
-				{ role: "system", content: SP_OK_SYSTEM_PROMPT },
-				{ role: "user", content: SP_OK_USER_MESSAGE },
-			],
-			temperature: 0,
-			max_tokens: 32,
-			stream: false,
-			chat_template_kwargs: { enable_thinking: false },
-		},
+		body as unknown as Parameters<typeof postChat>[1],
 		{ timeoutMs: 60_000 },
 	);
 	const rawText = resp.choices[0]?.message?.content;

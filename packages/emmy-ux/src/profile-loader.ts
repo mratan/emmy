@@ -79,6 +79,17 @@ export async function loadProfile(profileDir: string): Promise<ProfileSnapshot> 
 		"engine",
 		"max_model_len",
 	]);
+	// Phase 04.7-02 Wave 5: optional engine.tokenizer_mode propagation. Mistral
+	// NVFP4 sets this to "mistral" so the SP_OK canary + before-request hook
+	// can skip chat_template_kwargs injection (vLLM's MistralTokenizer rejects
+	// it with HTTP 400). Non-Mistral profiles leave this undefined and render
+	// byte-identically.
+	const tokenizerModeRaw = (servingYaml as any)?.engine?.tokenizer_mode;
+	const tokenizerMode: "auto" | "hf" | "slow" | "mistral" | "deepseek_v32" | undefined =
+		typeof tokenizerModeRaw === "string" &&
+		["auto", "hf", "slow", "mistral", "deepseek_v32"].includes(tokenizerModeRaw)
+			? (tokenizerModeRaw as "auto" | "hf" | "slow" | "mistral" | "deepseek_v32")
+			: undefined;
 	const samplingTemp = requireNum(
 		servingYaml,
 		`${servingYamlPath}:sampling_defaults.temperature`,
@@ -336,7 +347,11 @@ export async function loadProfile(profileDir: string): Promise<ProfileSnapshot> 
 	const snap: ProfileSnapshot = {
 		ref: { id, version, hash, path: profileDir },
 		serving: {
-			engine: { served_model_name: servedModelName, max_model_len: maxModelLen },
+			engine: {
+				served_model_name: servedModelName,
+				max_model_len: maxModelLen,
+				...(tokenizerMode !== undefined ? { tokenizer_mode: tokenizerMode } : {}),
+			},
 			sampling_defaults: {
 				temperature: samplingTemp,
 				top_p: samplingTopP,

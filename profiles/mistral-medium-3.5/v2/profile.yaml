@@ -11,7 +11,7 @@ profile:
     \ routes.yaml participant, NOT an ask_claude target. Boot-only validation per\
     \ CONTEXT D-05/D-06 (no KV-bisection, no thermal replay)."
   created: '2026-05-03'
-  hash: sha256:37c97992818fb12be2794d021b1b661272ba808fe8f7dd467df06639b505b28b
+  hash: sha256:28c0d7c3a3b81fe977ab7452c9cd67c43327cd03828bce6c9e21f3757e9121ce
   hash_algorithm: sha256
   hash_manifest_version: 1
   tags:
