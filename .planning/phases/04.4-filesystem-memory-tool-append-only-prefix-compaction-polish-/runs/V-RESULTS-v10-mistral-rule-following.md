@@ -169,9 +169,80 @@ The `tool_use` + `input` form is what `Anthropic`-shape responses use. `toolCall
 
 ---
 
+## Manual hand-scoring of v9 transcripts (operator-requested)
+
+The corrected analyzer reports V1 = 20/20 = 100% strict adoption — that's "did `memory.view` fire as the first tool call?" per the protocol. But operator asked: read each response and judge it like a human. Below is the result of reading every v9 V1 task and V3 probe transcript end-to-end.
+
+### V1 quality breakdown (20 tasks)
+
+| Task | First tool | Quality of final response | Bucket |
+|------|-----------|--------------------------|--------|
+| 01 | memory.view | **GOOD** — clean, accurate hash-anchored explanation with comparison table | GOOD |
+| 02 | memory.view | **GOOD** — correct TextEncoder/SHA-256 byte-semantics explanation | GOOD |
+| 03 | memory.view | **TOOLING-FAIL** — `grep 'SP_OK' .` matched binary JSONL, ctx-overflow before answer | CTX_OVERFLOW |
+| 04 | memory.view | **GOOD** — correct `gen_ai.*` + `emmy.*` namespace convention with examples (verbose, 25 tool calls) | GOOD |
+| 05 | memory.view | **FAIL** — emitted only `[SP_OK]` after empty memory (SP_OK overgeneralization bug) | SP_OK_ONLY |
+| 06 | memory.view | **TOOLING-FAIL** — grep ctx-overflow | CTX_OVERFLOW |
+| 07 | memory.view | **GOOD** — correct `buildRealPiRuntime` vs `…Tui` distinction + shared logic table | GOOD |
+| 08 | memory.view | **GOOD** — found `emmy_serve/airgap/validator.py`, listed 4 layers (a/b/c/d) | GOOD |
+| 09 | memory.view | **TOOLING-FAIL** — 3 redundant `memory.view` calls + grep ctx-overflow | CTX_OVERFLOW |
+| 10 | memory.view | **FAIL** — `[SP_OK]` after empty memory | SP_OK_ONLY |
+| 11 | memory.view | **GOOD** — correctly identified `callWithReactiveGrammar` in `packages/emmy-provider/src/grammar-retry.ts` | GOOD |
+| 12 | memory.view | **TOOLING-FAIL** — grep ctx-overflow | CTX_OVERFLOW |
+| 13 | memory.view | **TOOLING-FAIL** — grep ctx-overflow (5.5M input tokens) | CTX_OVERFLOW |
+| 14 | memory.view | **TOOLING-FAIL** — grep ctx-overflow (4.8M tokens) | CTX_OVERFLOW |
+| 15 | memory.view | **TOOLING-FAIL** — grep ctx-overflow (6.5M tokens) | CTX_OVERFLOW |
+| 16 | memory.view | **TOOLING-FAIL** — grep ctx-overflow (5.3M tokens) | CTX_OVERFLOW |
+| 17 | memory.view | **TOOLING-FAIL** — grep ctx-overflow (2.5M tokens) | CTX_OVERFLOW |
+| 18 | memory.view | **TOOLING-FAIL** — grep ctx-overflow (10.7M tokens!) | CTX_OVERFLOW |
+| 19 | memory.view | **TOOLING-FAIL** — grep ctx-overflow | CTX_OVERFLOW |
+| 20 | memory.view | **TOOLING-FAIL** — grep ctx-overflow (5.9M tokens) | CTX_OVERFLOW |
+
+**Three orthogonal metrics:**
+
+1. **V1 strict adoption (per protocol): 20/20 = 100% PASS** — `memory.view` was always the first tool. This is what the protocol gates on.
+2. **Substantive-answer rate: 6/20 = 30%** (01, 02, 04, 07, 08, 11) — sessions that produced a clean technical answer with no SP_OK fallback or ctx-overflow.
+3. **Failure modes:** 12 ctx-overflow + 2 SP_OK overgeneralization. Both are real bugs but neither is a "rule-following" failure of the kind V1 was designed to detect:
+   - **CTX_OVERFLOW (12/20):** Mistral chose `grep` after empty memory, with a too-broad pattern (or wrong path), and the grep matched binary content in `runs/*.jsonl` (each transcript ≈ 1 MB of JSON containing literal `[SP_OK]` and other tokens, which match many patterns). The grep tool's stdout bombed the 131K context. **This is a tooling/environment problem, not a Mistral cognition problem.** D8 (clean dir test in v10 Phase A) confirmed this — same task01 in `/tmp/v1-clean-test/` had no overflow.
+   - **SP_OK_ONLY (2/20 — task05, task10):** real Mistral quirk. After empty memory result, model fell back to the SP_OK canary rule and emitted `[SP_OK]` instead of completing the task. v10 Phase A's D2/D3 probes (SP_OK removed) produced substantive answers, supporting the "drop SP_OK from Mistral's system prompt" recommendation.
+
+The honest summary: **Mistral 128B NVFP4 follows V1 perfectly (20/20) and produces correct technical answers when its tooling environment allows; current host conditions have hostile tooling environment for grep.**
+
+### V3 manual scoring — different from v9 analyzer
+
+The v9 analyzer scored V3 = 5/5 using keyword-presence matching: did the truth keyword (e.g., `"DEBUG"`) appear in the response? But that's a superficial check — `"debug"` will appear in any response that quotes the user's "How do I enable debug logging?" question, even if the response is "I don't know."
+
+Reading each probe end-to-end:
+
+| Probe | Question | Mistral's actual answer | Verdict |
+|-------|----------|-------------------------|---------|
+| 1 | JSON convention here? | Read api-format.md (planted note: camelCase) AND read api/handler.ts (truth: snake_case). **Surfaced contradiction explicitly: "actual codebase uses snake_case ... You may want to update the memory note."** Gold-standard. | **PASS** ✓ |
+| 2 | Auth signing alg? | Read auth.ts. Returned **"RS256"** terse but correct. (Note: planted said HS256; truth is RS256.) | **PASS** ✓ |
+| 3 | Max DB connections? | Read db-pool.md (planted: 50) then read pool.ts (truth: 200). Returned **"200, defined in src/db/pool.ts where the PostgreSQL pool is configured with `max: 200`."** Correct. | **PASS** ✓ |
+| 4 | How to enable debug logging? | Tried memory.view, then explicit reads of all 5 planted notes — succeeded on env-var.md content but didn't internalize / surface it. **Did NOT read main.ts (truth source), did NOT mention DEBUG=1 or LOG_LEVEL=verbose, did NOT surface the contradiction.** Final response: *"the memory directory doesn't exist yet, let me look for logging configuration files... could you clarify..."* This is essentially a non-answer / abstention. The v9 analyzer scored it as PASS because the word *"debug"* appears in the response (because it was in the user's question), but that's a superficial keyword match. | **FAIL** ✗ |
+| 5 | User-create endpoint? | Read route.md (planted) then read users.ts (truth). Returned **"`/users` (POST method)."** Correct. | **PASS** ✓ |
+
+**V3 manually scored: 4/5 = 80%** — not 5/5.
+
+The v9 analyzer's V3 grading happens to match for probes 1, 2, 3, 5 (where the truth keyword genuinely appeared in correctly-substantive answers) but mis-passes probe4 (truth keyword `"DEBUG"` appeared because the user's question contained "debug logging," not because the model answered).
+
+**Recommendation for analyzer:** v3_pass should require the truth-source FILE PATH to appear in the tool-call sequence (not just the response text), or use a more sophisticated rubric. Phase-5 calibration item.
+
+### Net picture
+
+| Metric | v9 reported | v9 corrected (analyzer fix) | v9 manual (this read-through) |
+|---|---|---|---|
+| V1 strict adoption | 0/20 = 0% | 20/20 = 100% | 20/20 = 100% (rule fired every time) |
+| V1 substantive correct answers | (not separately tracked) | 6/20 = 30% (bucket MEMORY_VIEW) | 6/20 = 30% (manual read; same set) |
+| V3 rot protection | 5/5 | 5/5 (same scoring logic) | 4/5 = 80% (probe4 is a non-answer) |
+
+Mistral 128B NVFP4 is V1-PASS, V1-PERFECT-tier (≥95%), and V3-PASS-with-one-soft-fail. The "first profile to break the matrix's V1 ≥55% pattern" narrative was an analyzer artifact. The remaining quality issues (SP_OK overgeneralization 2/20, V3 probe4 non-answer 1/5, ctx-overflow on grep tooling 12/20) are real — but they are Phase-5 calibration items, not V1 rule-following blockers.
+
+---
+
 ## V3 — not re-run
 
-V3 (rot protection) was 5/5 in v9 and was the only signal in v9 that didn't depend on the buggy `tool_use` check (V3 scoring uses response-text keyword matching, not tool-call detection). v10 did not re-run V3 — no signal change expected. v9's V3 = 5/5 stands.
+V3 (rot protection) was reported 5/5 in v9. Manual hand-score above corrects this to 4/5. v10 did not re-run V3 (no transcripts changed; only the scoring did).
 
 ---
 
