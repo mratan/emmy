@@ -109,6 +109,36 @@ The Qwen-MoE-vs-falsified-active-params hypothesis from v8 (V-RESULTS-v8 §"What
 
 ---
 
+## Separate finding: SP_OK overgeneralization is a real Mistral bug (response quality, not V1)
+
+The corrected V1 score is 20/20 = 100%, but **2 of those 20 sessions (task05, task10) still produced bad output** — specifically, Mistral responded with just `[SP_OK]` to non-`ping` user questions. The V1 protocol is satisfied (memory.view fired first, twice, before the model gave up and emitted `[SP_OK]`), but this is a real response-quality bug.
+
+What actually happened in v9 task05:
+
+```
+[user]      How does the web_search tool's URL bypass mechanism work for web_fetch?
+[toolCall]  memory.view /memories/project        (V1 PASS — first tool ✓)
+[result]    (empty)
+[toolCall]  memory.view /memories/project        (retry)
+[result]    (empty)
+[text]      [SP_OK]                              ← BUG: should have answered the question
+```
+
+task10 has the identical shape. Both sessions ran a clean memory.view-first, observed an empty memory, then **overgeneralized the SP_OK canary rule** ("when the user says 'ping', reply with the exact literal text [SP_OK]") to also fire on "user asked a question and memory came back empty."
+
+This is a Mistral-specific quirk distinct from V1 rule-following. It's the failure mode the v10 plan's **H2 ("SP_OK confounder")** anticipated: SP_OK occupies a privileged position in Mistral's rule registry, and under uncertainty the model falls back to it. The plan was wrong about H2 affecting V1 (memory.view was already landing 20/20 with SP_OK present), but right about H2 affecting *response quality*.
+
+**Phase A evidence the SP_OK overgeneralization is system-prompt-driven, not innate:**
+- D2 (SP_OK removed, memory directive auto-injected): final text "The memory system appears to be abstract rather than filesystem-based. Let me re…" — substantive answer, no SP_OK fallback
+- D3 (SP_OK removed + memory rule first): "The memory system appears empty for this project. I'll answer based on the instr…" — substantive answer, no SP_OK fallback
+- D0/D1/D4/D7 (SP_OK present): all produced substantive answers in this Phase A sample (no SP_OK fallback observed) — but Phase A is single-task per probe; the 2/20 rate in v9 is the population-level signal.
+
+**Recommendation:** drop the SP_OK canary from `profiles/mistral-medium-3.5/v2/prompts/system.md` for the Mistral profile and replace its "did the system prompt land?" gate with a Mistral-friendly alternative (e.g. a numbered behavioral protocol that requires acknowledgement on the first turn, OR move the canary to a `[INST]…[/INST]`-framed pre-task hint, OR drop the canary entirely for this profile and rely on memory.view first-call as the implicit landing signal). The Gemma + Qwen profiles can keep SP_OK as it stands — neither shows the overgeneralization bug.
+
+Concrete action items remain Phase 5 work (full eval suite measures response quality across all 20 tasks, not just first-tool-call). v10 surfaces the bug; it doesn't fix it.
+
+---
+
 ## Why this happened
 
 `scripts/v-matrix-analyze.py` was authored 2026-05-04 specifically for the v9 run. It guessed at the transcript shape based on a generic LLM tool_use convention (`type:"tool_use"`, `input:{…}`) but didn't cross-check against the actual `pi-emmy` transcript format produced by `packages/emmy-ux/src/session.ts`. Pi-emmy emits the assistant-content shape it expects on the harness side: `type:"toolCall"`, `arguments:{…}`. The test harness for the analyzer wasn't run against a known-positive transcript before the v9 batch.
