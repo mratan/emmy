@@ -913,9 +913,18 @@ export async function createEmmySession(
 	// compressed variant tests whether brevity buys more directive-attention
 	// budget on Qwen 35B-A3B v3.1.
 	const memoryInstinctCompressed = process.env.EMMY_MEMORY_INSTINCT_COMPRESSED === "1";
+	// V-experiment v10 D4 — load instinct text from a file when the env var is set.
+	// Used by the rule-following diagnostic to swap in a [INST]-framed numbered protocol
+	// without mutating any profile bytes. Takes precedence over the compressed variant.
+	const memoryInstinctOverridePath = process.env.EMMY_MEMORY_INSTINCT_OVERRIDE_PATH;
+	const memoryInstinctOverrideText = memoryInstinctOverridePath && existsSync(memoryInstinctOverridePath)
+		? readFileSync(memoryInstinctOverridePath, "utf8")
+		: null;
 	const memoryInstinctLines: string[] = !memoryInstinctActive
 		? []
-		: memoryInstinctCompressed
+		: memoryInstinctOverrideText !== null
+			? ["", memoryInstinctOverrideText]
+			: memoryInstinctCompressed
 			? [
 					"",
 					"# Memory instinct",
@@ -1117,11 +1126,30 @@ export async function createEmmySession(
 			]
 		: [];
 
-	const customTools: ToolDefinitionLike[] = [
+	let customTools: ToolDefinitionLike[] = [
 		...nativeTools,
 		...mcpTools,
 		...memoryTools,
 	];
+
+	// V-experiment v10 D6 — env-gated tool allowlist filter. When set, only the
+	// listed tool names (comma-separated) survive registration. Used by the
+	// rule-following diagnostic to test whether restricting the toolset on
+	// turn 1 nudges the model toward memory.view as the only available action.
+	const toolAllowlistRaw = process.env.EMMY_TOOL_ALLOWLIST_NAMES;
+	if (toolAllowlistRaw) {
+		const allowed = new Set(toolAllowlistRaw.split(",").map((s) => s.trim()).filter(Boolean));
+		const filtered = customTools.filter((t) => {
+			const name = (t as { label?: string; name?: string }).label
+				?? (t as { name?: string }).name
+				?? "";
+			return allowed.has(name);
+		});
+		process.stderr.write(
+			`[emmy] EMMY_TOOL_ALLOWLIST_NAMES filter: ${customTools.length} → ${filtered.length} tools (kept: ${filtered.map((t) => (t as { label?: string; name?: string }).label ?? (t as { name?: string }).name).join(",")})\n`,
+		);
+		customTools = filtered;
+	}
 
 	// 7b. Plan 03-06 (UX-03): boot-time offline audit (D-26). Runs AFTER
 	// native + MCP tool defs are assembled so the audit sees the full

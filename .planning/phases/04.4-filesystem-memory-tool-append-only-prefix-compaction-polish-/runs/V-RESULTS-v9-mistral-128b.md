@@ -1,5 +1,7 @@
 # Phase 04.4 V-protocol Results — v9: Mistral Medium 3.5 128B NVFP4
 
+> **⚠️ CORRIGENDUM (2026-05-05):** The "V1 = 0/20 = 0%" finding documented below is INCORRECT. It was caused by an analyzer bug in `scripts/v-matrix-analyze.py` that looked for `type=='tool_use'` + `input{}` (Anthropic shape) but pi-emmy emits `type=='toolCall'` + `arguments{}` (pi-mono shape). With the corrected analyzer, **v9 was actually 20/20 = 100% V1 strict adoption** — Mistral 128B NVFP4 is at the same PERFECT tier as Gemma 26B-A4B MoE and Qwen 27B dense. See `V-RESULTS-v10-mistral-rule-following.md` for the full discovery, root cause, and re-evaluation. The narrative below ("Mistral's bias toward grep-as-first-tool", "first profile to score 0/20") is wrong; grep was the *third* tool call in many sessions, after two memory.view rounds. Throughput numbers, V3 5/5, ctx-overflow analysis, and per-task duration data all remain valid.
+
 **Date:** 2026-05-04
 **Profile:** `mistral-medium-3.5/v2` (NVFP4 pivot from v1 GGUF — Phase 04.7-02 Wave 5)
 **Profile hash:** `sha256:28c0d7c3a3b81fe977ab7452c9cd67c43327cd03828bce6c9e21f3757e9121ce`

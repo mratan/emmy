@@ -93,14 +93,23 @@ def analyze_jsonl(path):
                 if stop_reason == "error" and err:
                     error_msg = err
 
-            # Walk content for tool_use / text
+            # Walk content for tool calls / text.
+            # Note (V-EXP v10 fix 2026-05-05): pi-emmy emits assistant content as
+            # type=='toolCall' with arguments={...}. The original code only matched
+            # type=='tool_use' with input={...} (the Anthropic-shape that vLLM's
+            # raw tool_use spans use), so every pi-emmy tool call was invisible
+            # to this analyzer. v9's "0/20 V1 strict adoption" for Mistral 128B
+            # NVFP4 was a downstream effect of this bug — the corrected count
+            # is 20/20 = 100%. See V-RESULTS-v10-mistral-rule-following.md.
             if isinstance(content, list):
                 for c in content:
                     if isinstance(c, dict):
                         ctype = c.get("type")
-                        if ctype == "tool_use":
+                        if ctype in ("toolCall", "tool_use"):
                             tname = c.get("name") or "?"
-                            tinput = c.get("input", {}) or {}
+                            tinput = c.get("arguments") or c.get("input") or {}
+                            if not isinstance(tinput, dict):
+                                tinput = {}
                             tool_calls_seen.append((tname, tinput))
                             if first_tool_call is None:
                                 first_tool_call = tname
@@ -208,9 +217,16 @@ def main():
     print(f"  CTX_OVERFLOW   (grep flooded context): {n_ctx}/{total}")
     print(f"  OTHER_ERROR    : {n_other_err}/{total}")
 
-    # V1 strict adoption (per v8 protocol — pass = ≥60%)
-    strict_pct = n_view * 100 // total
-    print(f"\nV1 STRICT ADOPTION: {n_view}/{total} = {strict_pct}% (pass ≥ 60%)")
+    # V1 strict adoption — protocol spec: "Adoption = sessions with at least one
+    # view call) / total" (04.4-09-OPERATOR-PROTOCOLS.md V1). The bucket-based
+    # n_view excludes sessions where memory.view fired BUT the session also hit
+    # CTX_OVERFLOW or SP_OK_ONLY — those rows have memory_view_called=True but
+    # are categorized into the failure buckets. Counting the raw flag is the
+    # correct "did the rule fire?" metric. (V-EXP v10 fix 2026-05-05.)
+    n_view_raw = sum(1 for r in v1_rows if r.get("memory_view_called"))
+    strict_pct = n_view_raw * 100 // total
+    print(f"\nV1 STRICT ADOPTION: {n_view_raw}/{total} = {strict_pct}% (pass ≥ 60%) — counts ALL sessions where memory.view fired, regardless of subsequent ctx/SP_OK errors")
+    print(f"  (bucket MEMORY_VIEW: {n_view}/{total} — sessions where memory.view fired AND no ctx-overflow / SP_OK-only — informational only)")
 
     # V1 writes
     total_writes = sum(r.get("memory_writes", 0) for r in v1_rows)
