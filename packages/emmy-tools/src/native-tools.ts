@@ -272,7 +272,7 @@ export function registerNativeTools(
   // ---- grep -----------------------------------------------------------------
   pi.registerTool({
     name: "grep",
-    description: "Run grep against a path. Returns stdout + exit_code.",
+    description: "Run grep against a path. Returns stdout + exit_code. Default flags '-rnI' skip binary files; output is line-truncated (100 head+tail) AND char-capped (~20K chars) to prevent ctx-overflow on transcripts/large logs.",
     parameters: {
       type: "object",
       properties: {
@@ -285,20 +285,42 @@ export function registerNativeTools(
     },
     invoke: async (args) =>
       invoke("grep", async () => {
-        const flagsStr = String(args.flags ?? "-rn");
+        // V-EXP v10 cross-profile audit (2026-05-05): default flags bumped from
+        // '-rn' to '-rnI' to skip binary files. Without -I, grep treats JSONL
+        // transcripts and other long-line files as text and matches their
+        // contents — a single matching JSONL line can be 50KB-1MB, and 100
+        // head+tail lines (the prior truncation cap) yields multi-MB output
+        // that bombs the 131K chat-completion ctx on subsequent turns.
+        // Observed: 8/20 Gemma 26B MoE + 12/20 Mistral v9 sessions hit this.
+        // Caller can override flags explicitly if they need binary matching.
+        const flagsStr = String(args.flags ?? "-rnI");
         const pattern = String(args.pattern);
         const path = String(args.path ?? ".");
+        // V-EXP v10: char-cap output as a backstop. 20K chars ≈ 5K tokens —
+        // generous for a code search; pathological matches truncated cleanly.
+        const GREP_OUTPUT_CHAR_CAP = 20_000;
+        const cap = (text: string): string => {
+          if (text.length <= GREP_OUTPUT_CHAR_CAP) return text;
+          const head = Math.floor(GREP_OUTPUT_CHAR_CAP * 0.7);
+          const tail = GREP_OUTPUT_CHAR_CAP - head - 200; // 200 reserved for marker
+          const dropped = text.length - head - tail;
+          return (
+            text.slice(0, head) +
+            `\n…(grep output truncated ${dropped.toLocaleString()} chars from middle — refine pattern or narrow path to reduce match volume)…\n` +
+            text.slice(-tail)
+          );
+        };
         try {
           const out = execFileSync(
             "grep",
             [...flagsStr.split(/\s+/).filter(Boolean), pattern, path],
             { cwd, encoding: "utf8", maxBuffer: 10 * 1024 * 1024 },
           );
-          return { stdout: truncateHeadTail(out, 100), exit_code: 0 };
+          return { stdout: cap(truncateHeadTail(out, 100)), exit_code: 0 };
         } catch (e: unknown) {
           const err = e as { stdout?: string; stderr?: string; status?: number };
           return {
-            stdout: truncateHeadTail(err.stdout ?? "", 100),
+            stdout: cap(truncateHeadTail(err.stdout ?? "", 100)),
             stderr: err.stderr ?? "",
             exit_code: err.status ?? -1,
           };

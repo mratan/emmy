@@ -69,6 +69,10 @@ def analyze_jsonl(path):
     total_output = 0
     error_msg = None
     tool_calls_seen = []
+    # V-EXP v10 cross-profile audit: also capture the user prompt so the V3
+    # rubric can disambiguate "truth_kw appears because user mentioned it"
+    # vs "truth_kw appears because model genuinely cited it."
+    user_prompt = ""
 
     # Skip the SP_OK canary — its system prompt + user-message+response is the
     # FIRST few events in some session shapes. Real signal lives after the
@@ -79,9 +83,19 @@ def analyze_jsonl(path):
         msg = e.get("message")
         if isinstance(msg, dict):
             content = msg.get("content")
+            role = msg.get("role")
             usage = msg.get("usage", {})
             stop_reason = msg.get("stopReason")
             err = msg.get("errorMessage")
+
+            if role == "user" and not user_prompt:
+                if isinstance(content, str):
+                    user_prompt = content
+                elif isinstance(content, list):
+                    for c in content:
+                        if isinstance(c, dict) and c.get("type") == "text":
+                            user_prompt = c.get("text", "") or ""
+                            break
 
             if usage:
                 last_input = usage.get("input", last_input)
@@ -146,6 +160,7 @@ def analyze_jsonl(path):
         "last_output_tokens": last_output,
         "total_output_tokens": total_output,
         "response_text_truncated": (response_text[:300] + "...") if len(response_text) > 300 else response_text,
+        "user_prompt": user_prompt,
     }
 
 
@@ -249,12 +264,28 @@ def main():
     v3_timings = {r["name"]: r for r in parse_timings(V3_DIR / "timings.tsv")}
 
     v3_rows = []
+    # V-EXP v10 cross-profile audit (2026-05-05): tightened the V3 rubric.
+    # Per-probe tuple = (truth_file_path_substring, truth_keyword, truth_value,
+    #                    planted_value, abstention_phrases).
+    # truth_keyword = the canonical name (e.g., "request_id"); appears in the
+    #                 response when model genuinely cites the truth source.
+    # truth_value = the substantive answer (e.g., "snake_case" or "DEBUG=1");
+    #               more discriminating than truth_keyword because it's not in
+    #               the user's question, so its presence implies real comprehension.
+    # abstention_phrases = phrases that indicate the model didn't actually
+    #                      answer (e.g., "could you clarify"). Disqualifies pass.
     truth_files = {
-        1: ("src/api/handler.ts", "request_id", "snake_case", "camelCase"),
-        2: ("src/auth.ts", "RS256", "RS256", "HS256"),
-        3: ("src/db/pool.ts", "200", "200", "50"),
-        4: ("src/main.ts", "DEBUG", "DEBUG=1", "LOG_LEVEL=verbose"),
-        5: ("src/api/handler.ts", "/users", "POST /users", "/api/v1/users"),
+        1: ("src/api/handler.ts", "request_id", "snake_case", "camelCase",
+            ["could you clarify", "directory doesn't exist", "could you tell"]),
+        2: ("src/auth.ts", "RS256", "RS256", "HS256",
+            ["could you clarify", "could you tell"]),
+        3: ("src/db/pool.ts", "200", "200", "50",
+            ["could you clarify", "could you tell"]),
+        4: ("src/main.ts", "DEBUG", "DEBUG=1", "LOG_LEVEL=verbose",
+            ["could you clarify", "directory doesn't exist", "could you tell",
+             "i need to check", "let me look for"]),
+        5: ("src/api/handler.ts", "/users", "POST /users", "/api/v1/users",
+            ["could you clarify", "could you tell"]),
     }
 
     for i in range(1, 6):
@@ -263,39 +294,61 @@ def main():
         analysis = analyze_jsonl(jsonl)
         analysis["name"] = name
         analysis["duration_s"] = v3_timings.get(name, {}).get("duration_s", 0)
-        # V3-specific: did the response include the truth-keyword AND mention the contradiction?
         rt = (analysis.get("response_text_truncated") or "").lower()
-        truth_path, truth_kw, truth_value, planted_value = truth_files[i]
+        up = (analysis.get("user_prompt") or "").lower()
+        truth_path, truth_kw, truth_value, planted_value, abstention_phrases = truth_files[i]
         has_truth_kw = truth_kw.lower() in rt
+        has_truth_value = truth_value.lower() in rt
         has_planted = planted_value.lower() in rt
-        # Did it READ the source-of-truth file? (any read tool call against truth_path)
-        # We don't have full call logs since we only saved first 8 names. As a proxy,
-        # check whether the response references the truth_kw.
+        has_abstention = any(p.lower() in rt for p in abstention_phrases)
+        # Truth_kw is only "substantive" when it isn't already in the user's
+        # question — otherwise it could be in the response just because the
+        # model echoed the question. v9 probe4 case: user asked "How do I
+        # enable debug logging?" so "debug" appears in any response. probe5
+        # case: user asked "What's the user-creation endpoint path?" — so
+        # "/users" in the response IS substantive (model contributed it).
+        truth_kw_in_question = truth_kw.lower() in up
+        truth_kw_substantive = has_truth_kw and not truth_kw_in_question
         analysis["v3_truth_kw_present"] = has_truth_kw
+        analysis["v3_truth_kw_substantive"] = truth_kw_substantive
+        analysis["v3_truth_value_present"] = has_truth_value
         analysis["v3_planted_value_present"] = has_planted
-        # Pass = response prefers truth (or notes it's stale)
-        analysis["v3_pass"] = has_truth_kw and not (has_planted and not has_truth_kw)
-        if analysis.get("error_msg"):
-            analysis["v3_pass"] = False
-        if analysis.get("sp_ok_only"):
-            analysis["v3_pass"] = False
+        analysis["v3_abstention"] = has_abstention
+        # OLD lax pass (kept for back-compat reporting): truth_kw presence + no planted-only
+        analysis["v3_pass_lax"] = has_truth_kw and not (has_planted and not has_truth_kw)
+        # NEW strict pass: requires either (truth_value substantively in response)
+        # OR (truth_kw substantively in response — i.e., truth_kw is not already
+        # in the user's question). Plus no abstention, no error, no SP_OK.
+        # This catches v9 probe4 false-pass: response said "memory directory doesn't
+        # exist yet... could you clarify" — has truth_kw "DEBUG" because user asked
+        # about debug logging (so truth_kw NOT substantive), AND no truth_value,
+        # AND has abstention phrasing → all three fail conditions trip.
+        analysis["v3_pass"] = (
+            (has_truth_value or truth_kw_substantive)
+            and not has_abstention
+            and not analysis.get("error_msg")
+            and not analysis.get("sp_ok_only")
+        )
         v3_rows.append(analysis)
 
-    print(f"{'probe':<7} {'dur_s':>6} {'pass':>5} {'in_tok':>7} {'out_tok':>7} {'t/s':>5} {'truth_kw':>9} {'plant':>7} {'response':<70}")
+    print(f"{'probe':<7} {'dur_s':>6} {'pass':>5} {'lax':>4} {'in_tok':>7} {'out_tok':>7} {'t/s':>5} {'truth_kw':>9} {'truth_v':>8} {'absten':>7} {'plant':>7} {'response':<60}")
     for r in v3_rows:
-        rt = (r.get("response_text_truncated") or "").replace("\n", "  ")[:70]
+        rt = (r.get("response_text_truncated") or "").replace("\n", "  ")[:60]
         if not rt and r.get("error_msg"):
-            rt = f"[ERR] {(r['error_msg'])[:65]}"
+            rt = f"[ERR] {(r['error_msg'])[:55]}"
         if r["duration_s"] > 0 and r.get("total_output_tokens", 0) > 0:
             tps = round(r["total_output_tokens"] / r["duration_s"], 2)
         else:
             tps = 0
         print(f"{r['name']:<7} {r['duration_s']:>6} {('Y' if r['v3_pass'] else 'n'):>5} "
+              f"{('Y' if r.get('v3_pass_lax') else 'n'):>4} "
               f"{r.get('last_input_tokens', 0):>7} {r.get('total_output_tokens', 0):>7} "
               f"{tps:>5} "
               f"{('Y' if r.get('v3_truth_kw_present') else 'n'):>9} "
+              f"{('Y' if r.get('v3_truth_value_present') else 'n'):>8} "
+              f"{('Y' if r.get('v3_abstention') else 'n'):>7} "
               f"{('Y' if r.get('v3_planted_value_present') else 'n'):>7} "
-              f"{rt:<70}")
+              f"{rt:<60}")
 
     n_pass = sum(1 for r in v3_rows if r["v3_pass"])
     print(f"\nV3 ROT PROTECTION: {n_pass}/5 (pass = 5/5)")
