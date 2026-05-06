@@ -1,0 +1,47 @@
+profile:
+  id: mistral-medium-3.5
+  version: v2.2
+  family: mistral
+  base_model: mistralai/Mistral-Medium-3.5-128B
+  description: "Mistral Medium 3.5 128B \u2014 Phase 04.7 alternate, v2.2 lazy-load\
+    \ OOM fix. v2.2 = v2.1 + engine.safetensors_load_strategy: lazy (single-byte change\
+    \ to serving.yaml). v2.1 boot OOM-killed 11 times on 2026-05-05 (gmu=0.84 and\
+    \ gmu=0.81 alike) at transient ~42-43 GB anon-rss burst during weight load \u2014\
+    \ vLLM's default safetensors loader (None strategy) auto-prefetches into the page\
+    \ cache when the checkpoint fits in 90% of available RAM, doubling the memory\
+    \ pressure on 128 GB UMA. `lazy` forces mmap with no auto-prefetch: pages are\
+    \ file-rss (page-cache-backed), not anon-rss, and stream into the GPU pool on\
+    \ demand. v2.1 properties carry forward unchanged: Dense 128B via RecViking NVFP4\
+    \ (compressed-tensors nvfp4-pack-quantized; ~80 GB on disk), SP_OK canary removed\
+    \ from system.md. Eval-only opt-in (`/profile mistral-medium-3.5`). NOT a daily-driver,\
+    \ NOT a routes.yaml participant, NOT an ask_claude target."
+  created: '2026-05-05'
+  hash: sha256:e30e9d342ca956b1066aa3d459ffa5462bab335187e385a27dfa6481de54718f
+  hash_algorithm: sha256
+  hash_manifest_version: 1
+  tags:
+  - coding
+  - dgx-spark
+  - nvfp4
+  - compressed-tensors
+  - mistral
+  - phase-04.7
+  - dense
+  - alternate
+  - eval-only
+  community_sources:
+  - title: RecViking/Mistral-Medium-3.5-128B-NVFP4 (HF, NVFP4 source for v2)
+    url: https://huggingface.co/RecViking/Mistral-Medium-3.5-128B-NVFP4
+    retrieved: '2026-05-03'
+  - title: mistralai/Mistral-Medium-3.5-128B (HF base model card)
+    url: https://huggingface.co/mistralai/Mistral-Medium-3.5-128B
+    retrieved: '2026-05-01'
+  - title: "vLLM Quantization \u2014 compressed-tensors NVFP4 backend"
+    url: https://docs.vllm.ai/en/latest/features/quantization/
+    retrieved: '2026-05-03'
+  - title: "vLLM Tool Calling \u2014 Mistral parser"
+    url: https://docs.vllm.ai/en/latest/features/tool_calling/
+    retrieved: '2026-05-01'
+  - title: llm-compressor (NVFP4 quantizer used by RecViking, v0.10.1.dev121)
+    url: https://github.com/vllm-project/llm-compressor
+    retrieved: '2026-05-03'

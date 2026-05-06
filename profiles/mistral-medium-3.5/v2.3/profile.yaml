@@ -1,0 +1,51 @@
+profile:
+  id: mistral-medium-3.5
+  version: v2.3
+  family: mistral
+  base_model: mistralai/Mistral-Medium-3.5-128B
+  description: "Mistral Medium 3.5 128B \u2014 Phase 04.7 alternate, v2.3 boot-OOM\
+    \ intervention stack E1 (cu130-nightly substrate). v2.3 = v2.1 + four interventions\
+    \ targeted at the boot-time anon-rss burst that OOM-killed v2.1/v2.2 at gmu=0.84\
+    \ (forensics: 43 GB anon-rss + 75 GB GPU pool + ~5 GB host noise = 122 GB > 119\
+    \ GB host). Changes: (1) load_format=auto (was safetensors; published Mistral\
+    \ 128B precedent uses auto), (2) enforce_eager=true (skip CUDA graph capture spike,\
+    \ free its ~0.004 effective gmu budget back to KV pool), (3) gpu_memory_utilization=0.80\
+    \ (was 0.84; enforce_eager + auto loader may now fit 128K KV at lower gmu, giving\
+    \ more boot-burst headroom), (4) env vars PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True\
+    \ + MALLOC_ARENA_MAX=2 + MALLOC_TRIM_THRESHOLD_=131072 + OMP_NUM_THREADS=4 to\
+    \ cap PyTorch + glibc fragmentation. Carries forward v2.1's empty system.md (SP_OK\
+    \ fix) byte-for-byte. Eval-only opt-in. NOT a daily-driver, NOT a routes.yaml\
+    \ participant, NOT an ask_claude target. enforce_eager costs ~10-30% throughput\
+    \ at runtime \u2014 acceptable for eval-only. If E1 OOMs, escalate to v3.0 (avarok\
+    \ substrate); if E1 boots but vLLM logs estimated max_model_len < 131072, raise\
+    \ gmu to 0.82 (E1b)."
+  created: '2026-05-05'
+  hash: sha256:a54b47b892764fe7b5d8a85da7b2d63a36f038d107888a306ef3d371080efc63
+  hash_algorithm: sha256
+  hash_manifest_version: 1
+  tags:
+  - coding
+  - dgx-spark
+  - nvfp4
+  - compressed-tensors
+  - mistral
+  - phase-04.7
+  - dense
+  - alternate
+  - eval-only
+  community_sources:
+  - title: RecViking/Mistral-Medium-3.5-128B-NVFP4 (HF, NVFP4 source for v2)
+    url: https://huggingface.co/RecViking/Mistral-Medium-3.5-128B-NVFP4
+    retrieved: '2026-05-03'
+  - title: mistralai/Mistral-Medium-3.5-128B (HF base model card)
+    url: https://huggingface.co/mistralai/Mistral-Medium-3.5-128B
+    retrieved: '2026-05-01'
+  - title: "vLLM Quantization \u2014 compressed-tensors NVFP4 backend"
+    url: https://docs.vllm.ai/en/latest/features/quantization/
+    retrieved: '2026-05-03'
+  - title: "vLLM Tool Calling \u2014 Mistral parser"
+    url: https://docs.vllm.ai/en/latest/features/tool_calling/
+    retrieved: '2026-05-01'
+  - title: llm-compressor (NVFP4 quantizer used by RecViking, v0.10.1.dev121)
+    url: https://github.com/vllm-project/llm-compressor
+    retrieved: '2026-05-03'

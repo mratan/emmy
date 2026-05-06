@@ -1,0 +1,158 @@
+# profiles/mistral-medium-3.5/v2/serving.yaml
+# Phase 04.7 — Mistral Medium 3.5 128B alternate (eval-only, NOT daily-driver).
+#
+# v2 = NVFP4 PIVOT after v1 GGUF empirically blocked at the kernel page-cache +
+# vLLM pool double-allocation OOM ceiling on the 128 GB UMA Spark box.
+#
+# v1 GGUF post-mortem (preserved verbatim for audit trail; full record in
+# .planning/phases/04.7-…/04.7-02-SUMMARY.md "Wave 5 NVFP4 pivot"):
+#
+#   - 9 layers of vLLM/transformers compat patches CLEARED 5 of 6 architectural
+#     barriers (T-01 GGUF allowlist, MistralTokenizer requirement, multimodal
+#     init, bfloat16 GGUF reject, multimodal weight allowlist, name-remap)
+#   - Final blocker = layer 9 (posix_fadvise(POSIX_FADV_DONTNEED) every 50
+#     tensors) was empirically PARTIALLY effective: 36.8 GB onto GPU before
+#     OOM (vs 0 GB at layer 8), but the 73 GB GGUF mmap'd page cache + 99.8
+#     GB vLLM pool reservation = ~173 GB demand on 119 GB system + 15 GB swap
+#     = OOM-killed EngineCore subprocess
+#   - Genuine hardware ceiling for vLLM's GGUF backend on UMA. Not a fix-able
+#     Emmy-side bug. Pending vLLM `--no-mmap` upstream.
+#
+# v2 = the proven escape hatch. NVFP4 safetensors via fastsafetensors loader
+# does NOT mmap the entire weight file — chunks stream GPU-direct. The OOM
+# mode that killed v1 is structurally absent.
+#
+# Trade-offs accepted (CONTEXT D-01 reasoning re-evaluated 2026-05-03):
+#
+#   - NVFP4 is ~23.6% slower than FP16 on GB10 UMA (per CLAUDE.md Pinned Tech
+#     Stack). MOOT for this profile — Mistral 128B is occasional-escalation
+#     eval-only (D-13); the pre-existing ~3 tok/s baseline already accepts the
+#     bandwidth-bound throughput floor. -23.6% on already-slow doesn't change
+#     the gate.
+#
+#   - RecViking's NVFP4 build was published for 4× RTX 5090 TP=4. Single-GPU
+#     loadability VERIFIED via probe (2026-05-03): config dimensions (hidden_size
+#     12288, num_attention_heads 96, num_kv_heads 8) byte-identical to upstream
+#     Mistral; 2 STORAGE shards not 4 TP-rank shards; tensor names have no rank
+#     suffixes. TP=1 portable.
+#
+#   - Compressed-tensors NVFP4 quantizer = `llm-compressor v0.10.1.dev121`
+#     (NOT ModelOpt 0.42.0). The CLAUDE.md-flagged ModelOpt NaN-in-weight_scale
+#     bug is N/A.
+#
+#   - Hybrid checkpoint: 88 language_model layers in NVFP4 (W4A4-FP4 + per-16
+#     group scales), bf16 lm_head + embed_tokens, bf16 vision_tower kept but
+#     IGNORED in quantization_config. Total disk 80.3 GB (74.8 GiB).
+#
+# The text-only-config strip from v1 Wave 4 carries forward unchanged:
+# vLLM probes architectures + model_type from config.json; declaring
+# "Ministral3ForCausalLM" + model_type "ministral3" routes through
+# MistralForCausalLM (registry.py:164) and bypasses Mistral3ForConditionalGeneration's
+# MultiModalBudget probe entirely. Vision_tower bf16 tensors WILL still be
+# loaded by the safetensors backend and skipped as "unexpected keys" by
+# MistralForCausalLM's params_dict — at worst a load-time WARNING; if it
+# errors hard, an airgap_patch can filter at load.
+#
+# Eval-only opt-in via `/profile mistral-medium-3.5`; NOT a routes.yaml
+# participant; NOT an `ask_claude.enabled` flip target (CONTEXT D-12).
+
+engine:
+  # --- immutable identity ---
+  # NVFP4 model dir (operator-staged 2026-05-03 from RecViking/Mistral-Medium-3.5-128B-NVFP4):
+  # Points at the text-only-config OVERLAY dir (sibling of the raw NVFP4 dir).
+  # The overlay contains:
+  #   - config.json (stripped: architectures=Ministral3ForCausalLM + model_type=ministral3 + quantization_config preserved)
+  #   - Symlinks to *.safetensors + model.safetensors.index.json + tekken.json + tokenizer*
+  # Pattern mirrors v1's text-only-config approach (Wave 4) — preserves RecViking's
+  # original config for audit while letting vLLM resolve the architecture cleanly.
+  model: /models/Mistral-Medium-3.5-128B-NVFP4-text-only-config
+  model_hf_id: RecViking/Mistral-Medium-3.5-128B-NVFP4
+  tokenizer: /models/Mistral-Medium-3.5-128B-NVFP4-text-only-config   # tekken.json symlinked into overlay; same dir as model
+  served_model_name: mistral-medium-3.5                                # name vLLM exposes on /v1/models; matches `/profile mistral-medium-3.5` route per CONTEXT D-13
+  container_image: vllm/vllm-openai:cu130-nightly-aarch64              # same nightly aarch64 cu130 as v1; compressed-tensors NVFP4 + Blackwell SM12.1 path is supported per HF card "NVFP4 needs Blackwell SM 12.0+"
+  container_image_digest: sha256:ffa30d66ff5c9346c6389507cc529827fc9934a6d2ee37855934f94fe1061cdc   # same image as v1 (same nightly digest); update if first NVFP4 boot pulls a fresher manifest
+  container_entrypoint_override: ""                                    # carry-over from v1
+
+  # --- context + memory ---
+  max_model_len: 131072                                 # CONTEXT D-03 (128K) — same as v1; 256K deferred to v3 candidate
+  gpu_memory_utilization: 0.81                          # V-EXP v10 retest RUNTIME ONLY: 0.84 → 0.81 — gmu=0.84 OOMs at 43 GB anon-rss in current host conditions (10 GB swap pressure, restic+mafft active). 0.81 = ~96 GiB pool, validated via prior boot 17 in same conditions. V1/V3 first-tool-call rule-following measurement is KV-budget-independent — behavioral measurement equivalent to v2.1 (gmu=0.84). NOT FOR SHIPPING — v2.1 (gmu=0.84) is the canonical config; v2.1-runtime exists only for this retest cycle.
+  kv_cache_dtype: fp8                                   # CONTEXT D-08 — NOT turboquant_4bit_nc (HF card recommends that for 200K context; we cap at 128K so fp8 is sufficient and proven on Spark)
+  enable_prefix_caching: true                           # SERVE-07
+  enable_chunked_prefill: true                          # SERVE-07
+  max_num_batched_tokens: 8192                          # carried over from v1
+  max_num_seqs: 1                                       # CONTEXT D-07 — single-stream; pool too tight for batching
+
+  # --- loader ---
+  load_format: safetensors                              # Wave 5 attempt 6 fix: was `fastsafetensors`, now plain safetensors. Matches the documented Gemma 26B v2.1 + Gemma 31B v1.2 precedent on the same `vllm/vllm-openai:cu130-nightly-aarch64` container family — that container does NOT bundle fastsafetensors; the fallback path on Spark (no GDS) stages the entire shard (~50 GB for shard 1) in host RAM before GPU memcpy, which collides with vLLM's pool reservation on the 128 GB UMA box. Plain safetensors loads tensor-by-tensor with peak host buffer in the few-hundred-MB range. Tradeoff: cold start ~5-8 min vs ~1-2 min for fastsafetensors. Acceptable for an eval-only profile.
+  # dtype: (UNSET — let vLLM auto-detect from config.json's torch_dtype: bfloat16)
+  # NVFP4 backend handles bfloat16 fine; the v1 `dtype: float16` override was a
+  # GGUF-backend-specific workaround for a Blackwell-GGUF kernel limitation that
+  # does not apply to compressed-tensors NVFP4.
+  tokenizer_mode: mistral                               # vLLM `mistral` tool_call_parser still requires MistralTokenizer instance (carries forward from v1 Wave 4)
+
+  # --- quantization ---
+  quantization: compressed-tensors                      # NVFP4 PIVOT (Wave 5 attempt 2 fix): vLLM strictly matches model config's quantization_config.quant_method against --quantization arg (vllm/transformers_utils/config.py ModelConfig validator). RecViking's quantization_config.quant_method = "compressed-tensors" — passing --quantization auto fails strict-match. Schema Literal extended in 04.7-02 Wave 5 commit.
+
+  # --- tool-call parser ---
+  tool_call_parser: mistral                             # CONTEXT D-09 — same as v1
+  reasoning_parser: mistral                             # CONTEXT D-09 + RESEARCH §3.3 — same as v1
+  enable_auto_tool_choice: true                         # CONTEXT D-09 — same as v1
+
+  # --- attention + backends ---
+  # attention_backend: (unset — vLLM auto-selects)
+  # HF card warns: "do not manually specify --attention-backend FLASH_ATTN" for
+  # NVFP4. Letting vLLM pick is the recommended path.
+
+  # --- network / runtime ---
+  host: 0.0.0.0                                         # container-internal bind
+  port: 8000                                            # container-internal
+
+  # --- airgap patches (carried forward, scope-changed) ---
+  # The v1 airgap_patches/ contained 9 layers of GGUF-specific hot-patches:
+  #   - mistral3 → GGUF allowlist (T-01)
+  #   - GGUFModelLoader._get_gguf_weight_type + _get_weights_iterator REPLACE
+  #   - GGUFModelLoader._get_gguf_weights_map WRAP (name-remap)
+  #   - posix_fadvise hook (layer 9 — only partially effective)
+  # NONE of these apply to the NVFP4 safetensors path. The v2 bundle COULD ship
+  # without airgap_patch_dir entirely. Kept as scaffolding in case NVFP4 surfaces
+  # its own compat issues that warrant hot-patching (e.g. unexpected-keys
+  # filtering for vision_tower bf16 tensors that MistralForCausalLM doesn't expect).
+  # If first boot smoke needs no patches, this can be removed in v2.1.
+  airgap_patch_dir: airgap_patches
+
+  # --- what is NOT here (deferred) ---
+  # - 256K full context (max_model_len: 262144) — v3 candidate
+  # - speculative: null — Phase 6
+  # - kv_cache_dtype: turboquant_4bit_nc — only for 200K+ context per HF card
+  # - --tensor-parallel-size 4 — NOT applicable on single-GPU Spark; TP=1 portable per probe
+  # - hf_config_path — NOT NEEDED with safetensors backend (vLLM reads model_dir/config.json directly; the overlay dir IS the model dir)
+
+sampling_defaults:
+  # Same as v1 — RESEARCH §2.5 community-typical Mistral coding defaults.
+  # Not re-tuned for NVFP4 (the NVFP4 compute path is bit-equivalent to FP16
+  # for inference purposes; sampling distribution is unchanged from quantization).
+  temperature: 0.15
+  top_p: 0.95
+  top_k: 40
+  repetition_penalty: 1.0
+  max_tokens: 8192
+  stop: []                                              # mistral parser handles stop tokens
+
+speculative: null                                       # Phase 6 per CONTEXT deferred list
+
+guided_decoding:
+  default_backend: xgrammar                             # vLLM 0.19 default
+
+quirks:
+  strip_thinking_tags: false                            # carry-over from v1; flip if [TOOL_CALLS] literal leaks at boot smoke
+  promote_reasoning_to_content: false                   # carry-over from v1
+  buffer_tool_streams: false                            # carry-over from v1
+
+env:
+  VLLM_NO_USAGE_STATS: "1"                              # SERVE-09 / D-12 layer c (enforced by schema._airgap_policy)
+  DO_NOT_TRACK: "1"
+  VLLM_LOAD_FORMAT: safetensors                         # matches engine.load_format. Note: vLLM nightly logs "Unknown vLLM environment variable detected: VLLM_LOAD_FORMAT" — this env var is no-op as of vLLM 0.19+ (only --load-format CLI arg is honored); kept for parity with prior-profile convention.
+  VLLM_FLASHINFER_MOE_BACKEND: latency                  # carry-over (no-op for non-MoE; harmless)
+  VLLM_DISABLE_COMPILE_CACHE: "1"
+  HF_HUB_OFFLINE: "1"                                   # REPRO-04 (enforced by schema._airgap_policy)
+  TRANSFORMERS_OFFLINE: "1"

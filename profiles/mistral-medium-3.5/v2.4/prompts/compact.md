@@ -1,0 +1,1 @@
+Summarize the conversation above so a fresh context can resume the work. Preserve: explicit goals, decisions made, errors and their resolutions, files modified and their final state. Drop: dead-end exploration, redundant tool calls, transient state.

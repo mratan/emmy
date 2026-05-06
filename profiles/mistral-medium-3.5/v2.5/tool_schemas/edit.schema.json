@@ -1,0 +1,39 @@
+{
+  "type": "function",
+  "function": {
+    "name": "edit",
+    "description": "Hash-anchored edit (DEFAULT). Every line in a prior read is tagged {8hex}{2sp}{content}; edits reference individual line hashes. Stale hashes are rejected with a named error — re-read the file and retry with fresh hashes.",
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "path": { "type": "string" },
+        "edits": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "hash": { "type": "string", "pattern": "^[0-9a-f]{8}$" },
+              "new_content": { "type": ["string", "null"] }
+            },
+            "required": ["hash", "new_content"],
+            "additionalProperties": false
+          }
+        },
+        "inserts": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "after_hash": { "type": "string" },
+              "insert": { "type": "array", "items": { "type": "string" } }
+            },
+            "required": ["after_hash", "insert"],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": ["path"],
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,46 @@
+profile:
+  id: mistral-medium-3.5
+  version: v2.4
+  family: mistral
+  base_model: mistralai/Mistral-Medium-3.5-128B
+  description: "Mistral Medium 3.5 128B \u2014 Phase 04.7-02 followup E2 (boot-OOM\
+    \ diagnostic). v2.4 = v2.3 with one variable change: load_format swapped from\
+    \ `auto` (which resolved internally to safetensors) to `runai_streamer` with model_loader_extra_config={\\\
+    \"memory_limit\\\": 4294967296} (4 GiB cap on host CPU staging buffer). E1 (v2.3)\
+    \ falsified the CUDA-graph-capture + frag + gmu hypotheses but the 43 GB anon-rss\
+    \ boot peak persisted with linear ~190 MB/s growth \u2014 consistent with safetensors\
+    \ loader accumulating CPU-side torch.Tensor objects. v2.4 tests Q2 (\"is the 43\
+    \ GB peak loader-caused?\") by swapping ONLY the loader. If boot peak < 20 GB,\
+    \ loader hypothesis CONFIRMED \u2192 ship v2.4. If peak \u2248 43 GB, hypothesis\
+    \ FALSIFIED \u2192 next experiment will probe KV pre-allocation. All other v2.3\
+    \ settings carry forward unchanged."
+  created: '2026-05-05'
+  hash: sha256:4267603dfc87b5e4b1aa6aecf8e641c24b9f82f79433ac4a0384591481282a1f
+  hash_algorithm: sha256
+  hash_manifest_version: 1
+  tags:
+  - coding
+  - dgx-spark
+  - nvfp4
+  - compressed-tensors
+  - mistral
+  - phase-04.7
+  - dense
+  - alternate
+  - eval-only
+  community_sources:
+  - title: RecViking/Mistral-Medium-3.5-128B-NVFP4 (HF, NVFP4 source for v2)
+    url: https://huggingface.co/RecViking/Mistral-Medium-3.5-128B-NVFP4
+    retrieved: '2026-05-03'
+  - title: mistralai/Mistral-Medium-3.5-128B (HF base model card)
+    url: https://huggingface.co/mistralai/Mistral-Medium-3.5-128B
+    retrieved: '2026-05-01'
+  - title: "vLLM Quantization \u2014 compressed-tensors NVFP4 backend"
+    url: https://docs.vllm.ai/en/latest/features/quantization/
+    retrieved: '2026-05-03'
+  - title: "vLLM Tool Calling \u2014 Mistral parser"
+    url: https://docs.vllm.ai/en/latest/features/tool_calling/
+    retrieved: '2026-05-01'
+  - title: llm-compressor (NVFP4 quantizer used by RecViking, v0.10.1.dev121)
+    url: https://github.com/vllm-project/llm-compressor
+    retrieved: '2026-05-03'

@@ -1,0 +1,45 @@
+profile:
+  id: mistral-medium-3.5
+  version: v2.6
+  family: mistral
+  base_model: mistralai/Mistral-Medium-3.5-128B
+  description: "Mistral Medium 3.5 128B \u2014 Phase 04.7-02 followup E3b (KV-fit\
+    \ at 128K). v2.6 = v2.5 + single variable change: gpu_memory_utilization 0.80\
+    \ \u2192 0.84. E3 (v2.5) confirmed that runai_streamer with memory_limit=4 GiB\
+    \ caps boot peak at 5.5 GiB (88% reduction from safetensors' 43 GB). Weight load\
+    \ succeeded; KV init then failed with vLLM diagnostic: '22.0 GiB KV cache needed,\
+    \ 21.21 GiB available, estimated max_model_len=126368'. Per the v2 history (~0.18\
+    \ GiB KV per 0.01 gmu), +0.79 GiB needs +0.044 gmu. v2.6 jumps to 0.84 (matches\
+    \ v2.1's gmu) for a ~0.7 GiB margin over the 22 GiB target. Boot peak expected\
+    \ to remain ~5.5 GiB because runai_streamer's memory_limit caps the loader buffer\
+    \ independently of gmu. All other v2.5 settings unchanged."
+  created: '2026-05-05'
+  hash: sha256:46c2781f241511f624592c3c82924ed7da8a9520135d6199d36f1435ffb3087e
+  hash_algorithm: sha256
+  hash_manifest_version: 1
+  tags:
+  - coding
+  - dgx-spark
+  - nvfp4
+  - compressed-tensors
+  - mistral
+  - phase-04.7
+  - dense
+  - alternate
+  - eval-only
+  community_sources:
+  - title: RecViking/Mistral-Medium-3.5-128B-NVFP4 (HF, NVFP4 source for v2)
+    url: https://huggingface.co/RecViking/Mistral-Medium-3.5-128B-NVFP4
+    retrieved: '2026-05-03'
+  - title: mistralai/Mistral-Medium-3.5-128B (HF base model card)
+    url: https://huggingface.co/mistralai/Mistral-Medium-3.5-128B
+    retrieved: '2026-05-01'
+  - title: "vLLM Quantization \u2014 compressed-tensors NVFP4 backend"
+    url: https://docs.vllm.ai/en/latest/features/quantization/
+    retrieved: '2026-05-03'
+  - title: "vLLM Tool Calling \u2014 Mistral parser"
+    url: https://docs.vllm.ai/en/latest/features/tool_calling/
+    retrieved: '2026-05-01'
+  - title: llm-compressor (NVFP4 quantizer used by RecViking, v0.10.1.dev121)
+    url: https://github.com/vllm-project/llm-compressor
+    retrieved: '2026-05-03'
