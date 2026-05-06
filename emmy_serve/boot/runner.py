@@ -137,6 +137,25 @@ def render_vllm_cli_args(profile_path: Path) -> list[str]:
     # followup profile where the field is unset (vLLM defaults to "auto" itself).
     if e.tokenizer_mode is not None:
         cli += ["--tokenizer-mode", e.tokenizer_mode]
+    # Phase 04.7-02 followup (Mistral v2.1 OOM diagnosis 2026-05-05). Optional
+    # `--safetensors-load-strategy` LoadConfig flag — see schema docstring for
+    # the four documented strategies. Conditional emission preserves byte-
+    # identical render for every pre-04.7-02-followup profile where the field
+    # is unset (vLLM's internal default is None, byte-identical to absence).
+    if e.safetensors_load_strategy is not None:
+        cli += ["--safetensors-load-strategy", e.safetensors_load_strategy]
+    # Phase 04.7-02 followup E1 (Mistral v2.3 boot-OOM diagnosis 2026-05-05).
+    # `--enforce-eager` skips CUDA graph capture; see schema docstring for the
+    # boot-OOM mechanism. Conditional emission preserves byte-identical render
+    # for every pre-04.7-02-followup profile where the field is unset (vLLM
+    # default behavior = enforce_eager=False, byte-identical to absence).
+    if e.enforce_eager is True:
+        cli.append("--enforce-eager")
+    # Phase 04.7-02 followup E2 (Mistral v2.4 boot-OOM diagnosis 2026-05-05).
+    # `--model-loader-extra-config` accepts a JSON string passed verbatim to
+    # vLLM's loader; we render the literal string from the profile.
+    if e.model_loader_extra_config is not None:
+        cli += ["--model-loader-extra-config", e.model_loader_extra_config]
     return cli
 
 
@@ -215,6 +234,18 @@ def render_docker_only_args(
         "-e",
         "HF_HOME=/hf-cache",
     ]
+    # Phase 04.7-02 followup E1 (Mistral v2.3 boot-OOM diagnosis 2026-05-05).
+    # Boot-time anon-rss management env vars — all Optional, all conditionally
+    # emitted. Pre-existing profiles validate with these unset and the runner
+    # emits no -e flags, byte-identical render preserved.
+    if env.PYTORCH_CUDA_ALLOC_CONF is not None:
+        args += ["-e", f"PYTORCH_CUDA_ALLOC_CONF={env.PYTORCH_CUDA_ALLOC_CONF}"]
+    if env.MALLOC_ARENA_MAX is not None:
+        args += ["-e", f"MALLOC_ARENA_MAX={env.MALLOC_ARENA_MAX}"]
+    if env.MALLOC_TRIM_THRESHOLD_ is not None:
+        args += ["-e", f"MALLOC_TRIM_THRESHOLD_={env.MALLOC_TRIM_THRESHOLD_}"]
+    if env.OMP_NUM_THREADS is not None:
+        args += ["-e", f"OMP_NUM_THREADS={env.OMP_NUM_THREADS}"]
     # Phase 04.7-02 follow-up (Decision Option 5 — sitecustomize hot-patch).
     # When the profile bundle ships an airgap_patches dir, prepend it to
     # PYTHONPATH so Python's site machinery imports /airgap_patches/

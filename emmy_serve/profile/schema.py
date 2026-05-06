@@ -100,7 +100,18 @@ class EngineConfig(BaseModel):
     # --- context + memory ---
     max_model_len: int = Field(gt=0)
     gpu_memory_utilization: float = Field(gt=0.0, le=1.0)
-    kv_cache_dtype: Literal["auto", "fp8", "fp16", "bf16"] = "fp8"
+    # Phase 04.7-02 followup E4 (Mistral v2.7 int4 KV experiment 2026-05-06):
+    # extended Literal to include the int4-equivalent values vLLM cu130-nightly
+    # accepts (per `vllm serve --help=CacheConfig`). turboquant_4bit_nc is the
+    # Mistral team's recommended int4 KV format — their HF model card calls it
+    # out specifically for ≥200K context. Strictly additive: pre-existing
+    # profiles continue to validate with "auto"/"fp8"/"fp16"/"bf16" unchanged.
+    kv_cache_dtype: Literal[
+        "auto", "fp8", "fp16", "bf16",
+        "fp8_e4m3", "fp8_e5m2", "nvfp4",
+        "turboquant_3bit_nc", "turboquant_4bit_nc",
+        "turboquant_k3v4_nc", "turboquant_k8v4",
+    ] = "fp8"
     enable_prefix_caching: bool = True
     enable_chunked_prefill: bool = True
     max_num_batched_tokens: int = Field(gt=0)
@@ -112,7 +123,50 @@ class EngineConfig(BaseModel):
     max_num_seqs: Optional[int] = Field(default=None, gt=0)
 
     # --- loader ---
-    load_format: Literal["auto", "fastsafetensors", "safetensors"] = "fastsafetensors"
+    # Phase 04.7-02 followup E2 (Mistral v2.4 boot-OOM diagnosis 2026-05-05):
+    # extended Literal to include "runai_streamer" + "instanttensor". Both are
+    # vLLM-supported (per `vllm serve --help=LoadConfig` in cu130-nightly-aarch64
+    # image: instanttensor explicitly listed; runai_streamer explicitly listed).
+    # runai_streamer pairs with model_loader_extra_config={"memory_limit": <bytes>}
+    # to cap the host CPU buffer during streaming-to-GPU — the targeted lever
+    # for boot-time anon-rss accumulation.
+    load_format: Literal[
+        "auto", "fastsafetensors", "safetensors",
+        "runai_streamer", "instanttensor",
+    ] = "fastsafetensors"
+
+    # Phase 04.7-02 followup E2 — vLLM's `--model-loader-extra-config` flag.
+    # JSON-encoded dict passed to the active loader. Used by runai_streamer for
+    # `memory_limit` (caps host CPU staging buffer in bytes), and by other
+    # loader plugins for their own settings. Strictly additive — every pre-
+    # 04.7-02-followup-E2 profile validates with the field unset and the runner
+    # emits no flag. The string is passed verbatim to vLLM, which JSON-parses
+    # it; we don't validate the inner shape here because the schema depends on
+    # which loader is active.
+    model_loader_extra_config: Optional[str] = None
+
+    # Phase 04.7-02 followup (Mistral v2.1 OOM diagnosis 2026-05-05). vLLM's
+    # `--safetensors-load-strategy` flag (LoadConfig group) controls how the
+    # safetensors backend stages weights between disk and GPU. Values:
+    #   - None (default, =unset here): mmap (lazy) on local FS; auto-prefetch
+    #     into page cache when an NFS filesystem is detected AND the checkpoint
+    #     fits within 90% of available RAM.
+    #   - "lazy": mmap from file; on-demand loading. Auto-prefetch on NFS is
+    #     OFF. Recommended for UMA hosts where eager-staged anon-rss (PyTorch
+    #     CPU buffers + FlashInfer scratch) competes with the vLLM GPU pool
+    #     allocation in the same 128 GB pool. v2.1's transient ~43 GB anon-rss
+    #     burst-during-boot OOM (11 boot attempts on 2026-05-05 at gmu=0.84
+    #     and gmu=0.81 alike) motivated this knob.
+    #   - "eager": entire file read into CPU memory upfront. Recommended for
+    #     network filesystems (Lustre, NFS) where mmap random reads are slow.
+    #   - "prefetch": page-cache warmup before workers load.
+    #   - "torchao": torchao tensor-subclass reconstruction (needs torchao>=0.14.0).
+    # Strictly additive — every pre-04.7-02-followup profile validates with
+    # safetensors_load_strategy=None and the runner emits no flag (vLLM
+    # behaves byte-identically to today: defaults to None internally).
+    safetensors_load_strategy: Optional[
+        Literal["lazy", "eager", "prefetch", "torchao"]
+    ] = None
 
     # Phase 04.7-02 follow-up Decision Option 5 (sitecustomize boot smoke
     # 2026-05-02). Optional dtype override for the model weights/computation.
@@ -154,6 +208,23 @@ class EngineConfig(BaseModel):
     tokenizer_mode: Optional[
         Literal["auto", "hf", "slow", "mistral", "deepseek_v32"]
     ] = None
+
+    # Phase 04.7-02 followup E1 (Mistral v2.3 boot-OOM diagnosis 2026-05-05).
+    # When True, vLLM disables CUDA graph capture and runs the model in eager
+    # mode end-to-end. Two effects relevant to the boot-OOM regime:
+    #   1. CUDA graph capture happens during warmup and produces a memory spike
+    #      that vLLM's KV-cache profiler accounts for via "effective gmu" being
+    #      ~0.004 lower than the configured value (vLLM logs "current 0.84 =
+    #      effective 0.8361 after CUDA graph memory profiling"). Skipping
+    #      capture frees that delta back into the KV pool budget.
+    #   2. CUDA graphs occupy GPU pool memory for the captured graph itself.
+    #      Skipping that frees additional pool space.
+    # Cost: throughput penalty of ~10-30% at runtime (no CUDA graph fast path).
+    # Acceptable for eval-only profiles; would NOT bake into a daily-driver.
+    # Strictly additive — every pre-04.7-02-followup profile validates with
+    # enforce_eager=None and the runner emits no flag (vLLM default = False,
+    # byte-identical to absence).
+    enforce_eager: Optional[bool] = None
 
     # --- quantization ---
     # Phase 04.7 — "gguf" added for Mistral Medium 3.5 128B Q4_K_M (CONTEXT D-02).
@@ -250,6 +321,42 @@ class EnvVars(BaseModel):
     VLLM_DISABLE_COMPILE_CACHE: str
     HF_HUB_OFFLINE: str
     TRANSFORMERS_OFFLINE: str
+
+    # Phase 04.7-02 followup E1 (Mistral v2.3 boot-OOM diagnosis 2026-05-05).
+    # Boot-time anon-rss management env vars. All Optional — every pre-04.7-02-
+    # followup profile validates with these unset and the runner emits no -e
+    # flags, so render is byte-identical for existing profiles.
+    #
+    # PYTORCH_CUDA_ALLOC_CONF: PyTorch CUDA caching allocator config.
+    # `expandable_segments:True` is the canonical fix for fragmentation-driven
+    # OOM and is specifically validated on DGX Spark by the operator on the
+    # Qwen3.5-397B-A17B-int4 vLLM-on-Spark forum thread (2026-04 timeframe)
+    # who reported flipping it cleared a UMA boot-OOM that other tunings did
+    # not. Reduces wasted reserved-but-unallocated CUDA chunks, which on UMA =
+    # wasted host anon-rss directly. May be combined with `,backend:cudaMallocAsync`
+    # for additional reuse but the two are partially incompatible per
+    # pytorch/pytorch#147851 — start with `expandable_segments:True` only.
+    PYTORCH_CUDA_ALLOC_CONF: Optional[str] = None
+    # MALLOC_ARENA_MAX: glibc per-thread malloc arena cap. Default scales with
+    # CPU count (DGX Spark = 20 ARM cores → 160 arenas), each holding free
+    # memory the Python process can't return to the OS. Setting `MALLOC_ARENA_MAX=2`
+    # is the standard heroku/algolia/dotnet recommendation for multithreaded
+    # Python services and shaves several GiB of native-RSS in practice. Cheap
+    # to apply; combine with MALLOC_TRIM_THRESHOLD_ for full effect.
+    MALLOC_ARENA_MAX: Optional[str] = None
+    # MALLOC_TRIM_THRESHOLD_ (note trailing underscore — this is the literal
+    # glibc env var name, NOT a typo; see `man mallopt(3) M_TRIM_THRESHOLD`):
+    # threshold in bytes for the top of the heap below which free()'d chunks
+    # get returned to the OS. Default is 128 KiB but glibc dynamically scales
+    # it upward with usage; setting `131072` pins it at the floor for aggressive
+    # trim. Pairs with MALLOC_ARENA_MAX.
+    MALLOC_TRIM_THRESHOLD_: Optional[str] = None
+    # OMP_NUM_THREADS: OpenMP worker pool size. Default = num-CPUs (= 20 on
+    # Spark) and each thread allocates its own malloc arena. Lowering to 4
+    # caps that arena-fanout. vLLM has its own thread pools that don't go
+    # through OMP, so this primarily affects PyTorch's eager-mode CPU ops
+    # during weight load.
+    OMP_NUM_THREADS: Optional[str] = None
 
     @model_validator(mode="after")
     def _airgap_policy(self) -> "EnvVars":
